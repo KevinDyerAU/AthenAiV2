@@ -1,6 +1,6 @@
 // tests/integration/websocket.test.js
 const Client = require('socket.io-client');
-const request = require('supertest');
+// const request = require('supertest'); // Unused import
 const app = require('../../src/app');
 
 describe('WebSocket Integration Tests', () => {

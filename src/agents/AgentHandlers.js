@@ -25,11 +25,13 @@ class AgentHandlers {
   // Agent Registration and Management
   async registerAgent(agentId, agentInstance, config = {}) {
     try {
+      const isUpdate = this.agents.has(agentId);
+      
       const agentInfo = {
         id: agentId,
         instance: agentInstance,
         config,
-        registeredAt: new Date().toISOString(),
+        registeredAt: isUpdate ? this.agents.get(agentId).registeredAt : new Date().toISOString(),
         status: 'active',
         lastHealthCheck: new Date().toISOString(),
         executionCount: 0,
@@ -38,29 +40,42 @@ class AgentHandlers {
 
       this.agents.set(agentId, agentInfo);
       this.agentStatus.set(agentId, 'active');
-      this.agentMetrics.set(agentId, {
-        totalExecutions: 0,
-        successfulExecutions: 0,
-        failedExecutions: 0,
-        averageExecutionTime: 0,
-        lastExecutionTime: null
-      });
+      
+      if (!isUpdate) {
+        this.agentMetrics.set(agentId, {
+          totalExecutions: 0,
+          successfulExecutions: 0,
+          failedExecutions: 0,
+          totalExecutionTime: 0,
+          averageExecutionTime: 0,
+          lastExecutionTime: null
+        });
+      }
 
-      logger.info('Agent registered', { agentId, config });
+      logger.info('Agent registered', { agentId, config, isUpdate });
       
       // Store in knowledge graph
-      await databaseService.createKnowledgeNode(
-        'system',
-        agentId,
-        'Agent',
-        {
-          agent_id: agentId,
-          status: 'registered',
-          registered_at: agentInfo.registeredAt
-        }
-      );
+      try {
+        await databaseService.createKnowledgeNode(
+          'system',
+          agentId,
+          'Agent',
+          {
+            agent_id: agentId,
+            status: isUpdate ? 'updated' : 'registered',
+            registered_at: agentInfo.registeredAt
+          }
+        );
+      } catch (dbError) {
+        logger.warn('Failed to store agent in knowledge graph', { agentId, error: dbError.message });
+      }
 
-      return { success: true, agentId, status: 'registered' };
+      return { 
+        agent_id: agentId, 
+        status: isUpdate ? 'updated' : 'registered', 
+        agent_name: agentInstance.name || agentId, 
+        capabilities: agentInstance.capabilities || [] 
+      };
     } catch (error) {
       logger.error('Agent registration failed', { agentId, error: error.message });
       return { success: false, error: error.message };
@@ -94,7 +109,13 @@ class AgentHandlers {
     try {
       const agentInfo = this.agents.get(agentId);
       if (!agentInfo) {
-        throw new Error(`Agent ${agentId} not registered`);
+        const executionTime = Date.now() - startTime;
+        return {
+          agent_id: agentId,
+          status: 'failed',
+          error: 'Agent not found',
+          execution_time: executionTime
+        };
       }
 
       if (this.agentStatus.get(agentId) !== 'active') {
@@ -106,36 +127,14 @@ class AgentHandlers {
       // Update status to executing
       this.agentStatus.set(agentId, 'executing');
 
-      // Execute the agent with retry logic
-      let result;
-      let attempts = 0;
-      let lastError;
-
-      while (attempts < this.maxRetries) {
-        try {
-          attempts++;
-          result = await this.executeAgentWithTimeout(agentInfo.instance, inputData, options);
-          break;
-        } catch (error) {
-          lastError = error;
-          logger.warn('Agent execution attempt failed', { 
-            agentId, 
-            executionId, 
-            attempt: attempts, 
-            error: error.message 
-          });
-
-          if (attempts < this.maxRetries) {
-            await this.delay(1000 * attempts); // Exponential backoff
-          }
-        }
-      }
-
+      // Execute the agent once (no retry logic here)
+      const result = await this.executeAgentWithTimeout(agentInfo.instance, inputData, options);
+      
       if (!result) {
-        throw lastError || new Error('Agent execution failed after retries');
+        throw new Error('Agent execution failed');
       }
 
-      const executionTime = Date.now() - startTime;
+      const executionTime = Math.max(1, Date.now() - startTime);
 
       // Update metrics
       this.updateAgentMetrics(agentId, executionTime, true);
@@ -150,16 +149,15 @@ class AgentHandlers {
       });
 
       return {
-        success: true,
-        agentId,
-        executionId,
+        agent_id: agentId,
+        status: 'completed',
         result,
-        executionTime,
-        attempts
+        execution_time: executionTime,
+        attempts: 1
       };
 
     } catch (error) {
-      const executionTime = Date.now() - startTime;
+      const executionTime = Math.max(1, Date.now() - startTime); // Ensure minimum 1ms
       
       // Update metrics for failed execution
       this.updateAgentMetrics(agentId, executionTime, false);
@@ -175,11 +173,10 @@ class AgentHandlers {
       });
 
       return {
-        success: false,
-        agentId,
-        executionId,
+        agent_id: agentId,
+        status: 'failed',
         error: error.message,
-        executionTime
+        execution_time: executionTime
       };
     }
   }
@@ -195,7 +192,9 @@ class AgentHandlers {
       // Determine which method to call based on agent type
       let executionPromise;
       
-      if (agentInstance.executeDevelopment) {
+      if (typeof agentInstance.execute === 'function') {
+        executionPromise = agentInstance.execute(inputData);
+      } else if (agentInstance.executeDevelopment) {
         executionPromise = agentInstance.executeDevelopment(inputData);
       } else if (agentInstance.executeCommunication) {
         executionPromise = agentInstance.executeCommunication(inputData);
@@ -214,6 +213,7 @@ class AgentHandlers {
       } else if (agentInstance.executeOrchestration) {
         executionPromise = agentInstance.executeOrchestration(inputData);
       } else {
+        clearTimeout(timer);
         reject(new Error('Agent does not have a recognized execution method'));
         return;
       }
@@ -299,20 +299,34 @@ class AgentHandlers {
       metrics.failedExecutions++;
     }
 
-    // Update average execution time
-    const totalTime = (metrics.averageExecutionTime * (metrics.totalExecutions - 1)) + executionTime;
-    metrics.averageExecutionTime = totalTime / metrics.totalExecutions;
+    // Update total and average execution time
+    metrics.totalExecutionTime = (metrics.totalExecutionTime || 0) + executionTime;
+    metrics.averageExecutionTime = metrics.totalExecutionTime / metrics.totalExecutions;
 
     this.agentMetrics.set(agentId, metrics);
   }
 
   getAgentMetrics(agentId = null) {
     if (agentId) {
+      const metrics = this.agentMetrics.get(agentId);
+      if (!metrics) {
+        return {
+          agent_id: agentId,
+          error: 'Agent not found',
+          total_executions: 0,
+          successful_executions: 0,
+          failed_executions: 0,
+          average_execution_time: 0
+        };
+      }
+      
       return {
-        agentId,
-        metrics: this.agentMetrics.get(agentId),
-        status: this.agentStatus.get(agentId),
-        info: this.agents.get(agentId)
+        agent_id: agentId,
+        total_executions: metrics.totalExecutions,
+        successful_executions: metrics.successfulExecutions,
+        failed_executions: metrics.failedExecutions,
+        average_execution_time: metrics.averageExecutionTime,
+        last_execution: metrics.lastExecutionTime
       };
     }
 
@@ -330,46 +344,74 @@ class AgentHandlers {
   }
 
   // Agent Coordination
-  async coordinateAgents(orchestrationPlan) {
+  async coordinateAgents(coordinationData) {
+    const { agents, execution_mode = 'parallel', executionMode = 'parallel', inputData } = coordinationData;
+    const mode = execution_mode || executionMode;
     const coordinationId = `coord_${Date.now()}`;
     const results = [];
 
-    try {
-      logger.info('Starting agent coordination', { coordinationId, orchestrationPlan });
+    logger.info('Starting agent coordination', { 
+      coordinationId, 
+      agentCount: agents.length, 
+      executionMode: mode 
+    });
 
-      // Parse orchestration plan
-      const steps = orchestrationPlan.steps || [];
-      
-      for (const step of steps) {
-        const stepResult = await this.executeCoordinationStep(step, coordinationId);
-        results.push(stepResult);
+    if (mode === 'parallel') {
+      // Execute all agents in parallel
+      const promises = agents.map(async (agentId) => {
+        const result = await this.executeAgent(agentId, inputData);
+        if (result.status === 'failed') {
+          return { agent_id: agentId, status: 'failed', error: result.error };
+        } else {
+          return { agent_id: agentId, status: 'completed', result };
+        }
+      });
 
-        // Check if step failed and should stop coordination
-        if (!stepResult.success && step.stopOnFailure !== false) {
-          throw new Error(`Coordination stopped at step: ${step.name || step.agentId}`);
+      const parallelResults = await Promise.allSettled(promises);
+      results.push(...parallelResults.map(r => r.value));
+
+    } else if (mode === 'sequential') {
+      // Execute agents one by one
+      for (const agentId of agents) {
+        try {
+          const result = await this.executeAgent(agentId, inputData);
+          results.push({ agent_id: agentId, status: 'completed', result });
+        } catch (error) {
+          logger.error('Agent execution failed in coordination', { agentId, error: error.message });
+          results.push({ agent_id: agentId, status: 'failed', error: error.message });
+          break; // Stop on first failure in sequential mode
         }
       }
-
-      logger.info('Agent coordination completed', { coordinationId });
-
-      return {
-        success: true,
-        coordinationId,
-        results,
-        totalSteps: steps.length,
-        successfulSteps: results.filter(r => r.success).length
-      };
-
-    } catch (error) {
-      logger.error('Agent coordination failed', { coordinationId, error: error.message });
-
-      return {
-        success: false,
-        coordinationId,
-        error: error.message,
-        results
-      };
     }
+
+    const successCount = results.filter(r => r.status === 'completed').length;
+    const failureCount = results.filter(r => r.status === 'failed').length;
+    
+    let overallStatus = 'completed';
+    if (failureCount > 0 && successCount > 0) {
+      overallStatus = 'partial_failure';
+    } else if (failureCount > 0) {
+      overallStatus = 'failed';
+    }
+
+    logger.info('Agent coordination completed', { 
+      coordinationId, 
+      successCount, 
+      failureCount 
+    });
+
+    return {
+      coordination_id: coordinationId,
+      execution_mode: mode,
+      agents_count: agents.length,
+      results,
+      status: overallStatus,
+      summary: {
+        total: results.length,
+        successful: successCount,
+        failed: failureCount
+      }
+    };
   }
 
   async executeCoordinationStep(step, coordinationId) {
@@ -453,6 +495,173 @@ class AgentHandlers {
   // Utility Methods
   async delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async executeAgentWithRetry(agentId, inputData, options = {}) {
+    const maxRetries = options.maxRetries || 3;
+    const retryDelay = options.retryDelay || 1000;
+    let lastError;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0 && this.agents.has(agentId)) {
+          this.agentStatus.set(agentId, 'active');
+        }
+        
+        const result = await this.executeAgent(agentId, inputData, options);
+        
+        if (result.status === 'completed') {
+          return {
+            ...result,
+            retry_count: attempt
+          };
+        }
+        
+        lastError = new Error(result.error || 'Execution failed');
+        if (attempt < maxRetries) {
+          await this.delay(retryDelay * (attempt + 1));
+        }
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxRetries) {
+          await this.delay(retryDelay * (attempt + 1));
+        }
+      }
+    }
+    
+    return {
+      agent_id: agentId,
+      status: 'failed',
+      error: lastError?.message || 'Max retries exceeded',
+      retry_count: maxRetries
+    };
+  }
+
+  async monitorAgentHealth(agentId) {
+    const agentInfo = this.agents.get(agentId);
+    if (!agentInfo) {
+      return {
+        agent_id: agentId,
+        health_status: 'not_found'
+      };
+    }
+
+    let healthStatus = 'unknown';
+    if (agentInfo.instance.healthCheck) {
+      try {
+        const health = await agentInfo.instance.healthCheck();
+        healthStatus = health.status || 'healthy';
+      } catch (error) {
+        healthStatus = 'unhealthy';
+      }
+    }
+
+    return {
+      agent_id: agentId,
+      health_status: healthStatus,
+      last_execution: agentInfo.lastHealthCheck,
+      metrics: this.agentMetrics.get(agentId)
+    };
+  }
+
+  async balanceLoad(tasks, availableAgents, strategy = 'round_robin') {
+    const assignments = [];
+    
+    if (strategy === 'round_robin') {
+      tasks.forEach((task, index) => {
+        const agentIndex = index % availableAgents.length;
+        assignments.push({
+          task,
+          agent: availableAgents[agentIndex]
+        });
+      });
+    } else if (strategy === 'priority') {
+      const sortedTasks = [...tasks].sort((a, b) => {
+        const priorityOrder = { high: 3, normal: 2, low: 1 };
+        return (priorityOrder[b.priority] || 1) - (priorityOrder[a.priority] || 1);
+      });
+      
+      sortedTasks.forEach((task, index) => {
+        const agentIndex = index % availableAgents.length;
+        assignments.push({
+          task,
+          agent: availableAgents[agentIndex]
+        });
+      });
+    }
+
+    return {
+      tasks_count: tasks.length,
+      available_agents: availableAgents.length,
+      strategy,
+      load_distribution: assignments.reduce((acc, assignment) => {
+        acc[assignment.agent] = (acc[assignment.agent] || 0) + 1;
+        return acc;
+      }, {}),
+      assignments
+    };
+  }
+
+  async shutdownAgent(agentId, force = false) {
+    const agentInfo = this.agents.get(agentId);
+    if (!agentInfo) {
+      return {
+        agent_id: agentId,
+        status: 'not_found'
+      };
+    }
+
+    let gracefulShutdown = false;
+    if (agentInfo.instance.shutdown && !force) {
+      try {
+        await agentInfo.instance.shutdown();
+        gracefulShutdown = true;
+      } catch (error) {
+        logger.warn('Graceful shutdown failed', { agentId, error: error.message });
+      }
+    }
+
+    this.agents.delete(agentId);
+    this.agentStatus.delete(agentId);
+    this.agentMetrics.delete(agentId);
+
+    return {
+      agent_id: agentId,
+      status: 'shutdown',
+      graceful_shutdown: gracefulShutdown
+    };
+  }
+
+  async listAgents() {
+    const agents = [];
+    for (const [agentId, agentInfo] of this.agents.entries()) {
+      agents.push({
+        agent_id: agentId,
+        name: agentInfo.instance.name || agentId,
+        status: this.agentStatus.get(agentId),
+        registered_at: agentInfo.registeredAt,
+        config: agentInfo.config
+      });
+    }
+
+    return {
+      total_agents: agents.length,
+      agents
+    };
+  }
+
+  async getSystemStatus() {
+    const totalAgents = this.agents.size;
+    const activeAgents = Array.from(this.agentStatus.values()).filter(status => status === 'active').length;
+    const totalExecutions = Array.from(this.agentMetrics.values()).reduce((sum, metrics) => sum + metrics.totalExecutions, 0);
+
+    return {
+      total_agents: totalAgents,
+      active_agents: activeAgents,
+      total_executions: totalExecutions,
+      system_health: activeAgents > 0 ? 'healthy' : 'degraded',
+      uptime: process.uptime()
+    };
   }
 
   getRegisteredAgents() {

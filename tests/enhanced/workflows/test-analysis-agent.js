@@ -30,8 +30,7 @@ assert.ok(statWebhook && statWebhook.parameters && statWebhook.parameters.path =
 
 const toolsViz = readJSON(files[2]);
 const vizWebhook = toolsViz.nodes.find(n => n.type === 'n8n-nodes-base.webhook');
-ah = vizWebhook && vizWebhook.parameters && vizWebhook.parameters.path === 'analysis/tools/data-visualization';
-assert.ok(ah);
+assert.ok(vizWebhook && vizWebhook.parameters && vizWebhook.parameters.path === 'analysis/tools/data-visualization');
 
 const agent = readJSON(files[0]);
 const agentWebhook = agent.nodes.find(n => n.type === 'n8n-nodes-base.webhook');

@@ -24,14 +24,14 @@ try {
 
       let level, estimatedDuration;
       if (complexityScore <= 2) {
-        level = "low";
-        estimatedDuration = "15s";
+        level = 'low';
+        estimatedDuration = '15s';
       } else if (complexityScore <= 4) {
-        level = "medium";
-        estimatedDuration = "30s";
+        level = 'medium';
+        estimatedDuration = '30s';
       } else {
-        level = "high";
-        estimatedDuration = "60s";
+        level = 'high';
+        estimatedDuration = '60s';
       }
 
       return {
@@ -56,32 +56,32 @@ try {
     determineAgentRouting(message, complexity) {
       const messageLower = message.toLowerCase();
       const routing = {
-        primary: "research",
+        primary: 'research',
         collaborators: [],
-        reasoning: ""
+        reasoning: ''
       };
 
-      if (messageLower.includes("research") || messageLower.includes("find") || 
-          messageLower.includes("search") || messageLower.includes("information")) {
-        routing.primary = "research";
-        routing.collaborators = ["analysis"];
-        routing.reasoning = "Research request detected";
+      if (messageLower.includes('research') || messageLower.includes('find') || 
+          messageLower.includes('search') || messageLower.includes('information')) {
+        routing.primary = 'research';
+        routing.collaborators = ['analysis'];
+        routing.reasoning = 'Research request detected';
       }
-      else if (messageLower.includes("create") || messageLower.includes("write") || 
-               messageLower.includes("generate") || messageLower.includes("design")) {
-        routing.primary = "creative";
-        routing.collaborators = ["research"];
-        routing.reasoning = "Creative task detected";
+      else if (messageLower.includes('create') || messageLower.includes('write') || 
+               messageLower.includes('generate') || messageLower.includes('design')) {
+        routing.primary = 'creative';
+        routing.collaborators = ['research'];
+        routing.reasoning = 'Creative task detected';
       }
-      else if (messageLower.includes("code") || messageLower.includes("program") || 
-               messageLower.includes("develop") || messageLower.includes("build")) {
-        routing.primary = "development";
-        routing.collaborators = ["research", "qa"];
-        routing.reasoning = "Development task detected";
+      else if (messageLower.includes('code') || messageLower.includes('program') || 
+               messageLower.includes('develop') || messageLower.includes('build')) {
+        routing.primary = 'development';
+        routing.collaborators = ['research', 'qa'];
+        routing.reasoning = 'Development task detected';
       }
 
-      if (complexity.level === "high" && !routing.collaborators.includes("qa")) {
-        routing.collaborators.push("qa");
+      if (complexity.level === 'high' && !routing.collaborators.includes('qa')) {
+        routing.collaborators.push('qa');
       }
 
       return routing;
@@ -91,15 +91,15 @@ try {
   const orchestrator = new SimpleMasterOrchestrator();
   
   // Test 1: Task complexity analysis
-  const complexity = orchestrator.analyzeTaskComplexity("Create a comprehensive analysis of machine learning algorithms for data processing");
+  const complexity = orchestrator.analyzeTaskComplexity('Create a comprehensive analysis of machine learning algorithms for data processing');
   console.log(`  ✅ Task complexity analysis: ${complexity.level} (score: ${complexity.score})`);
   
   // Test 2: Agent routing
-  const routing = orchestrator.determineAgentRouting("Research the latest AI developments", complexity);
+  const routing = orchestrator.determineAgentRouting('Research the latest AI developments', complexity);
   console.log(`  ✅ Agent routing: ${routing.primary} with collaborators: ${routing.collaborators.join(', ')}`);
   
   // Test 3: Technical term counting
-  const techTerms = orchestrator.countTechnicalTerms("This API uses machine learning algorithms for data processing");
+  const techTerms = orchestrator.countTechnicalTerms('This API uses machine learning algorithms for data processing');
   console.log(`  ✅ Technical terms detected: ${techTerms}`);
 
   console.log('\n🔍 Testing Research Agent Core Functions...');
@@ -107,7 +107,6 @@ try {
   // Simple Research Agent mock
   class SimpleResearchAgent {
     extractDataPoints(text) {
-      const dataPoints = [];
       const numberPattern = /\d+(?:\.\d+)?\s*(?:%|percent|million|billion|thousand)/gi;
       const matches = text.match(numberPattern) || [];
       
@@ -140,7 +139,7 @@ try {
   const researchAgent = new SimpleResearchAgent();
   
   // Test 4: Data extraction
-  const testData = "The market grew by 15% in 2024. Revenue increased to $2.5 million.";
+  const testData = 'The market grew by 15% in 2024. Revenue increased to $2.5 million.';
   const dataPoints = researchAgent.extractDataPoints(testData);
   console.log(`  ✅ Data points extracted: ${dataPoints.length} points`);
   
@@ -153,7 +152,6 @@ try {
   // Simple Analysis Agent mock
   class SimpleAnalysisAgent {
     parseNumericalData(data) {
-      const numbers = [];
       const text = typeof data === 'string' ? data : JSON.stringify(data);
       const numberMatches = text.match(/\d+(?:\.\d+)?/g) || [];
       
@@ -188,7 +186,7 @@ try {
   const analysisAgent = new SimpleAnalysisAgent();
   
   // Test 6: Numerical parsing
-  const testNumbers = "Sales: 100, 150, 200, 175, 225";
+  const testNumbers = 'Sales: 100, 150, 200, 175, 225';
   const numbers = analysisAgent.parseNumericalData(testNumbers);
   console.log(`  ✅ Numerical data parsed: ${numbers.length} values`);
   
@@ -205,9 +203,9 @@ try {
       const words = text.split(' ').length;
       const avgWordsPerSentence = words / sentences;
       
-      if (avgWordsPerSentence < 15) return "high";
-      if (avgWordsPerSentence < 25) return "medium";
-      return "low";
+      if (avgWordsPerSentence < 15) return 'high';
+      if (avgWordsPerSentence < 25) return 'medium';
+      return 'low';
     }
 
     extractThemes(text) {
@@ -232,12 +230,12 @@ try {
   const creativeAgent = new SimpleCreativeAgent();
   
   // Test 8: Readability
-  const testContent = "This is a comprehensive analysis of market trends. The data shows significant growth. We recommend immediate action.";
+  const testContent = 'This is a comprehensive analysis of market trends. The data shows significant growth. We recommend immediate action.';
   const readability = creativeAgent.calculateReadability(testContent);
   console.log(`  ✅ Readability assessment: ${readability}`);
   
   // Test 9: Theme extraction
-  const themes = creativeAgent.extractThemes("Our innovative software solution uses advanced technology to analyze market data and provide strategic insights.");
+  const themes = creativeAgent.extractThemes('Our innovative software solution uses advanced technology to analyze market data and provide strategic insights.');
   console.log(`  ✅ Themes extracted: ${themes.join(', ')}`);
 
   console.log('\n📋 Test Results Summary:');

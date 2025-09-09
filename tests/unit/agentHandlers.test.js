@@ -1,6 +1,6 @@
 // Unit Tests for Agent Handlers
 const { AgentHandlers } = require('../../src/agents/AgentHandlers');
-const { databaseService } = require('../../src/services/database');
+// const { databaseService } = require('../../src/services/database'); // Unused import
 
 // Mock dependencies
 jest.mock('../../src/services/database');

@@ -5,6 +5,7 @@ describe('Chatroom Service Unit Tests', () => {
   beforeEach(() => {
     // Reset any mocks or state
     jest.clearAllMocks();
+    chatroomService.rooms.clear();
   });
 
   describe('Room Management', () => {

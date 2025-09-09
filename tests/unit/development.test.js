@@ -159,9 +159,6 @@ describe('DevelopmentAgent', () => {
       const language = 'javascript';
 
       // Mock exec
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
       
       jest.spyOn(require('child_process'), 'exec').mockImplementation((cmd, options, callback) => {
         callback(null, { stdout: 'test\n', stderr: '' });
