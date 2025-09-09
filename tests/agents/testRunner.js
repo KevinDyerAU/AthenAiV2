@@ -6,7 +6,7 @@ class AgentTestRunner {
     this.testResults = [];
     this.mockConfig = {
       enabled: false, // Disable LangSmith for testing
-      project: "test-project"
+      project: 'test-project'
     };
   }
 
@@ -28,15 +28,15 @@ class AgentTestRunner {
       const orchestrator = new MasterOrchestrator('test-key', this.mockConfig);
       
       // Test task complexity analysis
-      const complexity = orchestrator.analyzeTaskComplexity("Create a comprehensive analysis of market trends");
+      const complexity = orchestrator.analyzeTaskComplexity('Create a comprehensive analysis of market trends');
       console.log(`  ✅ Task complexity analysis: ${complexity.level} (score: ${complexity.score})`);
       
       // Test agent routing
-      const routing = orchestrator.determineAgentRouting("Research the latest AI developments", complexity);
+      const routing = orchestrator.determineAgentRouting('Research the latest AI developments', complexity);
       console.log(`  ✅ Agent routing: ${routing.primary} with collaborators: ${routing.collaborators.join(', ')}`);
       
       // Test plan creation
-      const plan = orchestrator.createDetailedPlan("Analyze market data", complexity, routing);
+      const plan = orchestrator.createDetailedPlan('Analyze market data', complexity, routing);
       console.log(`  ✅ Detailed plan created with ${plan.length} steps`);
       
       this.testResults.push({ agent: 'MasterOrchestrator', status: 'PASS', tests: 3 });
@@ -54,7 +54,7 @@ class AgentTestRunner {
       const researchAgent = new ResearchAgent('test-key', this.mockConfig, {});
       
       // Test data extraction
-      const testData = "The market grew by 15% in 2024. Revenue increased to $2.5 million.";
+      const testData = 'The market grew by 15% in 2024. Revenue increased to $2.5 million.';
       const dataPoints = researchAgent.extractDataPoints(testData);
       console.log(`  ✅ Data points extracted: ${dataPoints.length} points`);
       
@@ -91,7 +91,7 @@ class AgentTestRunner {
       const analysisAgent = new AnalysisAgent('test-key', this.mockConfig);
       
       // Test numerical data parsing
-      const testData = "Sales: 100, 150, 200, 175, 225";
+      const testData = 'Sales: 100, 150, 200, 175, 225';
       const numbers = analysisAgent.parseNumericalData(testData);
       console.log(`  ✅ Numerical data parsed: ${numbers.length} values`);
       
@@ -100,12 +100,12 @@ class AgentTestRunner {
       console.log(`  ✅ Statistics calculated - Mean: ${stats.mean.toFixed(2)}, StdDev: ${stats.stdDev.toFixed(2)}`);
       
       // Test trend analysis
-      const trendData = "The market is increasing rapidly with growing demand and rising prices";
+      const trendData = 'The market is increasing rapidly with growing demand and rising prices';
       const trends = analysisAgent.analyzeTrends(trendData);
       console.log(`  ✅ Trend analysis: ${trends.direction} trend with ${trends.strength} strength`);
       
       // Test pattern detection
-      const patterns = analysisAgent.detectPatterns("Regular seasonal patterns with recurring monthly cycles");
+      const patterns = analysisAgent.detectPatterns('Regular seasonal patterns with recurring monthly cycles');
       console.log(`  ✅ Pattern detection: ${patterns.confidence}% confidence`);
       
       this.testResults.push({ agent: 'AnalysisAgent', status: 'PASS', tests: 4 });
@@ -123,7 +123,7 @@ class AgentTestRunner {
       const creativeAgent = new CreativeAgent('test-key', this.mockConfig);
       
       // Test content structure analysis
-      const testContent = "Introduction to the topic. First, we examine the data. Second, we analyze trends. Finally, we conclude with recommendations.";
+      const testContent = 'Introduction to the topic. First, we examine the data. Second, we analyze trends. Finally, we conclude with recommendations.';
       const structure = creativeAgent.analyzeContentStructure(testContent);
       console.log(`  ✅ Content structure analyzed: ${structure.sections.length} sections, ${structure.flow} flow`);
       
@@ -137,12 +137,12 @@ class AgentTestRunner {
       
       // Test engagement score
       const mockOutput = {
-        executive_summary: "This is a comprehensive summary of our findings and recommendations.",
+        executive_summary: 'This is a comprehensive summary of our findings and recommendations.',
         main_content: testContent,
-        key_takeaways: ["Takeaway 1", "Takeaway 2", "Takeaway 3"],
-        call_to_action: "Implement these recommendations immediately for best results.",
-        supporting_evidence: ["Evidence 1", "Evidence 2"],
-        style_assessment: { engagement: "high", clarity: "high" }
+        key_takeaways: ['Takeaway 1', 'Takeaway 2', 'Takeaway 3'],
+        call_to_action: 'Implement these recommendations immediately for best results.',
+        supporting_evidence: ['Evidence 1', 'Evidence 2'],
+        style_assessment: { engagement: 'high', clarity: 'high' }
       };
       const engagement = creativeAgent.calculateEngagementScore(mockOutput);
       console.log(`  ✅ Engagement score calculated: ${engagement}`);

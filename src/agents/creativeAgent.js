@@ -1,8 +1,8 @@
 // Creative Agent - Extracted Logic
-const { ChatOpenAI } = require("@langchain/openai");
-const { AgentExecutor, createOpenAIFunctionsAgent } = require("langchain/agents");
-const { DynamicTool } = require("@langchain/core/tools");
-const { PromptTemplate } = require("@langchain/core/prompts");
+const { ChatOpenAI } = require('@langchain/openai');
+const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
+const { DynamicTool } = require('@langchain/core/tools');
+const { PromptTemplate } = require('@langchain/core/prompts');
 
 class CreativeAgent {
   constructor(apiKey, langSmithConfig = {}) {
@@ -13,9 +13,9 @@ class CreativeAgent {
 
   setupLangSmith() {
     if (this.langSmithConfig.enabled) {
-      process.env.LANGCHAIN_TRACING_V2 = "true";
-      process.env.LANGCHAIN_PROJECT = this.langSmithConfig.project || "athenai-creative-agent";
-      process.env.LANGCHAIN_ENDPOINT = this.langSmithConfig.endpoint || "https://api.smith.langchain.com";
+      process.env.LANGCHAIN_TRACING_V2 = 'true';
+      process.env.LANGCHAIN_PROJECT = this.langSmithConfig.project || 'athenai-creative-agent';
+      process.env.LANGCHAIN_ENDPOINT = this.langSmithConfig.endpoint || 'https://api.smith.langchain.com';
     }
   }
 
@@ -23,7 +23,7 @@ class CreativeAgent {
     try {
       const taskData = inputData.task || inputData;
       const content = taskData.content || taskData.research_findings || taskData.analysis_results;
-      const creativeType = taskData.creative_type || "synthesis";
+      const creativeType = taskData.creative_type || 'synthesis';
       const sessionId = taskData.session_id || 'default_session';
       const orchestrationId = taskData.orchestration_id || 'default_orchestration';
       
@@ -32,10 +32,10 @@ class CreativeAgent {
       }
 
       const llm = new ChatOpenAI({
-        modelName: "gpt-4",
+        modelName: 'gpt-4',
         temperature: 0.7,
         openAIApiKey: this.apiKey,
-        tags: ["creative-agent", "athenai"]
+        tags: ['creative-agent', 'athenai']
       });
 
       const tools = this.initializeCreativeTools();
@@ -60,7 +60,7 @@ class CreativeAgent {
         creativeType: creativeType,
         sessionId: sessionId,
         orchestrationId: orchestrationId,
-        tools: tools.map(t => t.name).join(", ")
+        tools: tools.map(t => t.name).join(', ')
       });
 
       const structuredOutput = await this.processCreativeOutput(creativeResult, content, creativeType);
@@ -69,7 +69,7 @@ class CreativeAgent {
       const creativeReport = {
         orchestration_id: orchestrationId,
         session_id: sessionId,
-        agent_type: "creative",
+        agent_type: 'creative',
         creative_type: creativeType,
         input_summary: this.summarizeInput(content),
         creative_output: structuredOutput,
@@ -78,7 +78,7 @@ class CreativeAgent {
         quality_metrics: qualityMetrics,
         engagement_score: this.calculateEngagementScore(structuredOutput),
         timestamp: new Date().toISOString(),
-        status: "completed"
+        status: 'completed'
       };
 
       return {
@@ -87,11 +87,11 @@ class CreativeAgent {
         neo4j_context: this.createNeo4jContext(sessionId, orchestrationId, creativeType, creativeReport.engagement_score),
         memory: {
           upsert: true,
-          keys: ["creative_type", "engagement_score", "quality_metrics", "timestamp"]
+          keys: ['creative_type', 'engagement_score', 'quality_metrics', 'timestamp']
         },
         routing: {
-          queue: "qa_tasks",
-          priority: "normal"
+          queue: 'qa_tasks',
+          priority: 'normal'
         }
       };
 
@@ -135,8 +135,8 @@ Content: {content}
     const tools = [];
 
     tools.push(new DynamicTool({
-      name: "content_structurer",
-      description: "Structure content into logical, engaging sections",
+      name: 'content_structurer',
+      description: 'Structure content into logical, engaging sections',
       func: async (content) => {
         try {
           const structure = this.analyzeContentStructure(content);
@@ -152,8 +152,8 @@ Recommended Structure: ${structure.recommendation}`;
     }));
 
     tools.push(new DynamicTool({
-      name: "tone_adapter",
-      description: "Adapt content tone for specific audiences and purposes",
+      name: 'tone_adapter',
+      description: 'Adapt content tone for specific audiences and purposes',
       func: async (content) => {
         try {
           const toneAnalysis = this.analyzeTone(content);
@@ -179,7 +179,7 @@ Adjustments Needed: ${toneAnalysis.adjustments.join(', ')}`;
       sections: this.identifySections(sentences),
       flow: this.assessFlow(sentences),
       themes: this.extractThemes(text),
-      recommendation: "Introduction -> Main Points -> Conclusion"
+      recommendation: 'Introduction -> Main Points -> Conclusion'
     };
   }
 
@@ -206,7 +206,7 @@ Adjustments Needed: ${toneAnalysis.adjustments.join(', ')}`;
       transitionWords.some(word => s.toLowerCase().includes(word))
     );
     
-    return hasTransitions ? "good" : "needs_improvement";
+    return hasTransitions ? 'good' : 'needs_improvement';
   }
 
   extractThemes(text) {
@@ -231,35 +231,35 @@ Adjustments Needed: ${toneAnalysis.adjustments.join(', ')}`;
     const text = typeof content === 'string' ? content : JSON.stringify(content);
     const textLower = text.toLowerCase();
     
-    let currentTone = "neutral";
+    let currentTone = 'neutral';
     if (textLower.includes('exciting') || textLower.includes('amazing')) {
-      currentTone = "enthusiastic";
+      currentTone = 'enthusiastic';
     } else if (textLower.includes('concern') || textLower.includes('issue')) {
-      currentTone = "cautious";
+      currentTone = 'cautious';
     } else if (textLower.includes('data') || textLower.includes('analysis')) {
-      currentTone = "analytical";
+      currentTone = 'analytical';
     }
     
     return {
       current: currentTone,
-      recommended: "professional_engaging",
-      audienceFit: "medium",
-      adjustments: ["add_engaging_elements", "maintain_professionalism"]
+      recommended: 'professional_engaging',
+      audienceFit: 'medium',
+      adjustments: ['add_engaging_elements', 'maintain_professionalism']
     };
   }
 
-  async processCreativeOutput(creativeResult, originalContent, creativeType) {
+  async processCreativeOutput(creativeResult, _originalContent, _creativeType) {
     const output = {
-      executive_summary: "",
-      main_content: "",
+      executive_summary: '',
+      main_content: '',
       key_takeaways: [],
-      call_to_action: "",
+      call_to_action: '',
       supporting_evidence: [],
       style_assessment: {}
     };
 
     try {
-      const resultText = creativeResult.output || "";
+      const resultText = creativeResult.output || '';
       
       output.executive_summary = this.extractExecutiveSummary(resultText);
       output.main_content = resultText;
@@ -269,7 +269,7 @@ Adjustments Needed: ${toneAnalysis.adjustments.join(', ')}`;
       output.style_assessment = this.assessStyle(resultText);
       
     } catch (error) {
-      output.main_content = "Error processing creative output";
+      output.main_content = 'Error processing creative output';
     }
 
     return output;
@@ -303,7 +303,7 @@ Adjustments Needed: ${toneAnalysis.adjustments.join(', ')}`;
       }
     }
     
-    return "Consider implementing the insights provided in this analysis.";
+    return 'Consider implementing the insights provided in this analysis.';
   }
 
   extractEvidence(text) {
@@ -333,39 +333,39 @@ Adjustments Needed: ${toneAnalysis.adjustments.join(', ')}`;
     const words = text.split(' ').length;
     const avgWordsPerSentence = words / sentences;
     
-    if (avgWordsPerSentence < 15) return "high";
-    if (avgWordsPerSentence < 25) return "medium";
-    return "low";
+    if (avgWordsPerSentence < 15) return 'high';
+    if (avgWordsPerSentence < 25) return 'medium';
+    return 'low';
   }
 
   calculateEngagement(text) {
     const engagingWords = (text.match(/interesting|exciting|important|significant|remarkable/gi) || []).length;
     const questions = (text.match(/\?/g) || []).length;
     
-    return engagingWords + questions > 3 ? "high" : "medium";
+    return engagingWords + questions > 3 ? 'high' : 'medium';
   }
 
   calculateClarity(text) {
     const clarityIndicators = (text.match(/clear|obvious|evident|specifically|precisely/gi) || []).length;
     const confusingWords = (text.match(/complex|complicated|unclear|ambiguous/gi) || []).length;
     
-    return clarityIndicators > confusingWords ? "high" : "medium";
+    return clarityIndicators > confusingWords ? 'high' : 'medium';
   }
 
   calculateProfessionalism(text) {
     const professionalWords = (text.match(/analysis|research|data|strategy|implementation/gi) || []).length;
     const casualWords = (text.match(/awesome|cool|stuff|things|whatever/gi) || []).length;
     
-    return professionalWords > casualWords ? "high" : "medium";
+    return professionalWords > casualWords ? 'high' : 'medium';
   }
 
-  calculateQualityMetrics(output, rawResult) {
+  calculateQualityMetrics(output, _rawResult) {
     return {
       content_length: output.main_content.length,
       structure_score: this.calculateStructureScore(output),
       engagement_level: this.calculateEngagementScore(output),
       evidence_strength: output.supporting_evidence.length,
-      clarity_score: output.style_assessment.clarity === "high" ? 0.9 : 0.7,
+      clarity_score: output.style_assessment.clarity === 'high' ? 0.9 : 0.7,
       completeness: this.calculateCompleteness(output)
     };
   }
@@ -382,7 +382,7 @@ Adjustments Needed: ${toneAnalysis.adjustments.join(', ')}`;
 
   calculateEngagementScore(output) {
     let score = 0.5;
-    if (output.style_assessment.engagement === "high") score += 0.2;
+    if (output.style_assessment.engagement === 'high') score += 0.2;
     if (output.key_takeaways.length > 3) score += 0.1;
     if (output.call_to_action.length > 30) score += 0.1;
     return Math.min(0.95, score);
@@ -407,29 +407,29 @@ Adjustments Needed: ${toneAnalysis.adjustments.join(', ')}`;
     };
   }
 
-  determineNextActions(output, creativeType) {
+  determineNextActions(output, _creativeType) {
     const actions = [];
     
-    if (output.style_assessment.engagement === "low") {
+    if (output.style_assessment.engagement === 'low') {
       actions.push({
-        action: "enhance_engagement",
-        priority: "medium",
-        description: "Improve content engagement through storytelling and examples"
+        action: 'enhance_engagement',
+        priority: 'medium',
+        description: 'Improve content engagement through storytelling and examples'
       });
     }
     
     if (output.supporting_evidence.length < 2) {
       actions.push({
-        action: "add_evidence",
-        priority: "medium",
-        description: "Strengthen content with additional supporting evidence"
+        action: 'add_evidence',
+        priority: 'medium',
+        description: 'Strengthen content with additional supporting evidence'
       });
     }
     
     actions.push({
-      action: "quality_review",
-      priority: "normal",
-      description: "Conduct final quality review before publication"
+      action: 'quality_review',
+      priority: 'normal',
+      description: 'Conduct final quality review before publication'
     });
     
     return actions;
@@ -450,15 +450,15 @@ Adjustments Needed: ${toneAnalysis.adjustments.join(', ')}`;
   createErrorResponse(error) {
     return {
       error: error.message,
-      agent_type: "creative",
-      status: "failed",
+      agent_type: 'creative',
+      status: 'failed',
       timestamp: new Date().toISOString(),
       fallback_content: {
-        summary: "Creative agent encountered an error. Manual content creation may be required.",
+        summary: 'Creative agent encountered an error. Manual content creation may be required.',
         recommendations: [
-          "Review input content format",
-          "Check creative parameters",
-          "Verify API connectivity"
+          'Review input content format',
+          'Check creative parameters',
+          'Verify API connectivity'
         ]
       }
     };

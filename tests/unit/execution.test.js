@@ -75,8 +75,6 @@ describe('ExecutionAgent', () => {
 
   describe('executeCommand', () => {
     it('should execute command successfully', async () => {
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
       
       exec.mockImplementation((cmd, options, callback) => {
         callback(null, { stdout: 'Command executed successfully', stderr: '' });

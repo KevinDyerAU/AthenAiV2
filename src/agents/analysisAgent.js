@@ -1,8 +1,8 @@
 // Analysis Agent - Extracted Logic
-const { ChatOpenAI } = require("@langchain/openai");
-const { AgentExecutor, createOpenAIFunctionsAgent } = require("langchain/agents");
-const { DynamicTool } = require("@langchain/core/tools");
-const { PromptTemplate } = require("@langchain/core/prompts");
+const { ChatOpenAI } = require('@langchain/openai');
+const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
+const { DynamicTool } = require('@langchain/core/tools');
+const { PromptTemplate } = require('@langchain/core/prompts');
 
 class AnalysisAgent {
   constructor(apiKey, langSmithConfig = {}) {
@@ -13,9 +13,9 @@ class AnalysisAgent {
 
   setupLangSmith() {
     if (this.langSmithConfig.enabled) {
-      process.env.LANGCHAIN_TRACING_V2 = "true";
-      process.env.LANGCHAIN_PROJECT = this.langSmithConfig.project || "athenai-analysis-agent";
-      process.env.LANGCHAIN_ENDPOINT = this.langSmithConfig.endpoint || "https://api.smith.langchain.com";
+      process.env.LANGCHAIN_TRACING_V2 = 'true';
+      process.env.LANGCHAIN_PROJECT = this.langSmithConfig.project || 'athenai-analysis-agent';
+      process.env.LANGCHAIN_ENDPOINT = this.langSmithConfig.endpoint || 'https://api.smith.langchain.com';
     }
   }
 
@@ -23,7 +23,7 @@ class AnalysisAgent {
     try {
       const taskData = inputData.task || inputData;
       const dataToAnalyze = taskData.data || taskData.research_findings || taskData.content;
-      const analysisType = taskData.analysis_type || "comprehensive";
+      const analysisType = taskData.analysis_type || 'comprehensive';
       const sessionId = taskData.session_id || 'default_session';
       const orchestrationId = taskData.orchestration_id || 'default_orchestration';
       
@@ -33,10 +33,10 @@ class AnalysisAgent {
 
       // Initialize OpenAI
       const llm = new ChatOpenAI({
-        modelName: "gpt-4",
+        modelName: 'gpt-4',
         temperature: 0.1,
         openAIApiKey: this.apiKey,
-        tags: ["analysis-agent", "athenai"]
+        tags: ['analysis-agent', 'athenai']
       });
 
       // Initialize analysis tools
@@ -66,7 +66,7 @@ class AnalysisAgent {
         analysisType: analysisType,
         sessionId: sessionId,
         orchestrationId: orchestrationId,
-        tools: tools.map(t => t.name).join(", ")
+        tools: tools.map(t => t.name).join(', ')
       });
 
       // Process analysis results
@@ -79,7 +79,7 @@ class AnalysisAgent {
       const analysisReport = {
         orchestration_id: orchestrationId,
         session_id: sessionId,
-        agent_type: "analysis",
+        agent_type: 'analysis',
         analysis_type: analysisType,
         input_data_summary: this.summarizeInputData(dataToAnalyze),
         analysis_results: structuredAnalysis,
@@ -90,7 +90,7 @@ class AnalysisAgent {
         recommendations: this.generateRecommendations(structuredAnalysis),
         confidence_score: this.calculateConfidenceScore(structuredAnalysis),
         timestamp: new Date().toISOString(),
-        status: "completed"
+        status: 'completed'
       };
 
       return {
@@ -99,11 +99,11 @@ class AnalysisAgent {
         neo4j_context: this.createNeo4jContext(sessionId, orchestrationId, analysisType, analysisReport.confidence_score),
         memory: {
           upsert: true,
-          keys: ["analysis_type", "insights", "recommendations", "confidence_score", "timestamp"]
+          keys: ['analysis_type', 'insights', 'recommendations', 'confidence_score', 'timestamp']
         },
         routing: {
-          queue: "creative_tasks",
-          priority: "normal"
+          queue: 'creative_tasks',
+          priority: 'normal'
         }
       };
 
@@ -149,13 +149,13 @@ Data: {data}
 
     // Statistical analysis tool
     tools.push(new DynamicTool({
-      name: "statistical_analyzer",
-      description: "Perform statistical analysis on numerical data",
+      name: 'statistical_analyzer',
+      description: 'Perform statistical analysis on numerical data',
       func: async (data) => {
         try {
           const parsedData = this.parseNumericalData(data);
           if (parsedData.length === 0) {
-            return "No numerical data found for statistical analysis";
+            return 'No numerical data found for statistical analysis';
           }
 
           const stats = this.calculateStatistics(parsedData);
@@ -175,8 +175,8 @@ Variance: ${stats.variance.toFixed(2)}`;
 
     // Trend analyzer tool
     tools.push(new DynamicTool({
-      name: "trend_analyzer",
-      description: "Identify trends and patterns in time-series or sequential data",
+      name: 'trend_analyzer',
+      description: 'Identify trends and patterns in time-series or sequential data',
       func: async (data) => {
         try {
           const trends = this.analyzeTrends(data);
@@ -194,8 +194,8 @@ Anomalies Detected: ${trends.anomalies.length}`;
 
     // Correlation finder tool
     tools.push(new DynamicTool({
-      name: "correlation_finder",
-      description: "Find correlations between different data variables",
+      name: 'correlation_finder',
+      description: 'Find correlations between different data variables',
       func: async (data) => {
         try {
           const correlations = this.findCorrelations(data);
@@ -212,8 +212,8 @@ Top Correlation: ${correlations.top.description} (${correlations.top.strength})`
 
     // Pattern detector tool
     tools.push(new DynamicTool({
-      name: "pattern_detector",
-      description: "Detect recurring patterns and anomalies in data",
+      name: 'pattern_detector',
+      description: 'Detect recurring patterns and anomalies in data',
       func: async (data) => {
         try {
           const patterns = this.detectPatterns(data);
@@ -230,8 +230,8 @@ Confidence Level: ${patterns.confidence}%`;
 
     // Predictive analyzer tool
     tools.push(new DynamicTool({
-      name: "predictive_analyzer",
-      description: "Generate predictive insights based on historical data patterns",
+      name: 'predictive_analyzer',
+      description: 'Generate predictive insights based on historical data patterns',
       func: async (data) => {
         try {
           const predictions = this.generatePredictions(data);
@@ -250,7 +250,6 @@ Risk Factors: ${predictions.risks.join(', ')}`;
   }
 
   parseNumericalData(data) {
-    const numbers = [];
     const text = typeof data === 'string' ? data : JSON.stringify(data);
     const numberMatches = text.match(/\d+(?:\.\d+)?/g) || [];
     
@@ -288,17 +287,17 @@ Risk Factors: ${predictions.risks.join(', ')}`;
     const increasingWords = (text.match(/increas|grow|rise|up|higher|more/gi) || []).length;
     const decreasingWords = (text.match(/decreas|fall|drop|down|lower|less/gi) || []).length;
     
-    let direction = "stable";
-    if (increasingWords > decreasingWords + 2) direction = "increasing";
-    else if (decreasingWords > increasingWords + 2) direction = "decreasing";
+    let direction = 'stable';
+    if (increasingWords > decreasingWords + 2) direction = 'increasing';
+    else if (decreasingWords > increasingWords + 2) direction = 'decreasing';
     
-    const strength = Math.abs(increasingWords - decreasingWords) > 5 ? "strong" : "moderate";
-    const volatility = text.includes("volatile") || text.includes("fluctuat") ? "high" : "low";
+    const strength = Math.abs(increasingWords - decreasingWords) > 5 ? 'strong' : 'moderate';
+    const volatility = text.includes('volatile') || text.includes('fluctuat') ? 'high' : 'low';
     
     const patterns = [];
-    if (text.includes("seasonal")) patterns.push("seasonal");
-    if (text.includes("cyclic")) patterns.push("cyclical");
-    if (text.includes("linear")) patterns.push("linear");
+    if (text.includes('seasonal')) patterns.push('seasonal');
+    if (text.includes('cyclic')) patterns.push('cyclical');
+    if (text.includes('linear')) patterns.push('linear');
     
     return {
       direction,
@@ -350,7 +349,7 @@ Risk Factors: ${predictions.risks.join(', ')}`;
       strong,
       moderate,
       weak,
-      top: strong[0] || moderate[0] || weak[0] || { description: "No significant correlations", strength: 0 }
+      top: strong[0] || moderate[0] || weak[0] || { description: 'No significant correlations', strength: 0 }
     };
   }
 
@@ -386,17 +385,17 @@ Risk Factors: ${predictions.risks.join(', ')}`;
     const text = typeof data === 'string' ? data : JSON.stringify(data);
     
     // Simple prediction logic based on trends
-    let shortTerm = "stable";
-    let longTerm = "uncertain";
+    let shortTerm = 'stable';
+    let longTerm = 'uncertain';
     let confidence = 60;
     
     if (text.includes('grow') || text.includes('increas')) {
-      shortTerm = "continued growth expected";
-      longTerm = "positive trajectory";
+      shortTerm = 'continued growth expected';
+      longTerm = 'positive trajectory';
       confidence = 75;
     } else if (text.includes('declin') || text.includes('decreas')) {
-      shortTerm = "continued decline expected";
-      longTerm = "negative trajectory";
+      shortTerm = 'continued decline expected';
+      longTerm = 'negative trajectory';
       confidence = 70;
     }
     
@@ -413,7 +412,7 @@ Risk Factors: ${predictions.risks.join(', ')}`;
     };
   }
 
-  async processAnalysisResults(analysisResult, originalData, analysisType) {
+  async processAnalysisResults(analysisResult, originalData, _analysisType) {
     const results = {
       data_overview: this.createDataOverview(originalData),
       statistical_summary: {},
@@ -425,7 +424,7 @@ Risk Factors: ${predictions.risks.join(', ')}`;
     };
 
     try {
-      const output = analysisResult.output || "";
+      const output = analysisResult.output || '';
       
       // Extract different analysis components from the output
       results.statistical_summary = this.extractStatisticalSummary(output);
@@ -676,32 +675,32 @@ Risk Factors: ${predictions.risks.join(', ')}`;
     
     if (analysisResults.quality_assessment.completeness < 0.7) {
       recommendations.push({
-        type: "data_quality",
-        priority: "high",
-        description: "Improve data completeness before conducting further analysis"
+        type: 'data_quality',
+        priority: 'high',
+        description: 'Improve data completeness before conducting further analysis'
       });
     }
     
     if (analysisResults.trend_identification.direction === 'decreasing') {
       recommendations.push({
-        type: "trend_response",
-        priority: "medium",
-        description: "Investigate causes of declining trend and develop mitigation strategies"
+        type: 'trend_response',
+        priority: 'medium',
+        description: 'Investigate causes of declining trend and develop mitigation strategies'
       });
     }
     
     if (analysisResults.pattern_analysis.anomalies.length > 2) {
       recommendations.push({
-        type: "anomaly_investigation",
-        priority: "medium",
-        description: "Investigate detected anomalies for potential insights or data quality issues"
+        type: 'anomaly_investigation',
+        priority: 'medium',
+        description: 'Investigate detected anomalies for potential insights or data quality issues'
       });
     }
     
     recommendations.push({
-      type: "continuous_monitoring",
-      priority: "low",
-      description: "Establish regular monitoring to track changes in key metrics"
+      type: 'continuous_monitoring',
+      priority: 'low',
+      description: 'Establish regular monitoring to track changes in key metrics'
     });
     
     return recommendations;
@@ -770,25 +769,25 @@ Risk Factors: ${predictions.risks.join(', ')}`;
     
     if (analysisResults.quality_assessment.completeness < 0.7) {
       actions.push({
-        action: "data_enhancement",
-        priority: "high",
-        description: "Improve data quality before proceeding with advanced analysis"
+        action: 'data_enhancement',
+        priority: 'high',
+        description: 'Improve data quality before proceeding with advanced analysis'
       });
     }
     
     if (analysisResults.pattern_analysis.anomalies.length > 0) {
       actions.push({
-        action: "anomaly_investigation",
-        priority: "medium",
-        description: "Investigate detected anomalies for root causes"
+        action: 'anomaly_investigation',
+        priority: 'medium',
+        description: 'Investigate detected anomalies for root causes'
       });
     }
     
-    if (analysisType === "comprehensive") {
+    if (analysisType === 'comprehensive') {
       actions.push({
-        action: "report_generation",
-        priority: "normal",
-        description: "Generate comprehensive analysis report for stakeholders"
+        action: 'report_generation',
+        priority: 'normal',
+        description: 'Generate comprehensive analysis report for stakeholders'
       });
     }
     
@@ -810,15 +809,15 @@ Risk Factors: ${predictions.risks.join(', ')}`;
   createErrorResponse(error) {
     return {
       error: error.message,
-      agent_type: "analysis",
-      status: "failed",
+      agent_type: 'analysis',
+      status: 'failed',
       timestamp: new Date().toISOString(),
       fallback_analysis: {
-        summary: "Analysis agent encountered an error. Manual analysis may be required.",
+        summary: 'Analysis agent encountered an error. Manual analysis may be required.',
         recommendations: [
-          "Verify data format and structure",
-          "Check for data quality issues",
-          "Review analysis parameters"
+          'Verify data format and structure',
+          'Check for data quality issues',
+          'Review analysis parameters'
         ]
       }
     };

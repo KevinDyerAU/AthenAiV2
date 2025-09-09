@@ -1,6 +1,6 @@
 // src/agents/MasterOrchestrator.js
 const { ChatOpenAI } = require('@langchain/openai');
-const { PromptTemplate } = require('@langchain/core/prompts');
+// const { PromptTemplate } = require('@langchain/core/prompts'); // Unused import
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 
@@ -23,13 +23,13 @@ class MasterOrchestrator {
       logger.info('Starting orchestration', { sessionId, orchestrationId });
 
       // Analyze task complexity
-      const complexity = this.analyzeTaskComplexity(inputData.message);
+      const _complexity = this.analyzeTaskComplexity(inputData.message);
       
       // Determine agent routing
-      const routing = this.determineAgentRouting(inputData.message, complexity);
+      const routing = this.determineAgentRouting(inputData.message, _complexity);
       
       // Create execution plan
-      const plan = this.createExecutionPlan(inputData.message, complexity, routing);
+      const plan = this.createExecutionPlan(inputData.message, _complexity, routing);
       
       // Cache the orchestration context
       await databaseService.cacheSet(
@@ -37,7 +37,6 @@ class MasterOrchestrator {
         {
           sessionId,
           message: inputData.message,
-          complexity,
           routing,
           plan,
           status: 'in_progress'
@@ -52,7 +51,7 @@ class MasterOrchestrator {
         'Orchestration',
         {
           message: inputData.message,
-          complexity_level: complexity.level,
+          complexity_level: _complexity.level,
           primary_agent: routing.primary,
           created_at: new Date().toISOString()
         }
@@ -72,7 +71,7 @@ class MasterOrchestrator {
         session_id: sessionId,
         plan,
         routing,
-        complexity,
+        complexity: _complexity,
         execution_time_ms: executionTime,
         status: 'completed'
       };
@@ -253,30 +252,30 @@ class MasterOrchestrator {
 
   identifyRequestTypes(text) {
     const textLower = text.toLowerCase();
-    let complexity = 0;
+    let _complexity = 0;
     const types = [];
 
     if (textLower.includes('explain') || textLower.includes('how')) {
       types.push('explanation');
-      complexity += 1;
+      _complexity += 1;
     }
     
     if (textLower.includes('create') || textLower.includes('generate')) {
       types.push('creation');
-      complexity += 2;
+      _complexity += 2;
     }
     
     if (textLower.includes('analyze') || textLower.includes('compare')) {
       types.push('analysis');
-      complexity += 2;
+      _complexity += 2;
     }
     
     if (textLower.includes('solve') || textLower.includes('fix')) {
       types.push('problem_solving');
-      complexity += 3;
+      _complexity += 3;
     }
 
-    return { types, complexity };
+    return { types, complexity: _complexity };
   }
 
   generateSessionId() {

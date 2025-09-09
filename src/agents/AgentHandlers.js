@@ -501,7 +501,6 @@ class AgentHandlers {
     const maxRetries = options.maxRetries || 3;
     const retryDelay = options.retryDelay || 1000;
     let lastError;
-    let lastResult;
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -510,7 +509,6 @@ class AgentHandlers {
         }
         
         const result = await this.executeAgent(agentId, inputData, options);
-        lastResult = result;
         
         if (result.status === 'completed') {
           return {

@@ -83,58 +83,7 @@ class ChatroomService {
     return rooms;
   }
 
-  // Message handling
-  async addMessage(roomId, userId, message, messageType = 'user') {
-    const room = this.rooms.get(roomId);
-    if (!room) {
-      throw new Error(`Room ${roomId} not found`);
-    }
-
-    const messageData = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      roomId,
-      userId,
-      message,
-      messageType, // 'user', 'agent', 'system'
-      timestamp: new Date().toISOString()
-    };
-
-    // Add to room history (keep last 100 messages in memory)
-    room.messageHistory.push(messageData);
-    if (!room.messages) room.messages = [];
-    room.messages.push(messageData);
-    
-    if (room.messageHistory.length > 100) {
-      room.messageHistory.shift();
-    }
-    if (room.messages.length > 100) {
-      room.messages.shift();
-    }
-
-    // Store in database if available
-    try {
-      await databaseService.createConversation(
-        roomId,
-        userId,
-        message,
-        null, // response will be added later
-        messageType,
-        { messageId: messageData.id, roomId }
-      );
-    } catch (error) {
-      logger.warn('Failed to store message in database', { error: error.message });
-    }
-
-    logger.info('Message added to room', { roomId, userId, messageType });
-    return messageData;
-  }
-
-  getMessageHistory(roomId, limit = 50) {
-    const room = this.rooms.get(roomId);
-    if (!room) return [];
-    
-    return room.messageHistory.slice(-limit);
-  }
+  // Message handling - consolidated with improved version below
 
   // Agent response handling
   async addAgentResponse(roomId, originalMessageId, response, agentType = 'research') {
@@ -172,18 +121,7 @@ class ChatroomService {
     return this.userSockets.get(userId);
   }
 
-  getAllRooms() {
-    const roomList = [];
-    for (const [roomId, room] of this.rooms.entries()) {
-      roomList.push({
-        roomId,
-        userCount: room.users.size,
-        messageCount: room.messageHistory.length,
-        metadata: room.metadata
-      });
-    }
-    return roomList;
-  }
+  // getAllRooms - consolidated with improved version below
 
   // Cleanup disconnected users
   cleanupDisconnectedUser(socketId) {
