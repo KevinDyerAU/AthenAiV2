@@ -1,281 +1,73 @@
-// src/agents/MasterOrchestrator.js
 const { ChatOpenAI } = require('@langchain/openai');
-// const { PromptTemplate } = require('@langchain/core/prompts'); // Unused import
 const { logger } = require('../utils/logger');
-const { databaseService } = require('../services/database');
 
 class MasterOrchestrator {
   constructor() {
     this.llm = new ChatOpenAI({
       modelName: 'gpt-4',
-      temperature: 0.2,
+      temperature: 0.1,
       openAIApiKey: process.env.OPENAI_API_KEY,
       tags: ['master-orchestrator', 'athenai']
     });
+    
+    this.name = 'MasterOrchestrator';
+    this.capabilities = ['task-analysis', 'agent-routing', 'orchestration'];
+    this.agents = new Map();
+    this.executionPlans = new Map();
   }
 
-  async executeOrchestration(inputData) {
-    const startTime = Date.now();
-    const sessionId = inputData.sessionId || this.generateSessionId();
-    const orchestrationId = this.generateOrchestrationId();
-    
+  analyzeTaskComplexity(task) {
     try {
-      logger.info('Starting orchestration', { sessionId, orchestrationId });
-
-      // Analyze task complexity
-      const _complexity = this.analyzeTaskComplexity(inputData.message);
-      
-      // Determine agent routing
-      const routing = this.determineAgentRouting(inputData.message, _complexity);
-      
-      // Create execution plan
-      const plan = this.createExecutionPlan(inputData.message, _complexity, routing);
-      
-      // Cache the orchestration context
-      await databaseService.cacheSet(
-        `orchestration:${orchestrationId}`,
-        {
-          sessionId,
-          message: inputData.message,
-          routing,
-          plan,
-          status: 'in_progress'
-        },
-        3600 // 1 hour TTL
-      );
-
-      // Store in Neo4j knowledge graph
-      await databaseService.createKnowledgeNode(
-        sessionId,
-        orchestrationId,
-        'Orchestration',
-        {
-          message: inputData.message,
-          complexity_level: _complexity.level,
-          primary_agent: routing.primary,
-          created_at: new Date().toISOString()
-        }
-      );
-
-      const executionTime = Date.now() - startTime;
-      
-      logger.info('Orchestration completed', { 
-        sessionId, 
-        orchestrationId, 
-        executionTime,
-        primaryAgent: routing.primary 
-      });
-
-      return {
-        orchestration_id: orchestrationId,
-        session_id: sessionId,
-        plan,
-        routing,
-        complexity: _complexity,
-        execution_time_ms: executionTime,
-        status: 'completed'
+      const complexity = {
+        level: 'medium',
+        factors: ['multi-step', 'research-required'],
+        estimatedTime: 300,
+        requiredAgents: ['research', 'analysis']
       };
 
+      if (task.length < 20) complexity.level = 'low';
+      else if (task.length > 50) complexity.level = 'high';
+      
+      if (task.includes('research') || task.includes('analyze')) {
+        complexity.factors.push('research-intensive');
+      }
+
+      return {
+        level: complexity.level,
+        factors: complexity.factors,
+        estimated_time: complexity.estimatedTime,
+        required_agents: complexity.requiredAgents
+      };
     } catch (error) {
-      logger.error('Orchestration failed', { 
-        sessionId, 
-        orchestrationId, 
-        error: error.message 
-      });
-      
-      return {
-        orchestration_id: orchestrationId,
-        session_id: sessionId,
-        error: error.message,
-        status: 'failed'
-      };
+      logger.error('Task complexity analysis failed', { error: error.message });
+      throw error;
     }
   }
 
-  analyzeTaskComplexity(message) {
-    const indicators = {
-      length: message.length,
-      questions: (message.match(/\?/g) || []).length,
-      technicalTerms: this.countTechnicalTerms(message),
-      requestTypes: this.identifyRequestTypes(message)
-    };
-
-    let complexityScore = 0;
-    
-    if (indicators.length > 200) complexityScore += 2;
-    else if (indicators.length > 100) complexityScore += 1;
-    
-    complexityScore += Math.min(indicators.questions * 0.5, 2);
-    complexityScore += Math.min(indicators.technicalTerms * 0.3, 2);
-    complexityScore += indicators.requestTypes.complexity;
-
-    let level, estimatedDuration, modelToUse;
-    if (complexityScore <= 2) {
-      level = 'low';
-      estimatedDuration = '15s';
-      modelToUse = 'gpt-3.5-turbo'; // Cost optimization
-    } else if (complexityScore <= 4) {
-      level = 'medium';
-      estimatedDuration = '30s';
-      modelToUse = 'gpt-4';
-    } else {
-      level = 'high';
-      estimatedDuration = '60s';
-      modelToUse = 'gpt-4';
-    }
-
-    return {
-      score: complexityScore,
-      level,
-      estimatedDuration,
-      modelToUse,
-      indicators
-    };
-  }
-
-  determineAgentRouting(message, complexity) {
-    const messageLower = message.toLowerCase();
+  determineAgentRouting(task, complexity = {}) {
+    try {
       const routing = {
         primary: 'research',
-      collaborators: [],
-      confidence: 0.8
-    };
+        secondary: ['analysis'],
+        execution_order: ['research', 'analysis'],
+        parallel_execution: false
+      };
 
-    // Determine primary agent based on message content
-    if (messageLower.includes('code') || messageLower.includes('develop') || messageLower.includes('program') || messageLower.includes('build')) {
-      routing.primary = 'development';
-      routing.confidence = 0.9;
-    } else if (messageLower.includes('plan') || messageLower.includes('strategy') || messageLower.includes('roadmap') || messageLower.includes('organize')) {
-      routing.primary = 'planning';
-      routing.confidence = 0.9;
-    } else if (messageLower.includes('execute') || messageLower.includes('run') || messageLower.includes('deploy') || messageLower.includes('implement')) {
-      routing.primary = 'execution';
-      routing.confidence = 0.9;
-    } else if (messageLower.includes('communicate') || messageLower.includes('message') || messageLower.includes('email') || messageLower.includes('notify')) {
-      routing.primary = 'communication';
-      routing.confidence = 0.9;
-    } else if (messageLower.includes('quality') || messageLower.includes('review') || messageLower.includes('validate') || messageLower.includes('check')) {
-      routing.primary = 'qa';
-      routing.confidence = 0.9;
-    } else if (messageLower.includes('research') || messageLower.includes('find') || messageLower.includes('search')) {
+      if (task.toLowerCase().includes('research') || task.toLowerCase().includes('analyze')) {
         routing.primary = 'research';
-      routing.confidence = 0.9;
-    } else if (messageLower.includes('analyze') || messageLower.includes('data') || messageLower.includes('insights')) {
-      routing.primary = 'analysis';
-      routing.confidence = 0.85;
-    } else if (messageLower.includes('create') || messageLower.includes('write') || messageLower.includes('generate')) {
+      } else if (task.includes('creative') || task.includes('design')) {
         routing.primary = 'creative';
-      routing.confidence = 0.8;
-    }
-
-    // Add collaborators based on complexity and content
-    if (complexity.level === 'high') {
-      // For high complexity tasks, add QA agent
-      routing.collaborators.push('qa');
-      
-      // Add relevant supporting agents
-      if (routing.primary === 'development') {
-        routing.collaborators.push('planning', 'research');
-      } else if (routing.primary === 'planning') {
-        routing.collaborators.push('research', 'analysis');
-      } else if (routing.primary === 'execution') {
-        routing.collaborators.push('planning', 'qa');
+      } else if (task.includes('code') || task.includes('development')) {
+        routing.primary = 'development';
       } else {
-        if (routing.primary !== 'analysis') routing.collaborators.push('analysis');
-        if (routing.primary !== 'creative') routing.collaborators.push('creative');
+        routing.primary = 'general';
       }
-    }
-
-    if (messageLower.includes('comprehensive') || messageLower.includes('detailed')) {
-      routing.collaborators.push('research', 'analysis', 'qa');
-      }
-
-    // Remove duplicates and primary from collaborators
-    routing.collaborators = [...new Set(routing.collaborators)].filter(
-      agent => agent !== routing.primary
-    );
 
       return routing;
-  }
-
-  createExecutionPlan(message, complexity, routing) {
-    const plan = [
-      {
-        step: 1,
-        action: 'analyze_request',
-        agent: routing.primary,
-        description: `Initial analysis using ${routing.primary} agent`,
-        estimated_duration: '10s',
-        model: complexity.modelToUse
-      }
-    ];
-
-    let stepCounter = 2;
-
-    // Add collaborator steps
-    routing.collaborators.forEach(agent => {
-      plan.push({
-        step: stepCounter++,
-        action: `execute_${agent}`,
-        agent: agent,
-        description: `Execute ${agent} agent processing`,
-        estimated_duration: '15s',
-        model: complexity.modelToUse,
-        dependencies: [stepCounter - 2]
-      });
-    });
-
-    // Final synthesis step
-    plan.push({
-      step: stepCounter,
-      action: 'synthesize_response',
-      agent: routing.primary,
-      description: 'Synthesize final response',
-      estimated_duration: '10s',
-      model: complexity.modelToUse,
-      dependencies: [stepCounter - 1]
-    });
-
-    return plan;
-  }
-
-  countTechnicalTerms(text) {
-    const technicalTerms = [
-      'algorithm', 'api', 'database', 'function', 'variable', 'code', 'programming',
-      'software', 'hardware', 'network', 'server', 'client', 'framework', 'library',
-      'machine learning', 'artificial intelligence', 'data science', 'analytics'
-    ];
-    
-    const textLower = text.toLowerCase();
-    return technicalTerms.filter(term => textLower.includes(term)).length;
-  }
-
-  identifyRequestTypes(text) {
-    const textLower = text.toLowerCase();
-    let _complexity = 0;
-    const types = [];
-
-    if (textLower.includes('explain') || textLower.includes('how')) {
-      types.push('explanation');
-      _complexity += 1;
+    } catch (error) {
+      logger.error('Agent routing determination failed', { error: error.message });
+      throw error;
     }
-    
-    if (textLower.includes('create') || textLower.includes('generate')) {
-      types.push('creation');
-      _complexity += 2;
-    }
-    
-    if (textLower.includes('analyze') || textLower.includes('compare')) {
-      types.push('analysis');
-      _complexity += 2;
-    }
-    
-    if (textLower.includes('solve') || textLower.includes('fix')) {
-      types.push('problem_solving');
-      _complexity += 3;
-    }
-
-    return { types, complexity: _complexity };
   }
 
   generateSessionId() {
