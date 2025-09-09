@@ -18,6 +18,9 @@ class MasterOrchestrator {
 
   analyzeTaskComplexity(task) {
     try {
+      // Ensure task is a string
+      const taskString = typeof task === 'string' ? task : JSON.stringify(task);
+      
       const complexity = {
         level: 'medium',
         factors: ['multi-step', 'research-required'],
@@ -25,10 +28,10 @@ class MasterOrchestrator {
         requiredAgents: ['research', 'analysis']
       };
 
-      if (task.length < 20) complexity.level = 'low';
-      else if (task.length > 50) complexity.level = 'high';
+      if (taskString.length < 20) complexity.level = 'low';
+      else if (taskString.length > 50) complexity.level = 'high';
       
-      if (task.includes('research') || task.includes('analyze')) {
+      if (taskString.includes('research') || taskString.includes('analyze')) {
         complexity.factors.push('research-intensive');
       }
 
@@ -44,8 +47,11 @@ class MasterOrchestrator {
     }
   }
 
-  determineAgentRouting(task, complexity = {}) {
+  determineAgentRouting(task) {
     try {
+      // Ensure task is a string
+      const taskString = typeof task === 'string' ? task : JSON.stringify(task);
+      
       const routing = {
         primary: 'research',
         secondary: ['analysis'],
@@ -53,11 +59,12 @@ class MasterOrchestrator {
         parallel_execution: false
       };
 
-      if (task.toLowerCase().includes('research') || task.toLowerCase().includes('analyze')) {
+      const taskLower = taskString.toLowerCase();
+      if (taskLower.includes('research') || taskLower.includes('analyze')) {
         routing.primary = 'research';
-      } else if (task.includes('creative') || task.includes('design')) {
+      } else if (taskLower.includes('creative') || taskLower.includes('design')) {
         routing.primary = 'creative';
-      } else if (task.includes('code') || task.includes('development')) {
+      } else if (taskLower.includes('code') || taskLower.includes('development')) {
         routing.primary = 'development';
       } else {
         routing.primary = 'general';

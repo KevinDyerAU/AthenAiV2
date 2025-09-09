@@ -1,6 +1,6 @@
 // tests/integration/api.test.js
 const request = require('supertest');
-const app = require('../../src/app');
+const { app } = require('../../src/app');
 
 describe('API Integration Tests', () => {
   test('Health check should return 200', async () => {

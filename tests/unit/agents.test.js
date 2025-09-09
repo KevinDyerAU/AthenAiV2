@@ -80,8 +80,13 @@ describe('Agent Unit Tests', () => {
       const validQuery = 'Machine learning trends';
       const invalidQuery = '';
 
-      expect(researchAgent.validateQuery(validQuery)).toBe(true);
-      expect(researchAgent.validateQuery(invalidQuery)).toBe(false);
+      const validResult = researchAgent.validateQuery(validQuery);
+      const invalidResult = researchAgent.validateQuery(invalidQuery);
+
+      expect(validResult.is_valid).toBe(true);
+      expect(validResult.validation_issues).toEqual([]);
+      expect(invalidResult.is_valid).toBe(false);
+      expect(invalidResult.validation_issues.length).toBeGreaterThan(0);
     });
 
     test('Should format research results properly', () => {

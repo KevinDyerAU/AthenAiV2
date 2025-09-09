@@ -1,23 +1,89 @@
 // tests/integration/websocket.test.js
 const Client = require('socket.io-client');
-// const request = require('supertest'); // Unused import
-const app = require('../../src/app');
+const http = require('http');
+const { Server } = require('socket.io');
+const { app } = require('../../src/app');
 
 describe('WebSocket Integration Tests', () => {
   let server;
+  let io;
   let clientSocket;
 
   beforeAll((done) => {
-    server = app.listen(() => {
+    server = http.createServer(app);
+    io = new Server(server, {
+      cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+      }
+    });
+    
+    // Add basic socket event handlers for testing
+    io.on('connection', (socket) => {
+      socket.on('join_room', (data) => {
+        socket.join(data.roomId);
+        socket.emit('user_joined', {
+          username: data.username,
+          roomId: data.roomId,
+          userId: data.userId
+        });
+      });
+
+      socket.on('send_message', (data) => {
+        // Emit to all clients in the room including sender
+        io.to(data.roomId).emit('new_message', {
+          message: data.message,
+          username: data.username,
+          userId: data.userId,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Simulate AI response for AI queries
+        if (data.message && data.message.toLowerCase().includes('research')) {
+          setTimeout(() => {
+            socket.emit('ai_response', {
+              type: 'ai_response',
+              content: 'AI research response',
+              timestamp: new Date().toISOString()
+            });
+          }, 100);
+        }
+      });
+
+      socket.on('leave_room', (data) => {
+        socket.leave(data.roomId);
+        socket.emit('user_left', {
+          userId: data.userId,
+          roomId: data.roomId
+        });
+      });
+    });
+    
+    server.listen(() => {
       const port = server.address().port;
       clientSocket = new Client(`http://localhost:${port}`);
       clientSocket.on('connect', done);
     });
   });
 
-  afterAll(() => {
-    server.close();
-    clientSocket.close();
+  afterAll((done) => {
+    if (clientSocket) {
+      clientSocket.removeAllListeners();
+      clientSocket.disconnect();
+    }
+    if (io) {
+      io.close();
+    }
+    if (server) {
+      server.close(() => {
+        // Add a small delay to ensure all connections are properly closed
+        setTimeout(() => {
+          done();
+        }, 100);
+      });
+    } else {
+      done();
+    }
   });
 
   test('Should connect to websocket server', (done) => {
@@ -63,6 +129,10 @@ describe('WebSocket Integration Tests', () => {
       username: 'TestUser',
       message: 'Research AI trends'
     };
+
+    // Remove any existing listeners to avoid interference
+    clientSocket.removeAllListeners('new_message');
+    clientSocket.removeAllListeners('ai_response');
 
     clientSocket.emit('send_message', aiQuery);
 

@@ -41,7 +41,11 @@ async function initializeApp() {
     logger.info('Database services initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize database services:', error);
-    process.exit(1);
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1);
+    } else {
+      throw error; // In test environment, throw error instead of exiting
+    }
   }
 }
 
@@ -233,9 +237,12 @@ async function startServer() {
   });
 }
 
-startServer().catch(error => {
-  logger.error('Failed to start server:', error);
-  process.exit(1);
-});
+// Only start server if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+  startServer().catch(error => {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  });
+}
 
-module.exports = app;
+module.exports = { app, startServer };
