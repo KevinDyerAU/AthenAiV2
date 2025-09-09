@@ -1,11 +1,10 @@
 // tests/unit/chatroom.test.js
-const ChatroomService = require('../../src/services/chatroom');
+const { chatroomService } = require('../../src/services/chatroom');
 
 describe('Chatroom Service Unit Tests', () => {
-  let chatroomService;
-
   beforeEach(() => {
-    chatroomService = new ChatroomService();
+    // Reset any mocks or state
+    jest.clearAllMocks();
   });
 
   describe('Room Management', () => {

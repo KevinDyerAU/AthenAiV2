@@ -1,6 +1,6 @@
 // tests/unit/agents.test.js
-const MasterOrchestrator = require('../../src/agents/MasterOrchestrator');
-const ResearchAgent = require('../../src/agents/ResearchAgent');
+const { MasterOrchestrator } = require('../../src/agents/MasterOrchestrator');
+const { ResearchAgent } = require('../../src/agents/ResearchAgent');
 
 describe('Agent Unit Tests', () => {
   let orchestrator;

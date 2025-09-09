@@ -1,5 +1,5 @@
 // tests/unit/database.test.js
-const databaseService = require('../../src/services/database');
+const { databaseService } = require('../../src/services/database');
 
 describe('Database Service Unit Tests', () => {
   describe('Connection Management', () => {
