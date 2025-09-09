@@ -53,22 +53,30 @@ class ResearchAgent {
 
   validateQuery(query) {
     try {
+      const issues = [];
+      
       if (!query || typeof query !== 'string') {
-        return false;
+        issues.push('Query must be a non-empty string');
       }
 
-      if (query.length < 3) {
-        return false;
+      if (query && query.length < 3) {
+        issues.push('Query too short (minimum 3 characters)');
       }
 
-      if (query.length > 1000) {
-        return false;
+      if (query && query.length > 1000) {
+        issues.push('Query too long (maximum 1000 characters)');
       }
 
-      return true;
+      return {
+        is_valid: issues.length === 0,
+        validation_issues: issues
+      };
     } catch (error) {
       logger.error('Query validation failed', { error: error.message });
-      return false;
+      return {
+        is_valid: false,
+        validation_issues: ['Validation error occurred']
+      };
     }
   }
 
