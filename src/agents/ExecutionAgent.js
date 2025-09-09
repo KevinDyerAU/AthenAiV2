@@ -1,0 +1,710 @@
+// Execution Agent - Task Execution and Workflow Management
+const { ChatOpenAI } = require('@langchain/openai');
+const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
+const { DynamicTool } = require('@langchain/core/tools');
+const { PromptTemplate } = require('@langchain/core/prompts');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
+const fs = require('fs').promises;
+const path = require('path');
+const { logger } = require('../utils/logger');
+const { databaseService } = require('../services/database');
+
+class ExecutionAgent {
+  constructor() {
+    this.llm = new ChatOpenAI({
+      modelName: 'gpt-4',
+      temperature: 0.1,
+      openAIApiKey: process.env.OPENAI_API_KEY,
+      tags: ['execution-agent', 'athenai']
+    });
+    this.executionQueue = [];
+    this.runningTasks = new Map();
+    this.maxConcurrentTasks = process.env.MAX_CONCURRENT_TASKS || 5;
+  }
+
+  async executeTask(inputData) {
+    const startTime = Date.now();
+    const sessionId = inputData.sessionId || 'exec_session_' + Date.now();
+    const orchestrationId = inputData.orchestrationId || 'exec_orchestration_' + Date.now();
+
+    try {
+      logger.info('Starting execution task', { sessionId, orchestrationId });
+
+      const taskData = inputData.task || inputData;
+      const executionPlan = taskData.execution_plan || taskData.plan || taskData.message;
+      const executionType = taskData.execution_type || 'workflow';
+      const environment = taskData.environment || 'development';
+      const parameters = taskData.parameters || {};
+
+      if (!executionPlan) {
+        throw new Error('Execution plan is required');
+      }
+
+      // Initialize execution tools
+      const tools = this.initializeExecutionTools();
+
+      // Create execution prompt
+      const prompt = PromptTemplate.fromTemplate(`
+You are an Execution Agent specialized in task execution, workflow management, and process automation.
+
+Execution Plan: {executionPlan}
+Execution Type: {executionType}
+Environment: {environment}
+Parameters: {parameters}
+Session ID: {sessionId}
+
+Available tools: {tools}
+
+Your responsibilities:
+1. Execute tasks and workflows according to plans
+2. Monitor task progress and handle failures
+3. Coordinate parallel and sequential task execution
+4. Manage task dependencies and prerequisites
+5. Handle error recovery and retry logic
+6. Provide real-time status updates and logging
+7. Optimize execution performance and resource usage
+
+Execution types:
+- workflow: Execute multi-step workflows with dependencies
+- command: Execute system commands and scripts
+- api: Execute API calls and integrations
+- batch: Execute batch processing tasks
+- pipeline: Execute data processing pipelines
+- deployment: Execute deployment and infrastructure tasks
+
+Current execution: {executionType} - {executionPlan}
+`);
+
+      // Create agent
+      const agent = await createOpenAIFunctionsAgent({
+        llm: this.llm,
+        tools,
+        prompt
+      });
+
+      const agentExecutor = new AgentExecutor({
+        agent,
+        tools,
+        verbose: false,
+        maxIterations: 15,
+        returnIntermediateSteps: true
+      });
+
+      // Execute the task
+      const result = await agentExecutor.invoke({
+        executionPlan: typeof executionPlan === 'object' ? JSON.stringify(executionPlan) : executionPlan,
+        executionType,
+        environment,
+        parameters: JSON.stringify(parameters),
+        sessionId,
+        tools: tools.map(t => t.name).join(', ')
+      });
+
+      // Process and structure the results
+      const executionResult = {
+        session_id: sessionId,
+        orchestration_id: orchestrationId,
+        execution_plan: executionPlan,
+        execution_type: executionType,
+        environment,
+        parameters,
+        result: result.output,
+        intermediate_steps: result.intermediateSteps,
+        execution_time_ms: Date.now() - startTime,
+        status: 'completed'
+      };
+
+      // Store results in knowledge graph
+      await databaseService.createKnowledgeNode(
+        sessionId,
+        orchestrationId,
+        'ExecutionTask',
+        {
+          execution_type: executionType,
+          environment,
+          status: 'completed',
+          created_at: new Date().toISOString()
+        }
+      );
+
+      // Cache the execution context
+      await databaseService.cacheSet(
+        `execution:${orchestrationId}`,
+        executionResult,
+        3600 // 1 hour TTL
+      );
+
+      logger.info('Execution task completed', {
+        sessionId,
+        orchestrationId,
+        executionType,
+        executionTime: executionResult.execution_time_ms
+      });
+
+      return executionResult;
+
+    } catch (error) {
+      logger.error('Execution task failed', {
+        sessionId,
+        orchestrationId,
+        error: error.message
+      });
+
+      return {
+        session_id: sessionId,
+        orchestration_id: orchestrationId,
+        error: error.message,
+        status: 'failed',
+        execution_time_ms: Date.now() - startTime
+      };
+    }
+  }
+
+  initializeExecutionTools() {
+    return [
+      // Command Execution Tool
+      new DynamicTool({
+        name: 'execute_command',
+        description: 'Execute system commands and scripts',
+        func: async (input) => {
+          try {
+            const { command, workingDir, timeout, environment } = JSON.parse(input);
+            const result = await this.executeCommand(command, workingDir, timeout, environment);
+            return JSON.stringify(result);
+          } catch (error) {
+            return JSON.stringify({ error: error.message });
+          }
+        }
+      }),
+
+      // Workflow Execution Tool
+      new DynamicTool({
+        name: 'execute_workflow',
+        description: 'Execute multi-step workflows with dependencies',
+        func: async (input) => {
+          try {
+            const { workflow, context } = JSON.parse(input);
+            const result = await this.executeWorkflow(workflow, context);
+            return JSON.stringify(result);
+          } catch (error) {
+            return JSON.stringify({ error: error.message });
+          }
+        }
+      }),
+
+      // API Execution Tool
+      new DynamicTool({
+        name: 'execute_api_call',
+        description: 'Execute API calls and handle responses',
+        func: async (input) => {
+          try {
+            const { url, method, headers, data, timeout } = JSON.parse(input);
+            const result = await this.executeApiCall(url, method, headers, data, timeout);
+            return JSON.stringify(result);
+          } catch (error) {
+            return JSON.stringify({ error: error.message });
+          }
+        }
+      }),
+
+      // File Operations Tool
+      new DynamicTool({
+        name: 'execute_file_operations',
+        description: 'Execute file system operations',
+        func: async (input) => {
+          try {
+            const { operations } = JSON.parse(input);
+            const result = await this.executeFileOperations(operations);
+            return JSON.stringify(result);
+          } catch (error) {
+            return JSON.stringify({ error: error.message });
+          }
+        }
+      }),
+
+      // Task Queue Management Tool
+      new DynamicTool({
+        name: 'manage_task_queue',
+        description: 'Manage task execution queue and priorities',
+        func: async (input) => {
+          try {
+            const { action, taskId, priority } = JSON.parse(input);
+            const result = await this.manageTaskQueue(action, taskId, priority);
+            return JSON.stringify(result);
+          } catch (error) {
+            return JSON.stringify({ error: error.message });
+          }
+        }
+      }),
+
+      // Progress Monitoring Tool
+      new DynamicTool({
+        name: 'monitor_progress',
+        description: 'Monitor task progress and status',
+        func: async (input) => {
+          try {
+            const { taskId, checkpoints } = JSON.parse(input);
+            const result = await this.monitorProgress(taskId, checkpoints);
+            return JSON.stringify(result);
+          } catch (error) {
+            return JSON.stringify({ error: error.message });
+          }
+        }
+      }),
+
+      // Error Recovery Tool
+      new DynamicTool({
+        name: 'handle_error_recovery',
+        description: 'Handle error recovery and retry logic',
+        func: async (input) => {
+          try {
+            const { error, context, retryStrategy } = JSON.parse(input);
+            const result = await this.handleErrorRecovery(error, context, retryStrategy);
+            return JSON.stringify(result);
+          } catch (error) {
+            return JSON.stringify({ error: error.message });
+          }
+        }
+      }),
+
+      // Resource Management Tool
+      new DynamicTool({
+        name: 'manage_resources',
+        description: 'Manage execution resources and optimization',
+        func: async (input) => {
+          try {
+            const { resourceType, action, parameters } = JSON.parse(input);
+            const result = await this.manageResources(resourceType, action, parameters);
+            return JSON.stringify(result);
+          } catch (error) {
+            return JSON.stringify({ error: error.message });
+          }
+        }
+      })
+    ];
+  }
+
+  async executeCommand(command, workingDir = process.cwd(), timeout = 30000, environment = {}) {
+    try {
+      const options = {
+        cwd: workingDir,
+        timeout,
+        env: { ...process.env, ...environment }
+      };
+
+      logger.info('Executing command', { command, workingDir, timeout });
+
+      const { stdout, stderr } = await execAsync(command, options);
+
+      return {
+        command,
+        working_dir: workingDir,
+        stdout,
+        stderr,
+        exit_code: 0,
+        status: 'success',
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.error('Command execution failed', { command, error: error.message });
+      
+      return {
+        command,
+        working_dir: workingDir,
+        stdout: error.stdout || '',
+        stderr: error.stderr || error.message,
+        exit_code: error.code || 1,
+        status: 'failed',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  async executeWorkflow(workflow, context = {}) {
+    const workflowId = `workflow_${Date.now()}`;
+    const results = [];
+
+    try {
+      logger.info('Starting workflow execution', { workflowId, workflow });
+
+      // Parse workflow steps
+      const steps = Array.isArray(workflow) ? workflow : workflow.steps || [];
+      
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        const stepId = `${workflowId}_step_${i + 1}`;
+
+        logger.info('Executing workflow step', { workflowId, stepId, step });
+
+        try {
+          let stepResult;
+
+          switch (step.type) {
+            case 'command':
+              stepResult = await this.executeCommand(
+                step.command,
+                step.working_dir,
+                step.timeout,
+                step.environment
+              );
+              break;
+            case 'api':
+              stepResult = await this.executeApiCall(
+                step.url,
+                step.method,
+                step.headers,
+                step.data,
+                step.timeout
+              );
+              break;
+            case 'file':
+              stepResult = await this.executeFileOperations(step.operations);
+              break;
+            default:
+              stepResult = { status: 'skipped', reason: `Unknown step type: ${step.type}` };
+          }
+
+          results.push({
+            step_id: stepId,
+            step_index: i + 1,
+            step_name: step.name || `Step ${i + 1}`,
+            result: stepResult,
+            status: stepResult.status || 'completed'
+          });
+
+          // Check if step failed and workflow should stop
+          if (stepResult.status === 'failed' && step.stop_on_failure !== false) {
+            throw new Error(`Workflow stopped at step ${i + 1}: ${stepResult.error || 'Step failed'}`);
+          }
+
+        } catch (stepError) {
+          results.push({
+            step_id: stepId,
+            step_index: i + 1,
+            step_name: step.name || `Step ${i + 1}`,
+            error: stepError.message,
+            status: 'failed'
+          });
+
+          if (step.stop_on_failure !== false) {
+            throw stepError;
+          }
+        }
+      }
+
+      return {
+        workflow_id: workflowId,
+        total_steps: steps.length,
+        completed_steps: results.filter(r => r.status === 'completed').length,
+        failed_steps: results.filter(r => r.status === 'failed').length,
+        results,
+        status: 'completed',
+        timestamp: new Date().toISOString()
+      };
+
+    } catch (error) {
+      logger.error('Workflow execution failed', { workflowId, error: error.message });
+      
+      return {
+        workflow_id: workflowId,
+        results,
+        error: error.message,
+        status: 'failed',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  async executeApiCall(url, method = 'GET', headers = {}, data = null, timeout = 10000) {
+    try {
+      const axios = require('axios');
+      
+      const config = {
+        method,
+        url,
+        headers: {
+          'User-Agent': 'AthenAI-ExecutionAgent/1.0',
+          ...headers
+        },
+        timeout
+      };
+
+      if (data && ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
+        config.data = data;
+      }
+
+      logger.info('Executing API call', { url, method, timeout });
+
+      const response = await axios(config);
+
+      return {
+        url,
+        method,
+        status_code: response.status,
+        headers: response.headers,
+        data: response.data,
+        status: 'success',
+        timestamp: new Date().toISOString()
+      };
+
+    } catch (error) {
+      logger.error('API call failed', { url, method, error: error.message });
+      
+      return {
+        url,
+        method,
+        status_code: error.response?.status || 0,
+        error: error.message,
+        response_data: error.response?.data,
+        status: 'failed',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  async executeFileOperations(operations) {
+    const results = [];
+
+    for (const operation of operations) {
+      try {
+        let result;
+
+        switch (operation.type) {
+          case 'read':
+            const content = await fs.readFile(operation.path, operation.encoding || 'utf8');
+            result = { content, size: content.length };
+            break;
+          case 'write':
+            await fs.writeFile(operation.path, operation.content, operation.encoding || 'utf8');
+            result = { bytes_written: operation.content.length };
+            break;
+          case 'copy':
+            await fs.copyFile(operation.source, operation.destination);
+            result = { source: operation.source, destination: operation.destination };
+            break;
+          case 'move':
+            await fs.rename(operation.source, operation.destination);
+            result = { source: operation.source, destination: operation.destination };
+            break;
+          case 'delete':
+            await fs.unlink(operation.path);
+            result = { deleted: operation.path };
+            break;
+          case 'mkdir':
+            await fs.mkdir(operation.path, { recursive: operation.recursive || false });
+            result = { created: operation.path };
+            break;
+          default:
+            result = { error: `Unknown operation type: ${operation.type}` };
+        }
+
+        results.push({
+          operation: operation.type,
+          path: operation.path,
+          result,
+          status: result.error ? 'failed' : 'success'
+        });
+
+      } catch (error) {
+        results.push({
+          operation: operation.type,
+          path: operation.path,
+          error: error.message,
+          status: 'failed'
+        });
+      }
+    }
+
+    return {
+      total_operations: operations.length,
+      successful_operations: results.filter(r => r.status === 'success').length,
+      failed_operations: results.filter(r => r.status === 'failed').length,
+      results,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  async manageTaskQueue(action, taskId = null, priority = 'normal') {
+    switch (action) {
+      case 'add':
+        this.executionQueue.push({ id: taskId, priority, added_at: Date.now() });
+        this.executionQueue.sort((a, b) => {
+          const priorityOrder = { high: 3, normal: 2, low: 1 };
+          return priorityOrder[b.priority] - priorityOrder[a.priority];
+        });
+        break;
+      case 'remove':
+        this.executionQueue = this.executionQueue.filter(task => task.id !== taskId);
+        break;
+      case 'list':
+        return {
+          queue_length: this.executionQueue.length,
+          running_tasks: this.runningTasks.size,
+          queue: this.executionQueue
+        };
+      case 'clear':
+        this.executionQueue = [];
+        break;
+    }
+
+    return {
+      action,
+      task_id: taskId,
+      queue_length: this.executionQueue.length,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  async monitorProgress(taskId, checkpoints = []) {
+    const task = this.runningTasks.get(taskId);
+    
+    if (!task) {
+      return {
+        task_id: taskId,
+        status: 'not_found',
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    return {
+      task_id: taskId,
+      status: task.status,
+      progress: task.progress || 0,
+      checkpoints: task.checkpoints || [],
+      start_time: task.start_time,
+      elapsed_time: Date.now() - task.start_time,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  async handleErrorRecovery(error, context = {}, retryStrategy = {}) {
+    const maxRetries = retryStrategy.max_retries || 3;
+    const retryDelay = retryStrategy.retry_delay || 1000;
+    const backoffMultiplier = retryStrategy.backoff_multiplier || 2;
+
+    logger.info('Handling error recovery', { error, maxRetries, retryDelay });
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Wait before retry (except first attempt)
+        if (attempt > 1) {
+          const delay = retryDelay * Math.pow(backoffMultiplier, attempt - 2);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        // Attempt recovery based on error type
+        let recoveryResult;
+        
+        if (error.includes('timeout')) {
+          recoveryResult = await this.recoverFromTimeout(context);
+        } else if (error.includes('network') || error.includes('connection')) {
+          recoveryResult = await this.recoverFromNetworkError(context);
+        } else if (error.includes('permission') || error.includes('access')) {
+          recoveryResult = await this.recoverFromPermissionError(context);
+        } else {
+          recoveryResult = await this.genericErrorRecovery(context);
+        }
+
+        return {
+          error,
+          recovery_attempt: attempt,
+          recovery_result: recoveryResult,
+          status: 'recovered',
+          timestamp: new Date().toISOString()
+        };
+
+      } catch (recoveryError) {
+        logger.warn('Recovery attempt failed', { attempt, error: recoveryError.message });
+        
+        if (attempt === maxRetries) {
+          return {
+            error,
+            recovery_attempts: maxRetries,
+            final_error: recoveryError.message,
+            status: 'failed',
+            timestamp: new Date().toISOString()
+          };
+        }
+      }
+    }
+  }
+
+  async manageResources(resourceType, action, parameters = {}) {
+    switch (resourceType) {
+      case 'memory':
+        return this.manageMemoryResources(action, parameters);
+      case 'cpu':
+        return this.manageCpuResources(action, parameters);
+      case 'disk':
+        return this.manageDiskResources(action, parameters);
+      case 'network':
+        return this.manageNetworkResources(action, parameters);
+      default:
+        return {
+          resource_type: resourceType,
+          action,
+          error: `Unknown resource type: ${resourceType}`,
+          timestamp: new Date().toISOString()
+        };
+    }
+  }
+
+  async recoverFromTimeout(context) {
+    // Implement timeout recovery logic
+    return { recovery_type: 'timeout', action: 'increased_timeout' };
+  }
+
+  async recoverFromNetworkError(context) {
+    // Implement network error recovery logic
+    return { recovery_type: 'network', action: 'retry_with_backoff' };
+  }
+
+  async recoverFromPermissionError(context) {
+    // Implement permission error recovery logic
+    return { recovery_type: 'permission', action: 'check_permissions' };
+  }
+
+  async genericErrorRecovery(context) {
+    // Implement generic error recovery logic
+    return { recovery_type: 'generic', action: 'restart_task' };
+  }
+
+  async manageMemoryResources(action, parameters) {
+    const memUsage = process.memoryUsage();
+    return {
+      resource_type: 'memory',
+      action,
+      current_usage: memUsage,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  async manageCpuResources(action, parameters) {
+    return {
+      resource_type: 'cpu',
+      action,
+      current_load: process.cpuUsage(),
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  async manageDiskResources(action, parameters) {
+    return {
+      resource_type: 'disk',
+      action,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  async manageNetworkResources(action, parameters) {
+    return {
+      resource_type: 'network',
+      action,
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+module.exports = { ExecutionAgent };

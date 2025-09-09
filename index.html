@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NeoV3 — Local Dev Portal</title>
+  <title>AthenAI — Simplified Portal</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -68,122 +68,45 @@
 <body>
   <header>
     <div class="container">
-      <div class="title">NeoV3 — Local Dev Portal</div>
-      <div class="subtitle">Quick links, health, and a short tutorial for your local stack</div>
-      <div class="pill">Tip: manage the stack with <code>./deploy-local.sh</code></div>
+      <div class="title">AthenAI — Simplified Portal</div>
+      <div class="subtitle">AI-powered research and analysis platform with real-time chat</div>
+      <div class="pill">Simplified architecture with cost optimization</div>
     </div>
   </header>
 
   <main class="container">
     <section class="grid" aria-label="Quick Links">
       <div class="card">
-        <h3>API</h3>
-        <div class="desc">Core backend service, exposed on port 8000.</div>
+        <h3>🤖 AI Chat Interface</h3>
+        <div class="desc">Real-time chat with AI agents including research, analysis, and creative capabilities.</div>
         <div class="links">
-          <a href="http://localhost:__API_PORT__/system/health" target="_blank">/system/health</a>
-          <a href="http://localhost:__API_PORT__/api/docs" target="_blank">/api/docs (Swagger UI)</a>
-          <a href="http://localhost:__API_PORT__/redoc" target="_blank">/redoc (ReDoc)</a>
-          <a href="http://localhost:__API_PORT__/api/swagger.json" target="_blank">/api/swagger.json (OpenAPI)</a>
+          <a href="/public/chat.html" target="_blank">Launch Chat Interface</a>
         </div>
       </div>
 
       <div class="card">
-        <h3>n8n</h3>
-        <div class="desc">Workflow orchestrator.</div>
+        <h3>🔌 API Endpoints</h3>
+        <div class="desc">Core backend service with REST API and WebSocket support.</div>
         <div class="links">
-          <a href="http://localhost:__N8N_PORT__" target="_blank">n8n UI (http://localhost:__N8N_PORT__)</a>
+          <a href="/health" target="_blank">Health Check</a>
+          <a href="/api/metrics" target="_blank">System Metrics</a>
+          <a href="/public/index.html" target="_blank">Full Portal</a>
         </div>
       </div>
 
       <div class="card">
-        <h3>Grafana</h3>
-        <div class="desc">Dashboards and visualization.</div>
+        <h3>💬 WebSocket API</h3>
+        <div class="desc">Real-time communication endpoints for chat rooms and user management.</div>
         <div class="links">
-          <a href="http://localhost:__GRAFANA_PORT__" target="_blank">Grafana Home</a>
-          <a href="http://localhost:__GRAFANA_PORT__/api/health" target="_blank">API Health</a>
+          <a href="/api/ws/rooms" target="_blank">Active Rooms</a>
         </div>
       </div>
 
       <div class="card">
-        <h3>Prometheus</h3>
-        <div class="desc">Metrics collection.</div>
+        <h3>🧠 Knowledge Graph</h3>
+        <div class="desc">Neo4j-powered knowledge relationships and conversation context.</div>
         <div class="links">
-          <a href="http://localhost:__PROMETHEUS_PORT__" target="_blank">UI</a>
-          <a href="http://localhost:__PROMETHEUS_PORT__/-/ready" target="_blank">/-/ready</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Alertmanager</h3>
-        <div class="desc">Alert routing.</div>
-        <div class="links">
-          <a href="http://localhost:__ALERTMANAGER_PORT__" target="_blank">UI</a>
-          <a href="http://localhost:__ALERTMANAGER_PORT__/-/ready" target="_blank">/-/ready</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Loki</h3>
-        <div class="desc">Log aggregation (no standalone UI).</div>
-        <div class="links">
-          <a href="http://localhost:__LOKI_PORT__/ready" target="_blank">/ready</a>
-          <a href="http://localhost:__GRAFANA_PORT__/explore" target="_blank">Explore in Grafana</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>RabbitMQ</h3>
-        <div class="desc">Messaging broker & management UI.</div>
-        <div class="links">
-          <a href="http://localhost:__RABBITMQ_MGMT_PORT__" target="_blank">Management UI</a>
-          <a href="http://localhost:__RABBITMQ_MGMT_PORT__/api/overview" target="_blank">API /overview</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Neo4j</h3>
-        <div class="desc">Graph database & browser.</div>
-        <div class="links">
-          <a href="http://localhost:__NEO4J_HTTP_PORT__" target="_blank">Neo4j Browser</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>LangSmith</h3>
-        <div class="desc">AI tracing and observability platform.</div>
-        <div class="links">
-          <a href="https://smith.langchain.com" target="_blank">LangSmith Dashboard</a>
-          <a href="http://localhost:__GRAFANA_PORT__/d/langsmith-monitoring" target="_blank">LangSmith Metrics (Grafana)</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Documentation</h3>
-        <div class="desc">Repo docs bundled with the project.</div>
-        <div class="links">
-          <a href="documentation/api/README.md" target="_blank">API Docs (README)</a>
-          <a href="documentation/api/REFERENCE.md" target="_blank">API Reference (by namespace)</a>
-          <a href="documentation/api/redoc.html" target="_blank">OpenAPI (static Redoc)</a>
-          <a href="documentation/architecture/README.md" target="_blank">Architecture</a>
-          <a href="documentation/configuration/README.md" target="_blank">Configuration & ENV</a>
-          <a href="documentation/operations/PORTS.md" target="_blank">Ports & URLs Matrix</a>
-          <a href="documentation/database/README.md" target="_blank">Database (Neo4j & Postgres)</a>
-          <a href="documentation/operations/README.md" target="_blank">Operations</a>
-          <a href="documentation/monitoring/README.md" target="_blank">Monitoring</a>
-          <a href="documentation/workflows/README.md" target="_blank">Workflows</a>
-          <a href="documentation/testing/README.md" target="_blank">Testing</a>
-          <a href="documentation/security/README.md" target="_blank">Security</a>
-          <a href="documentation/unstructured/README.md" target="_blank">Unstructured Worker Guide</a>
-          <a href="documentation/self-healing/README.md" target="_blank">Self-Healing</a>
-          <a href="documentation/maintenance/README.md" target="_blank">Maintenance</a>
-          <a href="documentation/developer-guides/README.md" target="_blank">Developer Guides</a>
-          <a href="documentation/user/README.md" target="_blank">User/Admin Guide</a>
-          <a href="documentation/training/README.md" target="_blank">Training</a>
-          <a href="documentation/langsmith/README.md" target="_blank">LangSmith Integration Guide</a>
-          <a href="documentation/planning/n8nplan/N8N Workflow Analysis and Implementation Guide for NeoV3.md" target="_blank">N8N Workflow Implementation Guide</a>
-          <a href="documentation/workflows/Enhanced-Workflows-Guide.md" target="_blank">Enhanced Workflows Guide</a>
-          <a href="documentation/workflows/MODERN_N8N_MIGRATION.md" target="_blank">Modern N8N Migration</a>
-          <a href="documentation/The Ultimate n8n Guide.pdf" target="_blank">Ultimate N8N Guide (PDF)</a>
+          <a href="#" onclick="alert('Neo4j queries available via API')">Query Knowledge</a>
         </div>
       </div>
     </section>
@@ -192,89 +115,30 @@
       <h2 class="section-title">Getting Started</h2>
       <div class="cols">
         <div class="card">
-          <h3>1) Prepare environment</h3>
-          <div class="desc">Ensure your tools are available and variables exist.</div>
-          <pre><code># From repo root (Linux/macOS or WSL)
-./deploy-local.sh --check
-
-# If .env is missing, it will be created from .env.example/unified.env.example
-# Review and adjust secrets in .env and optionally .env.secrets</code></pre>
+          <h3>1) Install Dependencies</h3>
+          <div class="desc">Install Node.js packages for the simplified architecture.</div>
+          <pre><code>npm install</code></pre>
         </div>
 
         <div class="card">
-          <h3>2) Start the stack</h3>
-          <div class="desc">Fresh build and recreate containers.</div>
-          <pre><code>./deploy-local.sh --fresh
-
-# Or reuse existing containers without recreating
-./deploy-local.sh --reuse</code></pre>
+          <h3>2) Configure Environment</h3>
+          <div class="desc">Copy and configure your environment variables.</div>
+          <pre><code>cp .env.simplified.example .env
+# Edit .env with your API keys</code></pre>
         </div>
 
         <div class="card">
-          <h3>3) Check status</h3>
-          <div class="desc">Summarize container health and endpoints.</div>
-          <pre><code>./deploy-local.sh --status</code></pre>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <h2 class="section-title">Common Endpoints</h2>
-      <div class="grid">
-        <div class="card">
-          <h3>API Quick Test</h3>
-          <pre><code>curl -fsS http://localhost:__API_PORT__/system/health | jq .
-# Expect status: ok</code></pre>
-        </div>
-        <div class="card">
-          <h3>Postgres (inside container)</h3>
-          <pre><code>docker exec -it enhanced-ai-postgres psql \
-  -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}</code></pre>
-        </div>
-        <div class="card">
-          <h3>Neo4j (inside container)</h3>
-          <pre><code>docker exec -it enhanced-ai-neo4j cypher-shell \
-  -u ${NEO4J_USER:-neo4j} -p ${NEO4J_PASSWORD:-neo4j}</code></pre>
-        </div>
-        <div class="card">
-          <h3>RabbitMQ Management</h3>
-          <pre><code>open http://localhost:15672
-# Credentials come from .env (RABBITMQ_DEFAULT_USER / RABBITMQ_DEFAULT_PASS)</code></pre>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <h2 class="section-title">Troubleshooting</h2>
-      <div class="grid">
-        <div class="card">
-          <h3>Line endings on Windows</h3>
-          <div class="desc">If you see <span class="kbd">bash\r</span> errors:</div>
-          <pre><code># Run in WSL
-sed -i 's/\r$//' ./deploy-local.sh
-chmod +x ./deploy-local.sh</code></pre>
-        </div>
-        <div class="card">
-          <h3>Compose config check</h3>
-          <pre><code>docker compose -f docker-compose.yml \
-  -f docker-compose.override.observability.yml \
-  --env-file .env config</code></pre>
-        </div>
-        <div class="card">
-          <h3>View logs</h3>
-          <pre><code># Tail API logs
-docker logs -f enhanced-ai-agent-api
-
-# All services
-docker compose ps
-</code></pre>
+          <h3>3) Start the Server</h3>
+          <div class="desc">Launch the AthenAI server with WebSocket support.</div>
+          <pre><code>npm run dev
+# Server runs on http://localhost:3000</code></pre>
         </div>
       </div>
     </section>
   </main>
 
   <footer>
-    NeoV3 • Local development portal • <span title="Generated">index.html</span>
+    AthenAI Simplified • Real-time AI chat platform • v1.0.0
   </footer>
 </body>
 </html>

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AthenAI Chat</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #2d2d2d;
+            padding: 1rem;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100vh - 140px);
+        }
+        
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            background: #1e1e1e;
+        }
+        
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        
+        .message.user {
+            background: #0066cc;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .message.agent {
+            background: #2d5a2d;
+            margin-right: auto;
+        }
+        
+        .message.system {
+            background: #444;
+            margin: 0 auto;
+            text-align: center;
+            font-style: italic;
+            max-width: 60%;
+        }
+        
+        .message-header {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            margin-bottom: 0.25rem;
+        }
+        
+        .input-container {
+            background: #2d2d2d;
+            padding: 1rem;
+            border-top: 1px solid #444;
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background: #1a1a1a;
+            color: #ffffff;
+            font-size: 1rem;
+        }
+        
+        .send-button {
+            padding: 0.75rem 1.5rem;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        
+        .send-button:hover {
+            background: #0052a3;
+        }
+        
+        .send-button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        
+        .user-info {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        .status.connected {
+            background: #2d5a2d;
+        }
+        
+        .status.disconnected {
+            background: #5a2d2d;
+        }
+        
+        .room-users {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AthenAI Chat</h1>
+        <div class="user-info">
+            <div class="room-users">Room: <span id="roomId">general</span> | Users: <span id="userCount">0</span></div>
+            <div class="status" id="status">Disconnected</div>
+        </div>
+    </div>
+    
+    <div class="chat-container">
+        <div class="messages" id="messages"></div>
+        
+        <div class="input-container">
+            <input 
+                type="text" 
+                id="messageInput" 
+                class="message-input" 
+                placeholder="Type your message..."
+                disabled
+            >
+            <button id="sendButton" class="send-button" disabled>Send</button>
+        </div>
+    </div>
+
+    <script>
+        class ChatClient {
+            constructor() {
+                this.socket = null;
+                this.userId = this.generateUserId();
+                this.username = `User_${this.userId.slice(-4)}`;
+                this.roomId = 'general';
+                this.connected = false;
+                
+                this.initializeElements();
+                this.connect();
+            }
+            
+            generateUserId() {
+                return `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            }
+            
+            initializeElements() {
+                this.messagesContainer = document.getElementById('messages');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
+                this.statusElement = document.getElementById('status');
+                this.userCountElement = document.getElementById('userCount');
+                this.roomIdElement = document.getElementById('roomId');
+                
+                // Event listeners
+                this.sendButton.addEventListener('click', () => this.sendMessage());
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+            }
+            
+            connect() {
+                this.socket = io();
+                
+                this.socket.on('connect', () => {
+                    this.connected = true;
+                    this.updateStatus('Connected', 'connected');
+                    this.enableInput();
+                    this.joinRoom();
+                });
+                
+                this.socket.on('disconnect', () => {
+                    this.connected = false;
+                    this.updateStatus('Disconnected', 'disconnected');
+                    this.disableInput();
+                });
+                
+                this.socket.on('joined_room', (data) => {
+                    this.addSystemMessage(`Joined room: ${data.roomId}`);
+                    this.userCountElement.textContent = data.users.length;
+                    
+                    // Load message history
+                    data.messageHistory.forEach(msg => {
+                        this.displayMessage(msg);
+                    });
+                });
+                
+                this.socket.on('user_joined', (data) => {
+                    this.addSystemMessage(`${data.username} joined the room`);
+                    this.userCountElement.textContent = data.userCount;
+                });
+                
+                this.socket.on('user_left', (data) => {
+                    this.addSystemMessage(`User left the room`);
+                    this.userCountElement.textContent = data.userCount;
+                });
+                
+                this.socket.on('new_message', (data) => {
+                    this.displayMessage(data);
+                });
+                
+                this.socket.on('agent_response', (data) => {
+                    this.displayMessage(data);
+                });
+                
+                this.socket.on('error', (data) => {
+                    this.addSystemMessage(`Error: ${data.message}`);
+                });
+            }
+            
+            joinRoom() {
+                this.socket.emit('join_room', {
+                    roomId: this.roomId,
+                    userId: this.userId,
+                    username: this.username
+                });
+                this.roomIdElement.textContent = this.roomId;
+            }
+            
+            sendMessage() {
+                const message = this.messageInput.value.trim();
+                if (!message || !this.connected) return;
+                
+                this.socket.emit('send_message', {
+                    roomId: this.roomId,
+                    message: message,
+                    userId: this.userId,
+                    username: this.username
+                });
+                
+                this.messageInput.value = '';
+            }
+            
+            displayMessage(data) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${data.messageType || 'user'}`;
+                
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'message-header';
+                
+                if (data.messageType === 'agent') {
+                    headerDiv.textContent = `AthenAI (${data.agentType || 'assistant'}) • ${new Date(data.timestamp).toLocaleTimeString()}`;
+                } else if (data.messageType === 'system') {
+                    headerDiv.textContent = `System • ${new Date(data.timestamp).toLocaleTimeString()}`;
+                } else {
+                    headerDiv.textContent = `${data.username || 'User'} • ${new Date(data.timestamp).toLocaleTimeString()}`;
+                }
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.textContent = data.message;
+                
+                messageDiv.appendChild(headerDiv);
+                messageDiv.appendChild(contentDiv);
+                
+                this.messagesContainer.appendChild(messageDiv);
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+            
+            addSystemMessage(text) {
+                const data = {
+                    message: text,
+                    messageType: 'system',
+                    timestamp: new Date().toISOString()
+                };
+                this.displayMessage(data);
+            }
+            
+            updateStatus(text, className) {
+                this.statusElement.textContent = text;
+                this.statusElement.className = `status ${className}`;
+            }
+            
+            enableInput() {
+                this.messageInput.disabled = false;
+                this.sendButton.disabled = false;
+                this.messageInput.focus();
+            }
+            
+            disableInput() {
+                this.messageInput.disabled = true;
+                this.sendButton.disabled = true;
+            }
+        }
+        
+        // Initialize chat when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new ChatClient();
+        });
+    </script>
+</body>
+</html>

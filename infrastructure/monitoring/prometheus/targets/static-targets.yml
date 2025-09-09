@@ -1,6 +1,0 @@
-# Placeholder for custom services exposing Prometheus metrics.
-# Example:
-# - labels:
-#     job: custom-service
-#   targets:
-#     - "my-service:9000"

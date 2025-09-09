@@ -1,4 +1,0 @@
-{
-  "labels": {"job": "example"},
-  "targets": ["localhost:9090"]
-}
