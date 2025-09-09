@@ -1,0 +1,114 @@
+{
+  "name": "Data Analyzer Tool",
+  "nodes": [
+    {
+      "parameters": {
+        "queue": "data_analysis_requests",
+        "options": {}
+      },
+      "id": "rabbitmq-consume",
+      "name": "RabbitMQ Consumer",
+      "type": "n8n-nodes-base.rabbitmqTrigger",
+      "typeVersion": 1,
+      "position": [160, 304]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Data Analyzer Tool - Production Implementation\nconst { ChatOpenAI } = require(\"@langchain/openai\");\n\n// Initialize LangSmith tracing\nprocess.env.LANGCHAIN_TRACING_V2 = \"true\";\nprocess.env.LANGCHAIN_PROJECT = process.env.LANGCHAIN_PROJECT || \"athenai-data-analyzer\";\nprocess.env.LANGCHAIN_ENDPOINT = process.env.LANGCHAIN_ENDPOINT || \"https://api.smith.langchain.com\";\n\nasync function executeDataAnalyzer() {\n  try {\n    const inputData = $json;\n    const dataset = inputData.dataset || inputData.data;\n    const analysisType = inputData.analysis_type || 'comprehensive';\n    const sessionId = inputData.session_id || 'default_session';\n    const toolRequestId = inputData.tool_request_id || generateRequestId();\n    \n    if (!dataset) {\n      throw new Error('Dataset is required for analysis');\n    }\n\n    // Parse and validate dataset\n    const parsedData = await parseDataset(dataset);\n    \n    // Perform statistical analysis\n    const statisticalAnalysis = await performStatisticalAnalysis(parsedData);\n    \n    // Identify patterns and trends\n    const patternAnalysis = await identifyPatterns(parsedData);\n    \n    // Generate insights using AI\n    const aiInsights = await generateAIInsights(parsedData, statisticalAnalysis, patternAnalysis);\n    \n    // Create visualizations data\n    const visualizations = await generateVisualizationData(parsedData, statisticalAnalysis);\n\n    const analysisReport = {\n      tool_request_id: toolRequestId,\n      session_id: sessionId,\n      tool_type: \"data_analyzer\",\n      analysis_type: analysisType,\n      dataset_info: {\n        size: parsedData.length,\n        columns: Object.keys(parsedData[0] || {}),\n        data_types: identifyDataTypes(parsedData)\n      },\n      statistical_analysis: statisticalAnalysis,\n      pattern_analysis: patternAnalysis,\n      ai_insights: aiInsights,\n      visualizations: visualizations,\n      analysis_quality: calculateAnalysisQuality(statisticalAnalysis, patternAnalysis),\n      timestamp: new Date().toISOString(),\n      status: \"completed\"\n    };\n\n    return [{\n      json: {\n        analysis_report: analysisReport,\n        key_findings: extractKeyFindings(statisticalAnalysis, patternAnalysis, aiInsights),\n        recommendations: generateRecommendations(analysisReport),\n        next_actions: determineAnalysisNextActions(analysisReport),\n        neo4j_context: {\n          write: true,\n          cypher: `MERGE (s:Session {id: '${sessionId}'}) MERGE (da:DataAnalysis {id: '${toolRequestId}', type: '${analysisType}', timestamp: datetime(), quality: ${analysisReport.analysis_quality}, data_size: ${parsedData.length}}) MERGE (s)-[:PERFORMED_ANALYSIS]->(da)`\n        },\n        memory: {\n          upsert: true,\n          keys: [\"analysis_type\", \"key_findings\", \"recommendations\", \"timestamp\"]\n        },\n        routing: {\n          queue: \"tool_results\",\n          priority: \"normal\"\n        }\n      }\n    }];\n\n  } catch (error) {\n    return [{\n      json: {\n        error: error.message,\n        tool_type: \"data_analyzer\",\n        status: \"failed\",\n        timestamp: new Date().toISOString(),\n        fallback_analysis: {\n          message: \"Data analysis failed. Manual analysis may be required.\",\n          suggestions: [\n            \"Check data format and structure\",\n            \"Verify data completeness\",\n            \"Consider data preprocessing\"\n          ]\n        }\n      }\n    }];\n  }\n}\n\n// Parse dataset from various formats\nasync function parseDataset(dataset) {\n  try {\n    if (typeof dataset === 'string') {\n      // Try to parse as JSON\n      try {\n        return JSON.parse(dataset);\n      } catch {\n        // Try to parse as CSV\n        return parseCSV(dataset);\n      }\n    } else if (Array.isArray(dataset)) {\n      return dataset;\n    } else if (typeof dataset === 'object') {\n      return [dataset];\n    }\n    \n    throw new Error('Unsupported dataset format');\n    \n  } catch (error) {\n    throw new Error(`Dataset parsing failed: ${error.message}`);\n  }\n}\n\n// Parse CSV data\nfunction parseCSV(csvString) {\n  const lines = csvString.trim().split('\\n');\n  if (lines.length < 2) throw new Error('CSV must have at least header and one data row');\n  \n  const headers = lines[0].split(',').map(h => h.trim());\n  const data = [];\n  \n  for (let i = 1; i < lines.length; i++) {\n    const values = lines[i].split(',').map(v => v.trim());\n    const row = {};\n    \n    headers.forEach((header, index) => {\n      const value = values[index] || '';\n      // Try to convert to number if possible\n      row[header] = isNaN(value) ? value : parseFloat(value);\n    });\n    \n    data.push(row);\n  }\n  \n  return data;\n}\n\n// Identify data types in dataset\nfunction identifyDataTypes(data) {\n  if (!data || data.length === 0) return {};\n  \n  const sample = data[0];\n  const types = {};\n  \n  Object.keys(sample).forEach(key => {\n    const values = data.map(row => row[key]).filter(v => v !== null && v !== undefined);\n    \n    if (values.every(v => typeof v === 'number')) {\n      types[key] = 'numeric';\n    } else if (values.every(v => typeof v === 'boolean')) {\n      types[key] = 'boolean';\n    } else if (values.every(v => !isNaN(Date.parse(v)))) {\n      types[key] = 'date';\n    } else {\n      types[key] = 'categorical';\n    }\n  });\n  \n  return types;\n}\n\n// Perform statistical analysis\nasync function performStatisticalAnalysis(data) {\n  const analysis = {\n    descriptive_stats: {},\n    correlations: {},\n    distributions: {},\n    outliers: {}\n  };\n  \n  const numericColumns = [];\n  const categoricalColumns = [];\n  \n  // Identify column types\n  if (data.length > 0) {\n    Object.keys(data[0]).forEach(key => {\n      const values = data.map(row => row[key]).filter(v => v !== null && v !== undefined);\n      if (values.every(v => typeof v === 'number')) {\n        numericColumns.push(key);\n      } else {\n        categoricalColumns.push(key);\n      }\n    });\n  }\n  \n  // Calculate descriptive statistics for numeric columns\n  numericColumns.forEach(column => {\n    const values = data.map(row => row[column]).filter(v => typeof v === 'number');\n    analysis.descriptive_stats[column] = calculateDescriptiveStats(values);\n    analysis.distributions[column] = analyzeDistribution(values);\n    analysis.outliers[column] = detectOutliers(values);\n  });\n  \n  // Calculate correlations between numeric columns\n  if (numericColumns.length > 1) {\n    analysis.correlations = calculateCorrelations(data, numericColumns);\n  }\n  \n  // Analyze categorical columns\n  categoricalColumns.forEach(column => {\n    const values = data.map(row => row[column]);\n    analysis.descriptive_stats[column] = analyzeCategorical(values);\n  });\n  \n  return analysis;\n}\n\n// Calculate descriptive statistics\nfunction calculateDescriptiveStats(values) {\n  if (values.length === 0) return null;\n  \n  const sorted = [...values].sort((a, b) => a - b);\n  const sum = values.reduce((a, b) => a + b, 0);\n  const mean = sum / values.length;\n  const variance = values.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / values.length;\n  \n  return {\n    count: values.length,\n    mean: mean,\n    median: sorted[Math.floor(sorted.length / 2)],\n    min: Math.min(...values),\n    max: Math.max(...values),\n    std_dev: Math.sqrt(variance),\n    variance: variance,\n    range: Math.max(...values) - Math.min(...values),\n    q1: sorted[Math.floor(sorted.length * 0.25)],\n    q3: sorted[Math.floor(sorted.length * 0.75)]\n  };\n}\n\n// Analyze distribution\nfunction analyzeDistribution(values) {\n  const stats = calculateDescriptiveStats(values);\n  if (!stats) return null;\n  \n  const skewness = calculateSkewness(values, stats.mean, stats.std_dev);\n  const kurtosis = calculateKurtosis(values, stats.mean, stats.std_dev);\n  \n  return {\n    skewness: skewness,\n    kurtosis: kurtosis,\n    distribution_type: classifyDistribution(skewness, kurtosis),\n    normality_test: testNormality(values)\n  };\n}\n\n// Calculate skewness\nfunction calculateSkewness(values, mean, stdDev) {\n  if (stdDev === 0) return 0;\n  const n = values.length;\n  const sum = values.reduce((acc, val) => acc + Math.pow((val - mean) / stdDev, 3), 0);\n  return (n / ((n - 1) * (n - 2))) * sum;\n}\n\n// Calculate kurtosis\nfunction calculateKurtosis(values, mean, stdDev) {\n  if (stdDev === 0) return 0;\n  const n = values.length;\n  const sum = values.reduce((acc, val) => acc + Math.pow((val - mean) / stdDev, 4), 0);\n  return ((n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))) * sum - (3 * Math.pow(n - 1, 2)) / ((n - 2) * (n - 3));\n}\n\n// Classify distribution type\nfunction classifyDistribution(skewness, kurtosis) {\n  if (Math.abs(skewness) < 0.5 && Math.abs(kurtosis) < 0.5) return 'normal';\n  if (skewness > 0.5) return 'right_skewed';\n  if (skewness < -0.5) return 'left_skewed';\n  if (kurtosis > 0.5) return 'heavy_tailed';\n  if (kurtosis < -0.5) return 'light_tailed';\n  return 'unknown';\n}\n\n// Test for normality (simplified)\nfunction testNormality(values) {\n  const stats = calculateDescriptiveStats(values);\n  if (!stats) return { is_normal: false, confidence: 0 };\n  \n  // Simple test based on skewness and kurtosis\n  const skewness = calculateSkewness(values, stats.mean, stats.std_dev);\n  const kurtosis = calculateKurtosis(values, stats.mean, stats.std_dev);\n  \n  const normalityScore = 1 - (Math.abs(skewness) + Math.abs(kurtosis)) / 2;\n  \n  return {\n    is_normal: normalityScore > 0.7,\n    confidence: Math.max(0, normalityScore)\n  };\n}\n\n// Detect outliers using IQR method\nfunction detectOutliers(values) {\n  const sorted = [...values].sort((a, b) => a - b);\n  const q1 = sorted[Math.floor(sorted.length * 0.25)];\n  const q3 = sorted[Math.floor(sorted.length * 0.75)];\n  const iqr = q3 - q1;\n  \n  const lowerBound = q1 - 1.5 * iqr;\n  const upperBound = q3 + 1.5 * iqr;\n  \n  const outliers = values.filter(v => v < lowerBound || v > upperBound);\n  \n  return {\n    count: outliers.length,\n    values: outliers,\n    percentage: (outliers.length / values.length) * 100,\n    lower_bound: lowerBound,\n    upper_bound: upperBound\n  };\n}\n\n// Calculate correlations\nfunction calculateCorrelations(data, numericColumns) {\n  const correlations = {};\n  \n  for (let i = 0; i < numericColumns.length; i++) {\n    for (let j = i + 1; j < numericColumns.length; j++) {\n      const col1 = numericColumns[i];\n      const col2 = numericColumns[j];\n      \n      const values1 = data.map(row => row[col1]).filter(v => typeof v === 'number');\n      const values2 = data.map(row => row[col2]).filter(v => typeof v === 'number');\n      \n      const correlation = calculatePearsonCorrelation(values1, values2);\n      correlations[`${col1}_${col2}`] = {\n        correlation: correlation,\n        strength: interpretCorrelation(correlation)\n      };\n    }\n  }\n  \n  return correlations;\n}\n\n// Calculate Pearson correlation\nfunction calculatePearsonCorrelation(x, y) {\n  if (x.length !== y.length || x.length === 0) return 0;\n  \n  const n = x.length;\n  const sumX = x.reduce((a, b) => a + b, 0);\n  const sumY = y.reduce((a, b) => a + b, 0);\n  const sumXY = x.reduce((acc, xi, i) => acc + xi * y[i], 0);\n  const sumX2 = x.reduce((acc, xi) => acc + xi * xi, 0);\n  const sumY2 = y.reduce((acc, yi) => acc + yi * yi, 0);\n  \n  const numerator = n * sumXY - sumX * sumY;\n  const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));\n  \n  return denominator === 0 ? 0 : numerator / denominator;\n}\n\n// Interpret correlation strength\nfunction interpretCorrelation(r) {\n  const abs_r = Math.abs(r);\n  if (abs_r >= 0.8) return 'very_strong';\n  if (abs_r >= 0.6) return 'strong';\n  if (abs_r >= 0.4) return 'moderate';\n  if (abs_r >= 0.2) return 'weak';\n  return 'very_weak';\n}\n\n// Analyze categorical data\nfunction analyzeCategorical(values) {\n  const counts = {};\n  values.forEach(value => {\n    counts[value] = (counts[value] || 0) + 1;\n  });\n  \n  const total = values.length;\n  const frequencies = {};\n  Object.keys(counts).forEach(key => {\n    frequencies[key] = counts[key] / total;\n  });\n  \n  return {\n    unique_values: Object.keys(counts).length,\n    value_counts: counts,\n    frequencies: frequencies,\n    mode: Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b),\n    entropy: calculateEntropy(Object.values(frequencies))\n  };\n}\n\n// Calculate entropy\nfunction calculateEntropy(probabilities) {\n  return -probabilities.reduce((entropy, p) => {\n    return p > 0 ? entropy + p * Math.log2(p) : entropy;\n  }, 0);\n}\n\n// Identify patterns in data\nasync function identifyPatterns(data) {\n  return {\n    trends: identifyTrends(data),\n    seasonality: detectSeasonality(data),\n    anomalies: detectAnomalies(data),\n    clusters: identifyClusters(data)\n  };\n}\n\n// Identify trends (simplified)\nfunction identifyTrends(data) {\n  // This is a simplified trend analysis\n  // In production, you might use more sophisticated time series analysis\n  return {\n    overall_trend: 'stable',\n    trend_strength: 0.5,\n    trend_direction: 'neutral'\n  };\n}\n\n// Detect seasonality (placeholder)\nfunction detectSeasonality(data) {\n  return {\n    has_seasonality: false,\n    period: null,\n    strength: 0\n  };\n}\n\n// Detect anomalies (simplified)\nfunction detectAnomalies(data) {\n  return {\n    anomaly_count: 0,\n    anomaly_percentage: 0,\n    anomaly_indices: []\n  };\n}\n\n// Identify clusters (placeholder)\nfunction identifyClusters(data) {\n  return {\n    optimal_clusters: 1,\n    cluster_quality: 0.5,\n    cluster_assignments: []\n  };\n}\n\n// Generate AI insights\nasync function generateAIInsights(data, statisticalAnalysis, patternAnalysis) {\n  try {\n    const llm = new ChatOpenAI({\n      modelName: \"gpt-4\",\n      temperature: 0.2,\n      openAIApiKey: $credentials.openAi?.apiKey || process.env.OPENAI_API_KEY,\n      tags: [\"data-analyzer\", \"athenai\"]\n    });\n\n    const prompt = `Analyze this dataset and provide insights:\\n\\nDataset size: ${data.length} rows\\nColumns: ${Object.keys(data[0] || {}).join(', ')}\\n\\nStatistical Summary:\\n${JSON.stringify(statisticalAnalysis, null, 2)}\\n\\nProvide 3-5 key insights about this data.`;\n    \n    const response = await llm.invoke(prompt);\n    \n    return {\n      insights: response.content.split('\\n').filter(line => line.trim().length > 10).slice(0, 5),\n      confidence: 0.8,\n      generated_by: 'ai'\n    };\n    \n  } catch (error) {\n    return {\n      insights: ['AI insight generation failed', 'Manual analysis recommended'],\n      confidence: 0.1,\n      generated_by: 'fallback'\n    };\n  }\n}\n\n// Generate visualization data\nasync function generateVisualizationData(data, statisticalAnalysis) {\n  const visualizations = [];\n  \n  // Histogram data for numeric columns\n  Object.keys(statisticalAnalysis.descriptive_stats).forEach(column => {\n    if (statisticalAnalysis.descriptive_stats[column].mean !== undefined) {\n      visualizations.push({\n        type: 'histogram',\n        column: column,\n        data: generateHistogramData(data, column),\n        title: `Distribution of ${column}`\n      });\n    }\n  });\n  \n  // Correlation heatmap data\n  if (Object.keys(statisticalAnalysis.correlations).length > 0) {\n    visualizations.push({\n      type: 'correlation_heatmap',\n      data: statisticalAnalysis.correlations,\n      title: 'Correlation Matrix'\n    });\n  }\n  \n  return visualizations;\n}\n\n// Generate histogram data\nfunction generateHistogramData(data, column) {\n  const values = data.map(row => row[column]).filter(v => typeof v === 'number');\n  const bins = 10;\n  const min = Math.min(...values);\n  const max = Math.max(...values);\n  const binWidth = (max - min) / bins;\n  \n  const histogram = Array(bins).fill(0);\n  values.forEach(value => {\n    const binIndex = Math.min(Math.floor((value - min) / binWidth), bins - 1);\n    histogram[binIndex]++;\n  });\n  \n  return histogram.map((count, index) => ({\n    bin_start: min + index * binWidth,\n    bin_end: min + (index + 1) * binWidth,\n    count: count\n  }));\n}\n\n// Extract key findings\nfunction extractKeyFindings(statisticalAnalysis, patternAnalysis, aiInsights) {\n  const findings = [];\n  \n  // Statistical findings\n  Object.keys(statisticalAnalysis.descriptive_stats).forEach(column => {\n    const stats = statisticalAnalysis.descriptive_stats[column];\n    if (stats.mean !== undefined) {\n      findings.push(`${column}: Mean = ${stats.mean.toFixed(2)}, Std Dev = ${stats.std_dev.toFixed(2)}`);\n    }\n  });\n  \n  // Correlation findings\n  Object.keys(statisticalAnalysis.correlations).forEach(pair => {\n    const corr = statisticalAnalysis.correlations[pair];\n    if (Math.abs(corr.correlation) > 0.5) {\n      findings.push(`Strong correlation between ${pair.replace('_', ' and ')}: ${corr.correlation.toFixed(3)}`);\n    }\n  });\n  \n  // AI insights\n  if (aiInsights.insights) {\n    findings.push(...aiInsights.insights.slice(0, 3));\n  }\n  \n  return findings.slice(0, 10);\n}\n\n// Generate recommendations\nfunction generateRecommendations(analysisReport) {\n  const recommendations = [];\n  \n  // Data quality recommendations\n  const outlierColumns = Object.keys(analysisReport.statistical_analysis.outliers || {}).filter(\n    col => analysisReport.statistical_analysis.outliers[col].percentage > 5\n  );\n  \n  if (outlierColumns.length > 0) {\n    recommendations.push(`Consider investigating outliers in: ${outlierColumns.join(', ')}`);\n  }\n  \n  // Correlation recommendations\n  const strongCorrelations = Object.keys(analysisReport.statistical_analysis.correlations || {}).filter(\n    pair => Math.abs(analysisReport.statistical_analysis.correlations[pair].correlation) > 0.7\n  );\n  \n  if (strongCorrelations.length > 0) {\n    recommendations.push('Strong correlations detected - consider feature selection for modeling');\n  }\n  \n  // General recommendations\n  recommendations.push('Consider additional data preprocessing steps');\n  recommendations.push('Validate findings with domain experts');\n  \n  return recommendations;\n}\n\n// Calculate analysis quality\nfunction calculateAnalysisQuality(statisticalAnalysis, patternAnalysis) {\n  let quality = 0.5;\n  \n  // Statistical analysis quality\n  const statsCount = Object.keys(statisticalAnalysis.descriptive_stats || {}).length;\n  if (statsCount > 0) quality += 0.2;\n  if (statsCount > 3) quality += 0.1;\n  \n  // Correlation analysis quality\n  const corrCount = Object.keys(statisticalAnalysis.correlations || {}).length;\n  if (corrCount > 0) quality += 0.1;\n  \n  // Pattern analysis quality\n  if (patternAnalysis.trends) quality += 0.1;\n  \n  return Math.min(1.0, quality);\n}\n\n// Determine next actions\nfunction determineAnalysisNextActions(analysisReport) {\n  const actions = [];\n  \n  if (analysisReport.analysis_quality < 0.7) {\n    actions.push({\n      action: \"improve_analysis\",\n      priority: \"medium\",\n      description: \"Analysis quality could be improved with additional data or methods\"\n    });\n  }\n  \n  const outlierCount = Object.values(analysisReport.statistical_analysis.outliers || {})\n    .reduce((sum, outlier) => sum + outlier.count, 0);\n  \n  if (outlierCount > 0) {\n    actions.push({\n      action: \"investigate_outliers\",\n      priority: \"medium\",\n      description: `${outlierCount} outliers detected - investigation recommended`\n    });\n  }\n  \n  actions.push({\n    action: \"analysis_complete\",\n    priority: \"normal\",\n    description: \"Data analysis completed - results ready for interpretation\"\n  });\n  \n  return actions;\n}\n\nfunction generateRequestId() {\n  return `data_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;\n}\n\n// Execute and return\nreturn await executeDataAnalyzer();"
+      },
+      "type": "@n8n/n8n-nodes-langchain.code",
+      "typeVersion": 1,
+      "position": [360, 304],
+      "id": "langchain-data-analyzer",
+      "name": "Data Analyzer Tool"
+    },
+    {
+      "parameters": {
+        "queue": "={{ $json.routing.queue }}",
+        "options": {
+          "priority": "={{ $json.routing.priority }}"
+        }
+      },
+      "id": "rabbitmq-publish",
+      "name": "RabbitMQ Publish",
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1,
+      "position": [560, 304]
+    },
+    {
+      "parameters": {
+        "query": "={{ $json.neo4j_context.cypher }}",
+        "additionalFields": {}
+      },
+      "id": "neo4j-write",
+      "name": "Neo4j Write",
+      "type": "n8n-nodes-base.neo4j",
+      "typeVersion": 1,
+      "position": [760, 304]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "data_analysis",
+        "columns": "tool_request_id, session_id, analysis_type, data_size, analysis_quality, timestamp",
+        "values": "={{ $json.analysis_report.tool_request_id }}, {{ $json.analysis_report.session_id }}, {{ $json.analysis_report.analysis_type }}, {{ $json.analysis_report.dataset_info.size }}, {{ $json.analysis_report.analysis_quality }}, {{ $json.analysis_report.timestamp }}"
+      },
+      "id": "postgres-memory",
+      "name": "PostgreSQL Memory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [960, 304]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "RabbitMQ Consumer": {
+      "main": [
+        [
+          {
+            "node": "Data Analyzer Tool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Analyzer Tool": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ Publish": {
+      "main": [
+        [
+          {
+            "node": "Neo4j Write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Neo4j Write": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

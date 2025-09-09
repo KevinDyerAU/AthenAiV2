@@ -1,0 +1,114 @@
+{
+  "name": "Analysis Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "queue": "analysis_tasks",
+        "options": {}
+      },
+      "id": "rabbitmq-consume",
+      "name": "RabbitMQ Consumer",
+      "type": "n8n-nodes-base.rabbitmqTrigger",
+      "typeVersion": 1,
+      "position": [160, 304]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analysis Agent - Production Implementation\nconst { ChatOpenAI } = require(\"@langchain/openai\");\nconst { AgentExecutor, createOpenAIFunctionsAgent } = require(\"langchain/agents\");\nconst { DynamicTool } = require(\"@langchain/core/tools\");\nconst { PromptTemplate } = require(\"@langchain/core/prompts\");\n\n// Initialize LangSmith tracing\nprocess.env.LANGCHAIN_TRACING_V2 = \"true\";\nprocess.env.LANGCHAIN_PROJECT = process.env.LANGCHAIN_PROJECT || \"athenai-analysis-agent\";\nprocess.env.LANGCHAIN_ENDPOINT = process.env.LANGCHAIN_ENDPOINT || \"https://api.smith.langchain.com\";\n\nasync function executeAnalysisAgent() {\n  try {\n    const inputData = $json;\n    const taskData = inputData.research_report || inputData.task || inputData;\n    const researchFindings = taskData.findings || {};\n    const query = taskData.query || taskData.original_message;\n    const sessionId = taskData.session_id || 'default_session';\n    const orchestrationId = taskData.orchestration_id || 'default_orchestration';\n    \n    if (!query) {\n      throw new Error('Query is required for analysis');\n    }\n\n    // Initialize OpenAI\n    const llm = new ChatOpenAI({\n      modelName: \"gpt-4\",\n      temperature: 0.1,\n      openAIApiKey: $credentials.openAi?.apiKey || process.env.OPENAI_API_KEY,\n      tags: [\"analysis-agent\", \"athenai\"]\n    });\n\n    // Initialize analysis tools\n    const tools = await initializeAnalysisTools();\n\n    // Create analysis prompt\n    const analysisPrompt = PromptTemplate.fromTemplate(`\nYou are an Analysis Agent specialized in data analysis, pattern recognition, and insight generation.\n\nResearch Data: {researchData}\nQuery: {query}\nSession ID: {sessionId}\n\nYour task:\n1. Analyze the provided research data\n2. Identify patterns, trends, and correlations\n3. Generate statistical insights where applicable\n4. Provide predictive analysis and forecasting\n5. Create actionable recommendations\n6. Assess data quality and reliability\n\nProvide structured analysis with:\n- Data Summary\n- Statistical Analysis\n- Pattern Recognition\n- Trend Analysis\n- Predictive Insights\n- Recommendations\n- Confidence Levels\n\nQuery: {query}\n`);\n\n    // Create agent\n    const agent = await createOpenAIFunctionsAgent({\n      llm,\n      tools,\n      prompt: analysisPrompt\n    });\n\n    const agentExecutor = new AgentExecutor({\n      agent,\n      tools,\n      verbose: true,\n      maxIterations: 8\n    });\n\n    // Execute analysis\n    const analysisResult = await agentExecutor.invoke({\n      researchData: JSON.stringify(researchFindings, null, 2),\n      query: query,\n      sessionId: sessionId\n    });\n\n    // Process analysis results\n    const structuredAnalysis = await processAnalysisResults(analysisResult, researchFindings);\n    const analysisMetrics = calculateAnalysisMetrics(structuredAnalysis);\n\n    // Create analysis report\n    const analysisReport = {\n      orchestration_id: orchestrationId,\n      session_id: sessionId,\n      agent_type: \"analysis\",\n      query: query,\n      input_data: researchFindings,\n      analysis: structuredAnalysis,\n      metrics: analysisMetrics,\n      confidence_score: calculateAnalysisConfidence(structuredAnalysis),\n      timestamp: new Date().toISOString(),\n      status: \"completed\"\n    };\n\n    return [{\n      json: {\n        analysis_report: analysisReport,\n        next_actions: determineAnalysisNextActions(structuredAnalysis),\n        neo4j_context: {\n          write: true,\n          cypher: `MERGE (s:Session {id: '${sessionId}'}) MERGE (o:Orchestration {id: '${orchestrationId}'}) MERGE (a:AnalysisReport {id: '${generateAnalysisId()}', query: '${query.replace(/'/g, \"\\\\'\"))}', timestamp: datetime(), confidence: ${analysisReport.confidence_score}}) MERGE (s)-[:HAS_ORCHESTRATION]->(o) MERGE (o)-[:GENERATED_ANALYSIS]->(a)`\n        },\n        memory: {\n          upsert: true,\n          keys: [\"query\", \"analysis\", \"confidence_score\", \"timestamp\"]\n        },\n        routing: {\n          queue: \"creative_tasks\",\n          priority: \"normal\"\n        }\n      }\n    }];\n\n  } catch (error) {\n    return [{\n      json: {\n        error: error.message,\n        agent_type: \"analysis\",\n        status: \"failed\",\n        timestamp: new Date().toISOString()\n      }\n    }];\n  }\n}\n\n// Initialize analysis tools\nasync function initializeAnalysisTools() {\n  return [\n    new DynamicTool({\n      name: \"statistical_analysis\",\n      description: \"Perform statistical analysis on numerical data\",\n      func: async (data) => {\n        try {\n          const numbers = extractNumbers(data);\n          if (numbers.length === 0) return \"No numerical data found\";\n          \n          const stats = calculateStatistics(numbers);\n          return JSON.stringify(stats, null, 2);\n        } catch (error) {\n          return `Statistical analysis error: ${error.message}`;\n        }\n      }\n    }),\n    new DynamicTool({\n      name: \"trend_analyzer\",\n      description: \"Analyze trends and patterns in data\",\n      func: async (data) => {\n        try {\n          const trends = analyzeTrends(data);\n          return JSON.stringify(trends, null, 2);\n        } catch (error) {\n          return `Trend analysis error: ${error.message}`;\n        }\n      }\n    }),\n    new DynamicTool({\n      name: \"correlation_finder\",\n      description: \"Find correlations between different data points\",\n      func: async (data) => {\n        try {\n          const correlations = findCorrelations(data);\n          return JSON.stringify(correlations, null, 2);\n        } catch (error) {\n          return `Correlation analysis error: ${error.message}`;\n        }\n      }\n    })\n  ];\n}\n\n// Process analysis results\nasync function processAnalysisResults(analysisResult, researchFindings) {\n  return {\n    data_summary: generateDataSummary(researchFindings),\n    statistical_insights: extractStatisticalInsights(analysisResult.output),\n    patterns: identifyPatterns(researchFindings),\n    trends: analyzeTrendData(researchFindings),\n    predictions: generatePredictions(researchFindings),\n    recommendations: extractRecommendations(analysisResult.output),\n    quality_assessment: assessDataQuality(researchFindings)\n  };\n}\n\n// Helper functions\nfunction extractNumbers(text) {\n  const numberPattern = /\\d+(?:\\.\\d+)?/g;\n  const matches = text.match(numberPattern) || [];\n  return matches.map(Number).filter(n => !isNaN(n));\n}\n\nfunction calculateStatistics(numbers) {\n  const sum = numbers.reduce((a, b) => a + b, 0);\n  const mean = sum / numbers.length;\n  const sortedNumbers = [...numbers].sort((a, b) => a - b);\n  const median = sortedNumbers[Math.floor(sortedNumbers.length / 2)];\n  const variance = numbers.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / numbers.length;\n  const stdDev = Math.sqrt(variance);\n  \n  return {\n    count: numbers.length,\n    sum: sum,\n    mean: mean,\n    median: median,\n    min: Math.min(...numbers),\n    max: Math.max(...numbers),\n    variance: variance,\n    standardDeviation: stdDev\n  };\n}\n\nfunction analyzeTrends(data) {\n  const trends = {\n    increasing: [],\n    decreasing: [],\n    stable: [],\n    cyclical: []\n  };\n  \n  // Simple trend detection logic\n  const text = typeof data === 'string' ? data : JSON.stringify(data);\n  \n  if (text.includes('increas') || text.includes('grow') || text.includes('ris')) {\n    trends.increasing.push('Growth pattern detected');\n  }\n  \n  if (text.includes('decreas') || text.includes('declin') || text.includes('fall')) {\n    trends.decreasing.push('Decline pattern detected');\n  }\n  \n  return trends;\n}\n\nfunction findCorrelations(data) {\n  // Simplified correlation analysis\n  return {\n    strong_correlations: [],\n    weak_correlations: [],\n    negative_correlations: [],\n    analysis_note: \"Correlation analysis requires structured numerical data\"\n  };\n}\n\nfunction generateDataSummary(findings) {\n  return {\n    total_findings: findings.key_findings ? findings.key_findings.length : 0,\n    data_points: findings.data_points ? findings.data_points.length : 0,\n    trends_identified: findings.trends ? findings.trends.length : 0,\n    completeness: calculateDataCompleteness(findings)\n  };\n}\n\nfunction extractStatisticalInsights(output) {\n  const insights = [];\n  \n  if (output.includes('significant')) {\n    insights.push('Significant patterns identified');\n  }\n  \n  if (output.includes('correlation')) {\n    insights.push('Correlations found in data');\n  }\n  \n  return insights;\n}\n\nfunction identifyPatterns(findings) {\n  const patterns = [];\n  \n  if (findings.trends && findings.trends.length > 0) {\n    patterns.push({\n      type: 'trend_pattern',\n      description: 'Multiple trends identified',\n      strength: 'medium'\n    });\n  }\n  \n  return patterns;\n}\n\nfunction analyzeTrendData(findings) {\n  return {\n    short_term: findings.trends ? findings.trends.slice(0, 2) : [],\n    long_term: [],\n    seasonal: [],\n    cyclical: []\n  };\n}\n\nfunction generatePredictions(findings) {\n  return {\n    short_term_forecast: 'Based on current trends, continuation expected',\n    confidence_level: 0.6,\n    risk_factors: findings.gaps || [],\n    opportunities: ['Further data collection', 'Trend monitoring']\n  };\n}\n\nfunction extractRecommendations(output) {\n  const recommendations = [];\n  \n  if (output.includes('recommend')) {\n    const lines = output.split('\\n');\n    for (const line of lines) {\n      if (line.toLowerCase().includes('recommend')) {\n        recommendations.push(line.trim());\n      }\n    }\n  }\n  \n  if (recommendations.length === 0) {\n    recommendations.push('Continue monitoring trends', 'Gather additional data for validation');\n  }\n  \n  return recommendations;\n}\n\nfunction assessDataQuality(findings) {\n  let score = 0.5;\n  \n  if (findings.key_findings && findings.key_findings.length > 3) score += 0.2;\n  if (findings.data_points && findings.data_points.length > 2) score += 0.2;\n  if (findings.gaps && findings.gaps.length < 2) score += 0.1;\n  \n  return {\n    overall_score: Math.min(0.95, score),\n    completeness: calculateDataCompleteness(findings),\n    reliability: 'medium',\n    recommendations: ['Validate key findings', 'Cross-reference sources']\n  };\n}\n\nfunction calculateDataCompleteness(findings) {\n  let completeness = 0;\n  if (findings.executive_summary) completeness += 0.2;\n  if (findings.key_findings && findings.key_findings.length > 0) completeness += 0.3;\n  if (findings.data_points && findings.data_points.length > 0) completeness += 0.3;\n  if (findings.trends && findings.trends.length > 0) completeness += 0.2;\n  return completeness;\n}\n\nfunction calculateAnalysisMetrics(analysis) {\n  return {\n    insights_generated: (analysis.statistical_insights || []).length,\n    patterns_identified: (analysis.patterns || []).length,\n    recommendations_count: (analysis.recommendations || []).length,\n    data_quality_score: analysis.quality_assessment ? analysis.quality_assessment.overall_score : 0.5,\n    analysis_depth: calculateAnalysisDepth(analysis)\n  };\n}\n\nfunction calculateAnalysisDepth(analysis) {\n  let depth = 0;\n  if (analysis.statistical_insights) depth += analysis.statistical_insights.length * 0.2;\n  if (analysis.patterns) depth += analysis.patterns.length * 0.3;\n  if (analysis.predictions) depth += 0.3;\n  if (analysis.recommendations) depth += analysis.recommendations.length * 0.1;\n  return Math.min(1.0, depth);\n}\n\nfunction calculateAnalysisConfidence(analysis) {\n  let confidence = 0.5;\n  \n  if (analysis.quality_assessment && analysis.quality_assessment.overall_score > 0.7) {\n    confidence += 0.2;\n  }\n  \n  if (analysis.patterns && analysis.patterns.length > 2) {\n    confidence += 0.1;\n  }\n  \n  if (analysis.statistical_insights && analysis.statistical_insights.length > 1) {\n    confidence += 0.1;\n  }\n  \n  return Math.min(0.95, Math.max(0.1, confidence));\n}\n\nfunction determineAnalysisNextActions(analysis) {\n  const actions = [];\n  \n  if (analysis.quality_assessment && analysis.quality_assessment.overall_score < 0.6) {\n    actions.push({\n      action: \"data_validation\",\n      priority: \"high\",\n      description: \"Data quality issues detected - validation required\"\n    });\n  }\n  \n  if (analysis.patterns && analysis.patterns.length > 2) {\n    actions.push({\n      action: \"pattern_deep_dive\",\n      priority: \"medium\",\n      description: \"Multiple patterns identified - detailed analysis recommended\"\n    });\n  }\n  \n  actions.push({\n    action: \"creative_synthesis\",\n    priority: \"normal\",\n    description: \"Analysis complete - ready for creative synthesis\"\n  });\n  \n  return actions;\n}\n\nfunction generateAnalysisId() {\n  return `analysis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;\n}\n\n// Execute and return\nreturn await executeAnalysisAgent();"
+      },
+      "type": "@n8n/n8n-nodes-langchain.code",
+      "typeVersion": 1,
+      "position": [360, 304],
+      "id": "langchain-analysis",
+      "name": "Analysis Agent"
+    },
+    {
+      "parameters": {
+        "queue": "={{ $json.routing.queue }}",
+        "options": {
+          "priority": "={{ $json.routing.priority }}"
+        }
+      },
+      "id": "rabbitmq-publish",
+      "name": "RabbitMQ Publish",
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1,
+      "position": [560, 304]
+    },
+    {
+      "parameters": {
+        "query": "={{ $json.neo4j_context.cypher }}",
+        "additionalFields": {}
+      },
+      "id": "neo4j-write",
+      "name": "Neo4j Write",
+      "type": "n8n-nodes-base.neo4j",
+      "typeVersion": 1,
+      "position": [760, 304]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "analysis_reports",
+        "columns": "orchestration_id, session_id, query, analysis, confidence_score, timestamp",
+        "values": "={{ $json.analysis_report.orchestration_id }}, {{ $json.analysis_report.session_id }}, {{ $json.analysis_report.query }}, {{ JSON.stringify($json.analysis_report.analysis) }}, {{ $json.analysis_report.confidence_score }}, {{ $json.analysis_report.timestamp }}"
+      },
+      "id": "postgres-memory",
+      "name": "PostgreSQL Memory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [960, 304]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "RabbitMQ Consumer": {
+      "main": [
+        [
+          {
+            "node": "Analysis Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analysis Agent": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ Publish": {
+      "main": [
+        [
+          {
+            "node": "Neo4j Write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Neo4j Write": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

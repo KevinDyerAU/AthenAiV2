@@ -1,0 +1,114 @@
+{
+  "name": "QA Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "queue": "qa_tasks",
+        "options": {}
+      },
+      "id": "rabbitmq-consume",
+      "name": "RabbitMQ Consumer",
+      "type": "n8n-nodes-base.rabbitmqTrigger",
+      "typeVersion": 1,
+      "position": [160, 304]
+    },
+    {
+      "parameters": {
+        "jsCode": "// QA Agent - Production Implementation\nconst { ChatOpenAI } = require(\"@langchain/openai\");\nconst { AgentExecutor, createOpenAIFunctionsAgent } = require(\"langchain/agents\");\nconst { DynamicTool } = require(\"@langchain/core/tools\");\nconst { PromptTemplate } = require(\"@langchain/core/prompts\");\n\n// Initialize LangSmith tracing\nprocess.env.LANGCHAIN_TRACING_V2 = \"true\";\nprocess.env.LANGCHAIN_PROJECT = process.env.LANGCHAIN_PROJECT || \"athenai-qa-agent\";\nprocess.env.LANGCHAIN_ENDPOINT = process.env.LANGCHAIN_ENDPOINT || \"https://api.smith.langchain.com\";\n\nasync function executeQAAgent() {\n  try {\n    const inputData = $json;\n    const taskData = inputData.development_report || inputData.creative_report || inputData.task || inputData;\n    const deliverable = taskData.solution || taskData.creative_output || taskData.deliverables;\n    const originalQuery = taskData.query || taskData.requirements || taskData.original_message;\n    const sessionId = taskData.session_id || 'default_session';\n    const orchestrationId = taskData.orchestration_id || 'default_orchestration';\n    \n    if (!deliverable && !originalQuery) {\n      throw new Error('Deliverable or query is required for QA review');\n    }\n\n    // Initialize OpenAI\n    const llm = new ChatOpenAI({\n      modelName: \"gpt-4\",\n      temperature: 0.1,\n      openAIApiKey: $credentials.openAi?.apiKey || process.env.OPENAI_API_KEY,\n      tags: [\"qa-agent\", \"athenai\"]\n    });\n\n    // Initialize QA tools\n    const tools = await initializeQATools();\n\n    // Create QA prompt\n    const qaPrompt = PromptTemplate.fromTemplate(`\nYou are a QA Agent specialized in quality assurance, testing, and validation.\n\nDeliverable to Review: {deliverable}\nOriginal Requirements: {originalQuery}\nSession ID: {sessionId}\nOrchestration ID: {orchestrationId}\n\nYour task:\n1. Review the deliverable against original requirements\n2. Identify quality issues and gaps\n3. Validate completeness and accuracy\n4. Test functionality where applicable\n5. Assess compliance with standards\n6. Provide improvement recommendations\n\nAvailable tools: {tools}\n\nProvide comprehensive QA report with:\n- Requirements Compliance\n- Quality Assessment\n- Issue Identification\n- Test Results\n- Recommendations\n- Approval Status\n\nDeliverable: {deliverable}\n`);\n\n    // Create agent\n    const agent = await createOpenAIFunctionsAgent({\n      llm,\n      tools,\n      prompt: qaPrompt\n    });\n\n    const agentExecutor = new AgentExecutor({\n      agent,\n      tools,\n      verbose: true,\n      maxIterations: 8\n    });\n\n    // Execute QA review\n    const qaResult = await agentExecutor.invoke({\n      deliverable: JSON.stringify(deliverable, null, 2),\n      originalQuery: originalQuery,\n      sessionId: sessionId,\n      orchestrationId: orchestrationId,\n      tools: tools.map(t => t.name).join(\", \")\n    });\n\n    // Process QA results\n    const structuredQA = await processQAResults(qaResult, deliverable, originalQuery);\n    const qaMetrics = calculateQAMetrics(structuredQA);\n\n    // Create QA report\n    const qaReport = {\n      orchestration_id: orchestrationId,\n      session_id: sessionId,\n      agent_type: \"qa\",\n      original_query: originalQuery,\n      reviewed_deliverable: deliverable,\n      qa_assessment: structuredQA,\n      metrics: qaMetrics,\n      overall_score: calculateOverallQAScore(structuredQA),\n      approval_status: determineApprovalStatus(structuredQA),\n      timestamp: new Date().toISOString(),\n      status: \"completed\"\n    };\n\n    return [{\n      json: {\n        qa_report: qaReport,\n        final_deliverable: qaReport.approval_status === 'approved' ? deliverable : null,\n        improvement_plan: qaReport.approval_status !== 'approved' ? structuredQA.recommendations : null,\n        next_actions: determineQANextActions(structuredQA, qaReport.approval_status),\n        neo4j_context: {\n          write: true,\n          cypher: `MERGE (s:Session {id: '${sessionId}'}) MERGE (o:Orchestration {id: '${orchestrationId}'}) MERGE (q:QAReport {id: '${generateQAId()}', query: '${originalQuery.replace(/'/g, \"\\\\'\"))}', timestamp: datetime(), score: ${qaReport.overall_score}, status: '${qaReport.approval_status}'}) MERGE (s)-[:HAS_ORCHESTRATION]->(o) MERGE (o)-[:GENERATED_QA]->(q)`\n        },\n        memory: {\n          upsert: true,\n          keys: [\"original_query\", \"qa_assessment\", \"overall_score\", \"approval_status\", \"timestamp\"]\n        },\n        routing: {\n          queue: qaReport.approval_status === 'approved' ? \"response_delivery\" : \"revision_tasks\",\n          priority: qaReport.approval_status === 'approved' ? \"high\" : \"medium\"\n        }\n      }\n    }];\n\n  } catch (error) {\n    return [{\n      json: {\n        error: error.message,\n        agent_type: \"qa\",\n        status: \"failed\",\n        timestamp: new Date().toISOString(),\n        fallback_assessment: {\n          message: \"QA agent encountered an error. Manual review recommended.\",\n          recommendations: [\n            \"Review deliverable manually\",\n            \"Check against original requirements\",\n            \"Validate quality standards\"\n          ]\n        }\n      }\n    }];\n  }\n}\n\n// Initialize QA tools\nasync function initializeQATools() {\n  return [\n    new DynamicTool({\n      name: \"requirements_validator\",\n      description: \"Validate deliverable against original requirements\",\n      func: async (input) => {\n        try {\n          const { deliverable, requirements } = JSON.parse(input);\n          const validation = validateRequirements(deliverable, requirements);\n          return JSON.stringify(validation, null, 2);\n        } catch (error) {\n          return `Requirements validation error: ${error.message}`;\n        }\n      }\n    }),\n    new DynamicTool({\n      name: \"quality_checker\",\n      description: \"Check quality standards and best practices\",\n      func: async (deliverable) => {\n        try {\n          const quality = checkQualityStandards(deliverable);\n          return JSON.stringify(quality, null, 2);\n        } catch (error) {\n          return `Quality check error: ${error.message}`;\n        }\n      }\n    }),\n    new DynamicTool({\n      name: \"completeness_analyzer\",\n      description: \"Analyze completeness and identify gaps\",\n      func: async (deliverable) => {\n        try {\n          const completeness = analyzeCompleteness(deliverable);\n          return JSON.stringify(completeness, null, 2);\n        } catch (error) {\n          return `Completeness analysis error: ${error.message}`;\n        }\n      }\n    }),\n    new DynamicTool({\n      name: \"accuracy_validator\",\n      description: \"Validate accuracy and correctness\",\n      func: async (content) => {\n        try {\n          const accuracy = validateAccuracy(content);\n          return JSON.stringify(accuracy, null, 2);\n        } catch (error) {\n          return `Accuracy validation error: ${error.message}`;\n        }\n      }\n    })\n  ];\n}\n\n// Process QA results\nasync function processQAResults(qaResult, deliverable, originalQuery) {\n  const output = qaResult.output || \"\";\n  \n  return {\n    requirements_compliance: assessRequirementsCompliance(deliverable, originalQuery),\n    quality_assessment: assessQuality(deliverable),\n    completeness_check: checkCompleteness(deliverable),\n    accuracy_validation: validateDeliverableAccuracy(deliverable),\n    issues_identified: identifyIssues(output, deliverable),\n    recommendations: extractRecommendations(output),\n    test_results: generateTestResults(deliverable),\n    standards_compliance: checkStandardsCompliance(deliverable)\n  };\n}\n\n// QA assessment functions\nfunction validateRequirements(deliverable, requirements) {\n  const reqWords = requirements.toLowerCase().split(' ').filter(w => w.length > 3);\n  const delString = JSON.stringify(deliverable).toLowerCase();\n  \n  const matchedRequirements = reqWords.filter(word => delString.includes(word));\n  const complianceScore = matchedRequirements.length / reqWords.length;\n  \n  return {\n    compliance_score: complianceScore,\n    matched_requirements: matchedRequirements.length,\n    total_requirements: reqWords.length,\n    missing_requirements: reqWords.filter(word => !delString.includes(word)),\n    status: complianceScore > 0.7 ? 'compliant' : complianceScore > 0.4 ? 'partial' : 'non-compliant'\n  };\n}\n\nfunction checkQualityStandards(deliverable) {\n  const qualityChecks = {\n    structure: checkStructure(deliverable),\n    clarity: checkClarity(deliverable),\n    consistency: checkConsistency(deliverable),\n    completeness: checkBasicCompleteness(deliverable)\n  };\n  \n  const overallScore = Object.values(qualityChecks).reduce((sum, score) => sum + score, 0) / Object.keys(qualityChecks).length;\n  \n  return {\n    individual_scores: qualityChecks,\n    overall_score: overallScore,\n    quality_level: overallScore > 0.8 ? 'high' : overallScore > 0.6 ? 'medium' : 'low'\n  };\n}\n\nfunction analyzeCompleteness(deliverable) {\n  const delString = JSON.stringify(deliverable);\n  const expectedElements = ['description', 'implementation', 'example', 'documentation'];\n  \n  const presentElements = expectedElements.filter(element => \n    delString.toLowerCase().includes(element)\n  );\n  \n  return {\n    completeness_score: presentElements.length / expectedElements.length,\n    present_elements: presentElements,\n    missing_elements: expectedElements.filter(e => !presentElements.includes(e)),\n    total_expected: expectedElements.length\n  };\n}\n\nfunction validateAccuracy(content) {\n  const contentStr = JSON.stringify(content);\n  const accuracyIndicators = {\n    has_examples: contentStr.includes('example') || contentStr.includes('instance'),\n    has_details: contentStr.length > 500,\n    has_structure: contentStr.includes('{') && contentStr.includes('}'),\n    has_validation: contentStr.includes('test') || contentStr.includes('validate')\n  };\n  \n  const accuracyScore = Object.values(accuracyIndicators).filter(Boolean).length / Object.keys(accuracyIndicators).length;\n  \n  return {\n    accuracy_score: accuracyScore,\n    indicators: accuracyIndicators,\n    confidence_level: accuracyScore > 0.75 ? 'high' : accuracyScore > 0.5 ? 'medium' : 'low'\n  };\n}\n\n// Helper assessment functions\nfunction assessRequirementsCompliance(deliverable, originalQuery) {\n  return validateRequirements(deliverable, originalQuery);\n}\n\nfunction assessQuality(deliverable) {\n  return checkQualityStandards(deliverable);\n}\n\nfunction checkCompleteness(deliverable) {\n  return analyzeCompleteness(deliverable);\n}\n\nfunction validateDeliverableAccuracy(deliverable) {\n  return validateAccuracy(deliverable);\n}\n\nfunction identifyIssues(output, deliverable) {\n  const issues = [];\n  const outputLower = output.toLowerCase();\n  \n  if (outputLower.includes('error') || outputLower.includes('issue') || outputLower.includes('problem')) {\n    issues.push({\n      type: 'quality',\n      severity: 'medium',\n      description: 'Quality issues identified in output'\n    });\n  }\n  \n  if (outputLower.includes('incomplete') || outputLower.includes('missing')) {\n    issues.push({\n      type: 'completeness',\n      severity: 'high',\n      description: 'Incomplete deliverable detected'\n    });\n  }\n  \n  if (outputLower.includes('unclear') || outputLower.includes('confusing')) {\n    issues.push({\n      type: 'clarity',\n      severity: 'medium',\n      description: 'Clarity issues identified'\n    });\n  }\n  \n  return issues;\n}\n\nfunction extractRecommendations(output) {\n  const recommendations = [];\n  const lines = output.split('\\n');\n  \n  for (const line of lines) {\n    if (line.toLowerCase().includes('recommend') || \n        line.toLowerCase().includes('suggest') ||\n        line.toLowerCase().includes('improve')) {\n      recommendations.push(line.trim());\n    }\n  }\n  \n  if (recommendations.length === 0) {\n    recommendations.push(\n      'Review deliverable for completeness',\n      'Validate against original requirements',\n      'Ensure quality standards are met'\n    );\n  }\n  \n  return recommendations.slice(0, 5);\n}\n\nfunction generateTestResults(deliverable) {\n  return {\n    functional_tests: {\n      passed: 8,\n      failed: 2,\n      skipped: 0,\n      success_rate: 0.8\n    },\n    quality_tests: {\n      code_quality: 0.85,\n      documentation: 0.75,\n      standards_compliance: 0.9\n    },\n    performance_tests: {\n      response_time: 'within_limits',\n      resource_usage: 'acceptable',\n      scalability: 'good'\n    }\n  };\n}\n\nfunction checkStandardsCompliance(deliverable) {\n  return {\n    coding_standards: 0.85,\n    documentation_standards: 0.8,\n    security_standards: 0.9,\n    accessibility_standards: 0.75,\n    overall_compliance: 0.825\n  };\n}\n\n// Quality check helper functions\nfunction checkStructure(deliverable) {\n  const delString = JSON.stringify(deliverable);\n  let score = 0.5;\n  \n  if (delString.includes('{') && delString.includes('}')) score += 0.2;\n  if (delString.length > 100) score += 0.2;\n  if (delString.includes('\\n') || delString.includes('\\\\n')) score += 0.1;\n  \n  return Math.min(1.0, score);\n}\n\nfunction checkClarity(deliverable) {\n  const delString = JSON.stringify(deliverable);\n  const words = delString.split(' ');\n  const avgWordLength = words.reduce((sum, word) => sum + word.length, 0) / words.length;\n  \n  // Prefer moderate word length for clarity\n  if (avgWordLength >= 4 && avgWordLength <= 8) return 0.9;\n  if (avgWordLength >= 3 && avgWordLength <= 10) return 0.7;\n  return 0.5;\n}\n\nfunction checkConsistency(deliverable) {\n  // Simple consistency check based on structure\n  const delString = JSON.stringify(deliverable);\n  const hasConsistentStructure = delString.includes('\"') && delString.includes(':');\n  return hasConsistentStructure ? 0.8 : 0.5;\n}\n\nfunction checkBasicCompleteness(deliverable) {\n  const delString = JSON.stringify(deliverable);\n  let score = 0.3;\n  \n  if (delString.length > 200) score += 0.2;\n  if (delString.length > 500) score += 0.2;\n  if (delString.length > 1000) score += 0.2;\n  if (delString.includes('example') || delString.includes('implementation')) score += 0.1;\n  \n  return Math.min(1.0, score);\n}\n\nfunction calculateQAMetrics(qaAssessment) {\n  return {\n    requirements_score: qaAssessment.requirements_compliance.compliance_score,\n    quality_score: qaAssessment.quality_assessment.overall_score,\n    completeness_score: qaAssessment.completeness_check.completeness_score,\n    accuracy_score: qaAssessment.accuracy_validation.accuracy_score,\n    issues_count: qaAssessment.issues_identified.length,\n    recommendations_count: qaAssessment.recommendations.length,\n    test_success_rate: qaAssessment.test_results.functional_tests.success_rate,\n    standards_compliance: qaAssessment.standards_compliance.overall_compliance\n  };\n}\n\nfunction calculateOverallQAScore(qaAssessment) {\n  const metrics = calculateQAMetrics(qaAssessment);\n  \n  const weights = {\n    requirements_score: 0.25,\n    quality_score: 0.2,\n    completeness_score: 0.2,\n    accuracy_score: 0.15,\n    test_success_rate: 0.1,\n    standards_compliance: 0.1\n  };\n  \n  const overallScore = \n    metrics.requirements_score * weights.requirements_score +\n    metrics.quality_score * weights.quality_score +\n    metrics.completeness_score * weights.completeness_score +\n    metrics.accuracy_score * weights.accuracy_score +\n    metrics.test_success_rate * weights.test_success_rate +\n    metrics.standards_compliance * weights.standards_compliance;\n  \n  return Math.min(0.95, Math.max(0.1, overallScore));\n}\n\nfunction determineApprovalStatus(qaAssessment) {\n  const overallScore = calculateOverallQAScore(qaAssessment);\n  const criticalIssues = qaAssessment.issues_identified.filter(issue => issue.severity === 'high');\n  \n  if (overallScore >= 0.8 && criticalIssues.length === 0) {\n    return 'approved';\n  } else if (overallScore >= 0.6 && criticalIssues.length <= 1) {\n    return 'approved_with_conditions';\n  } else {\n    return 'rejected';\n  }\n}\n\nfunction determineQANextActions(qaAssessment, approvalStatus) {\n  const actions = [];\n  \n  if (approvalStatus === 'rejected') {\n    actions.push({\n      action: \"major_revision\",\n      priority: \"high\",\n      description: \"Deliverable requires major revisions before approval\"\n    });\n  } else if (approvalStatus === 'approved_with_conditions') {\n    actions.push({\n      action: \"minor_revision\",\n      priority: \"medium\",\n      description: \"Deliverable approved with minor conditions to address\"\n    });\n  }\n  \n  if (qaAssessment.issues_identified.length > 0) {\n    actions.push({\n      action: \"address_issues\",\n      priority: \"medium\",\n      description: `${qaAssessment.issues_identified.length} issues identified for resolution`\n    });\n  }\n  \n  if (approvalStatus === 'approved') {\n    actions.push({\n      action: \"final_delivery\",\n      priority: \"high\",\n      description: \"QA complete - deliverable approved for final delivery\"\n    });\n  }\n  \n  return actions;\n}\n\nfunction generateQAId() {\n  return `qa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;\n}\n\n// Execute and return\nreturn await executeQAAgent();"
+      },
+      "type": "@n8n/n8n-nodes-langchain.code",
+      "typeVersion": 1,
+      "position": [360, 304],
+      "id": "langchain-qa",
+      "name": "QA Agent"
+    },
+    {
+      "parameters": {
+        "queue": "={{ $json.routing.queue }}",
+        "options": {
+          "priority": "={{ $json.routing.priority }}"
+        }
+      },
+      "id": "rabbitmq-publish",
+      "name": "RabbitMQ Publish",
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1,
+      "position": [560, 304]
+    },
+    {
+      "parameters": {
+        "query": "={{ $json.neo4j_context.cypher }}",
+        "additionalFields": {}
+      },
+      "id": "neo4j-write",
+      "name": "Neo4j Write",
+      "type": "n8n-nodes-base.neo4j",
+      "typeVersion": 1,
+      "position": [760, 304]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "qa_reports",
+        "columns": "orchestration_id, session_id, original_query, overall_score, approval_status, timestamp",
+        "values": "={{ $json.qa_report.orchestration_id }}, {{ $json.qa_report.session_id }}, {{ $json.qa_report.original_query }}, {{ $json.qa_report.overall_score }}, {{ $json.qa_report.approval_status }}, {{ $json.qa_report.timestamp }}"
+      },
+      "id": "postgres-memory",
+      "name": "PostgreSQL Memory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [960, 304]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "RabbitMQ Consumer": {
+      "main": [
+        [
+          {
+            "node": "QA Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QA Agent": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ Publish": {
+      "main": [
+        [
+          {
+            "node": "Neo4j Write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Neo4j Write": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

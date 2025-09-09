@@ -1,0 +1,40 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: system
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: varlogs
+          __path__: /var/log/*log
+  - job_name: docker
+    pipeline_stages:
+      - docker: {}
+      # If application logs are JSON, try to parse a correlation_id field
+      - json:
+          expressions:
+            correlation_id: correlation_id
+            msg: message
+      # Fallback: try to extract X-Correlation-ID from plain text logs
+      - regex:
+          # Use a named capture group so the value is stored as 'correlation_id'
+          expression: '.*(?:X-Correlation-ID|correlation_id)[=: ]+(?P<correlation_id>[a-fA-F0-9\-]{8,})'
+          source: msg
+          # If msg is not present (non-JSON), apply on the raw log line
+          # Note: promtail uses extracted "log" field by docker stage
+      - labels:
+          # Use value from extracted data with the same key name
+          correlation_id: correlation_id
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: docker
+          __path__: /var/lib/docker/containers/*/*-json.log

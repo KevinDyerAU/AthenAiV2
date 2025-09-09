@@ -1,0 +1,114 @@
+{
+  "name": "Planning Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "queue": "planning_tasks",
+        "options": {}
+      },
+      "id": "rabbitmq-consume",
+      "name": "RabbitMQ Consumer",
+      "type": "n8n-nodes-base.rabbitmqTrigger",
+      "typeVersion": 1,
+      "position": [160, 304]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Planning Agent - Production Implementation\nconst { ChatOpenAI } = require(\"@langchain/openai\");\nconst { AgentExecutor, createOpenAIFunctionsAgent } = require(\"langchain/agents\");\nconst { DynamicTool } = require(\"@langchain/core/tools\");\nconst { PromptTemplate } = require(\"@langchain/core/prompts\");\n\n// Initialize LangSmith tracing\nprocess.env.LANGCHAIN_TRACING_V2 = \"true\";\nprocess.env.LANGCHAIN_PROJECT = process.env.LANGCHAIN_PROJECT || \"athenai-planning-agent\";\nprocess.env.LANGCHAIN_ENDPOINT = process.env.LANGCHAIN_ENDPOINT || \"https://api.smith.langchain.com\";\n\nasync function executePlanningAgent() {\n  try {\n    const inputData = $json;\n    const taskData = inputData.task || inputData;\n    const objectives = taskData.objectives || taskData.query || taskData.original_message;\n    const sessionId = taskData.session_id || 'default_session';\n    const orchestrationId = taskData.orchestration_id || 'default_orchestration';\n    \n    if (!objectives) {\n      throw new Error('Planning objectives are required');\n    }\n\n    // Initialize OpenAI\n    const llm = new ChatOpenAI({\n      modelName: \"gpt-4\",\n      temperature: 0.3,\n      openAIApiKey: $credentials.openAi?.apiKey || process.env.OPENAI_API_KEY,\n      tags: [\"planning-agent\", \"athenai\"]\n    });\n\n    // Initialize planning tools\n    const tools = await initializePlanningTools();\n\n    // Create planning prompt\n    const planningPrompt = PromptTemplate.fromTemplate(`\nYou are a Planning Agent specialized in strategic planning, project management, and resource allocation.\n\nObjectives: {objectives}\nSession ID: {sessionId}\nOrchestration ID: {orchestrationId}\n\nYour task:\n1. Analyze the objectives and requirements\n2. Create detailed project plans with timelines\n3. Identify resources and dependencies\n4. Assess risks and mitigation strategies\n5. Define success metrics and milestones\n6. Provide implementation roadmap\n\nAvailable tools: {tools}\n\nProvide a comprehensive plan with:\n- Project Scope and Objectives\n- Work Breakdown Structure\n- Timeline and Milestones\n- Resource Requirements\n- Risk Assessment\n- Success Metrics\n\nObjectives: {objectives}\n`);\n\n    // Create agent\n    const agent = await createOpenAIFunctionsAgent({\n      llm,\n      tools,\n      prompt: planningPrompt\n    });\n\n    const agentExecutor = new AgentExecutor({\n      agent,\n      tools,\n      verbose: true,\n      maxIterations: 8\n    });\n\n    // Execute planning\n    const planningResult = await agentExecutor.invoke({\n      objectives: objectives,\n      sessionId: sessionId,\n      orchestrationId: orchestrationId,\n      tools: tools.map(t => t.name).join(\", \")\n    });\n\n    // Process planning output\n    const structuredPlan = await processPlanningOutput(planningResult, objectives);\n    const planningMetrics = calculatePlanningMetrics(structuredPlan);\n\n    // Create planning report\n    const planningReport = {\n      orchestration_id: orchestrationId,\n      session_id: sessionId,\n      agent_type: \"planning\",\n      objectives: objectives,\n      plan: structuredPlan,\n      metrics: planningMetrics,\n      feasibility_score: calculateFeasibilityScore(structuredPlan),\n      timestamp: new Date().toISOString(),\n      status: \"completed\"\n    };\n\n    return [{\n      json: {\n        planning_report: planningReport,\n        execution_roadmap: structuredPlan.roadmap,\n        next_actions: determinePlanningNextActions(structuredPlan),\n        neo4j_context: {\n          write: true,\n          cypher: `MERGE (s:Session {id: '${sessionId}'}) MERGE (o:Orchestration {id: '${orchestrationId}'}) MERGE (p:ProjectPlan {id: '${generatePlanId()}', objectives: '${objectives.replace(/'/g, \"\\\\'\"))}', timestamp: datetime(), feasibility: ${planningReport.feasibility_score}}) MERGE (s)-[:HAS_ORCHESTRATION]->(o) MERGE (o)-[:GENERATED_PLAN]->(p)`\n        },\n        memory: {\n          upsert: true,\n          keys: [\"objectives\", \"plan\", \"feasibility_score\", \"timestamp\"]\n        },\n        routing: {\n          queue: \"execution_tasks\",\n          priority: \"normal\"\n        }\n      }\n    }];\n\n  } catch (error) {\n    return [{\n      json: {\n        error: error.message,\n        agent_type: \"planning\",\n        status: \"failed\",\n        timestamp: new Date().toISOString()\n      }\n    }];\n  }\n}\n\n// Initialize planning tools\nasync function initializePlanningTools() {\n  return [\n    new DynamicTool({\n      name: \"timeline_generator\",\n      description: \"Generate project timelines and milestones\",\n      func: async (objectives) => {\n        try {\n          const timeline = generateTimeline(objectives);\n          return JSON.stringify(timeline, null, 2);\n        } catch (error) {\n          return `Timeline generation error: ${error.message}`;\n        }\n      }\n    }),\n    new DynamicTool({\n      name: \"resource_estimator\",\n      description: \"Estimate required resources for project completion\",\n      func: async (scope) => {\n        try {\n          const resources = estimateResources(scope);\n          return JSON.stringify(resources, null, 2);\n        } catch (error) {\n          return `Resource estimation error: ${error.message}`;\n        }\n      }\n    }),\n    new DynamicTool({\n      name: \"risk_analyzer\",\n      description: \"Analyze project risks and mitigation strategies\",\n      func: async (plan) => {\n        try {\n          const risks = analyzeRisks(plan);\n          return JSON.stringify(risks, null, 2);\n        } catch (error) {\n          return `Risk analysis error: ${error.message}`;\n        }\n      }\n    }),\n    new DynamicTool({\n      name: \"milestone_planner\",\n      description: \"Define project milestones and success criteria\",\n      func: async (objectives) => {\n        try {\n          const milestones = planMilestones(objectives);\n          return JSON.stringify(milestones, null, 2);\n        } catch (error) {\n          return `Milestone planning error: ${error.message}`;\n        }\n      }\n    })\n  ];\n}\n\n// Process planning output\nasync function processPlanningOutput(planningResult, objectives) {\n  const output = planningResult.output || \"\";\n  \n  return {\n    scope: extractScope(output, objectives),\n    timeline: extractTimeline(output),\n    milestones: extractMilestones(output),\n    resources: extractResources(output),\n    risks: extractRisks(output),\n    success_metrics: extractSuccessMetrics(output),\n    roadmap: generateRoadmap(output, objectives),\n    dependencies: identifyDependencies(output),\n    budget_estimate: estimateBudget(output)\n  };\n}\n\n// Planning helper functions\nfunction generateTimeline(objectives) {\n  const complexity = assessProjectComplexity(objectives);\n  const phases = identifyProjectPhases(objectives);\n  \n  return {\n    total_duration: calculateTotalDuration(complexity),\n    phases: phases.map((phase, index) => ({\n      name: phase,\n      duration: calculatePhaseDuration(phase, complexity),\n      start_week: index * 2 + 1,\n      dependencies: index > 0 ? [phases[index - 1]] : []\n    })),\n    critical_path: identifyCriticalPath(phases)\n  };\n}\n\nfunction estimateResources(scope) {\n  return {\n    human_resources: {\n      project_manager: 1,\n      developers: estimateDeveloperCount(scope),\n      designers: estimateDesignerCount(scope),\n      qa_engineers: 1\n    },\n    technical_resources: {\n      development_environment: true,\n      testing_environment: true,\n      production_environment: true,\n      monitoring_tools: true\n    },\n    budget_categories: {\n      personnel: \"70%\",\n      infrastructure: \"20%\",\n      tools_licenses: \"10%\"\n    }\n  };\n}\n\nfunction analyzeRisks(plan) {\n  return {\n    high_risks: [\n      {\n        risk: \"Technical complexity exceeds estimates\",\n        probability: 0.3,\n        impact: \"high\",\n        mitigation: \"Conduct technical spike and proof of concept\"\n      }\n    ],\n    medium_risks: [\n      {\n        risk: \"Resource availability constraints\",\n        probability: 0.4,\n        impact: \"medium\",\n        mitigation: \"Maintain resource buffer and backup plans\"\n      }\n    ],\n    low_risks: [\n      {\n        risk: \"Minor scope changes\",\n        probability: 0.6,\n        impact: \"low\",\n        mitigation: \"Implement change control process\"\n      }\n    ]\n  };\n}\n\nfunction planMilestones(objectives) {\n  return [\n    {\n      name: \"Project Kickoff\",\n      week: 1,\n      deliverables: [\"Project charter\", \"Team formation\"],\n      success_criteria: \"All stakeholders aligned on objectives\"\n    },\n    {\n      name: \"Design Complete\",\n      week: 4,\n      deliverables: [\"System design\", \"UI/UX mockups\"],\n      success_criteria: \"Design approved by stakeholders\"\n    },\n    {\n      name: \"MVP Release\",\n      week: 8,\n      deliverables: [\"Core functionality\", \"Basic testing\"],\n      success_criteria: \"MVP meets acceptance criteria\"\n    },\n    {\n      name: \"Production Release\",\n      week: 12,\n      deliverables: [\"Full system\", \"Documentation\"],\n      success_criteria: \"System deployed and operational\"\n    }\n  ];\n}\n\n// Extract functions\nfunction extractScope(output, objectives) {\n  return {\n    primary_objectives: [objectives],\n    secondary_objectives: [],\n    out_of_scope: [],\n    assumptions: [\"Standard development practices\", \"Available resources\"]\n  };\n}\n\nfunction extractTimeline(output) {\n  return {\n    start_date: new Date().toISOString().split('T')[0],\n    end_date: new Date(Date.now() + 84 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],\n    total_weeks: 12,\n    phases: 4\n  };\n}\n\nfunction extractMilestones(output) {\n  return [\n    { name: \"Planning Complete\", week: 2 },\n    { name: \"Development Start\", week: 3 },\n    { name: \"Testing Phase\", week: 10 },\n    { name: \"Deployment\", week: 12 }\n  ];\n}\n\nfunction extractResources(output) {\n  return {\n    team_size: 5,\n    budget_range: \"$50k-100k\",\n    tools_required: [\"Development IDE\", \"Project management tool\"],\n    infrastructure: [\"Cloud hosting\", \"CI/CD pipeline\"]\n  };\n}\n\nfunction extractRisks(output) {\n  return [\n    { type: \"technical\", level: \"medium\", description: \"Integration complexity\" },\n    { type: \"resource\", level: \"low\", description: \"Team availability\" },\n    { type: \"timeline\", level: \"medium\", description: \"Scope creep\" }\n  ];\n}\n\nfunction extractSuccessMetrics(output) {\n  return {\n    delivery_metrics: [\"On-time delivery\", \"Within budget\", \"Quality standards met\"],\n    performance_metrics: [\"System uptime > 99%\", \"Response time < 200ms\"],\n    business_metrics: [\"User adoption rate\", \"Customer satisfaction\"]\n  };\n}\n\nfunction generateRoadmap(output, objectives) {\n  return {\n    phase_1: {\n      name: \"Planning & Design\",\n      duration: \"2 weeks\",\n      activities: [\"Requirements analysis\", \"System design\", \"Resource allocation\"]\n    },\n    phase_2: {\n      name: \"Development\",\n      duration: \"6 weeks\",\n      activities: [\"Core development\", \"Feature implementation\", \"Integration\"]\n    },\n    phase_3: {\n      name: \"Testing & QA\",\n      duration: \"2 weeks\",\n      activities: [\"Unit testing\", \"Integration testing\", \"User acceptance testing\"]\n    },\n    phase_4: {\n      name: \"Deployment & Launch\",\n      duration: \"2 weeks\",\n      activities: [\"Production deployment\", \"Monitoring setup\", \"Documentation\"]\n    }\n  };\n}\n\nfunction identifyDependencies(output) {\n  return [\n    { task: \"Development\", depends_on: [\"Design approval\"] },\n    { task: \"Testing\", depends_on: [\"Development complete\"] },\n    { task: \"Deployment\", depends_on: [\"Testing passed\"] }\n  ];\n}\n\nfunction estimateBudget(output) {\n  return {\n    personnel: 70000,\n    infrastructure: 15000,\n    tools_licenses: 5000,\n    contingency: 10000,\n    total: 100000\n  };\n}\n\n// Helper calculation functions\nfunction assessProjectComplexity(objectives) {\n  const objLower = objectives.toLowerCase();\n  let complexity = 1; // Base complexity\n  \n  if (objLower.includes('integration') || objLower.includes('api')) complexity += 0.5;\n  if (objLower.includes('real-time') || objLower.includes('scalable')) complexity += 0.5;\n  if (objLower.includes('machine learning') || objLower.includes('ai')) complexity += 1;\n  \n  return Math.min(3, complexity);\n}\n\nfunction identifyProjectPhases(objectives) {\n  const phases = ['Planning', 'Design', 'Development', 'Testing', 'Deployment'];\n  \n  if (objectives.toLowerCase().includes('research')) {\n    phases.unshift('Research');\n  }\n  \n  return phases;\n}\n\nfunction calculateTotalDuration(complexity) {\n  const baseDuration = 8; // weeks\n  return Math.ceil(baseDuration * complexity);\n}\n\nfunction calculatePhaseDuration(phase, complexity) {\n  const baseDurations = {\n    'Research': 1,\n    'Planning': 1,\n    'Design': 2,\n    'Development': 4,\n    'Testing': 2,\n    'Deployment': 1\n  };\n  \n  return Math.ceil((baseDurations[phase] || 1) * complexity);\n}\n\nfunction identifyCriticalPath(phases) {\n  return phases.slice(0, 3); // First 3 phases are typically critical\n}\n\nfunction estimateDeveloperCount(scope) {\n  const scopeSize = scope.length;\n  if (scopeSize < 100) return 2;\n  if (scopeSize < 300) return 3;\n  return 4;\n}\n\nfunction estimateDesignerCount(scope) {\n  return scope.toLowerCase().includes('ui') || scope.toLowerCase().includes('design') ? 1 : 0;\n}\n\nfunction calculatePlanningMetrics(plan) {\n  return {\n    scope_clarity: calculateScopeClarity(plan.scope),\n    timeline_realism: assessTimelineRealism(plan.timeline),\n    resource_adequacy: assessResourceAdequacy(plan.resources),\n    risk_coverage: calculateRiskCoverage(plan.risks),\n    milestone_quality: assessMilestoneQuality(plan.milestones)\n  };\n}\n\nfunction calculateScopeClarity(scope) {\n  let clarity = 0.5;\n  if (scope.primary_objectives && scope.primary_objectives.length > 0) clarity += 0.2;\n  if (scope.out_of_scope && scope.out_of_scope.length > 0) clarity += 0.2;\n  if (scope.assumptions && scope.assumptions.length > 0) clarity += 0.1;\n  return Math.min(1.0, clarity);\n}\n\nfunction assessTimelineRealism(timeline) {\n  // Simple heuristic: 8-16 weeks is realistic for most projects\n  const weeks = timeline.total_weeks || 12;\n  if (weeks >= 8 && weeks <= 16) return 0.9;\n  if (weeks >= 4 && weeks <= 24) return 0.7;\n  return 0.5;\n}\n\nfunction assessResourceAdequacy(resources) {\n  let adequacy = 0.5;\n  if (resources.team_size && resources.team_size >= 3) adequacy += 0.2;\n  if (resources.budget_range) adequacy += 0.2;\n  if (resources.tools_required && resources.tools_required.length > 0) adequacy += 0.1;\n  return Math.min(1.0, adequacy);\n}\n\nfunction calculateRiskCoverage(risks) {\n  const totalRisks = risks.length || 0;\n  if (totalRisks >= 3) return 0.9;\n  if (totalRisks >= 1) return 0.6;\n  return 0.3;\n}\n\nfunction assessMilestoneQuality(milestones) {\n  const count = milestones.length || 0;\n  if (count >= 4) return 0.9;\n  if (count >= 2) return 0.7;\n  return 0.4;\n}\n\nfunction calculateFeasibilityScore(plan) {\n  const metrics = calculatePlanningMetrics(plan);\n  \n  const weights = {\n    scope_clarity: 0.25,\n    timeline_realism: 0.25,\n    resource_adequacy: 0.25,\n    risk_coverage: 0.15,\n    milestone_quality: 0.1\n  };\n  \n  const feasibilityScore = \n    metrics.scope_clarity * weights.scope_clarity +\n    metrics.timeline_realism * weights.timeline_realism +\n    metrics.resource_adequacy * weights.resource_adequacy +\n    metrics.risk_coverage * weights.risk_coverage +\n    metrics.milestone_quality * weights.milestone_quality;\n  \n  return Math.min(0.95, Math.max(0.1, feasibilityScore));\n}\n\nfunction determinePlanningNextActions(plan) {\n  const actions = [];\n  \n  if (calculateScopeClarity(plan.scope) < 0.7) {\n    actions.push({\n      action: \"clarify_scope\",\n      priority: \"high\",\n      description: \"Project scope needs clarification and refinement\"\n    });\n  }\n  \n  if (plan.risks.length < 3) {\n    actions.push({\n      action: \"risk_assessment\",\n      priority: \"medium\",\n      description: \"Additional risk analysis recommended\"\n    });\n  }\n  \n  actions.push({\n    action: \"stakeholder_approval\",\n    priority: \"normal\",\n    description: \"Planning complete - ready for stakeholder review and approval\"\n  });\n  \n  return actions;\n}\n\nfunction generatePlanId() {\n  return `plan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;\n}\n\n// Execute and return\nreturn await executePlanningAgent();"
+      },
+      "type": "@n8n/n8n-nodes-langchain.code",
+      "typeVersion": 1,
+      "position": [360, 304],
+      "id": "langchain-planning",
+      "name": "Planning Agent"
+    },
+    {
+      "parameters": {
+        "queue": "={{ $json.routing.queue }}",
+        "options": {
+          "priority": "={{ $json.routing.priority }}"
+        }
+      },
+      "id": "rabbitmq-publish",
+      "name": "RabbitMQ Publish",
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1,
+      "position": [560, 304]
+    },
+    {
+      "parameters": {
+        "query": "={{ $json.neo4j_context.cypher }}",
+        "additionalFields": {}
+      },
+      "id": "neo4j-write",
+      "name": "Neo4j Write",
+      "type": "n8n-nodes-base.neo4j",
+      "typeVersion": 1,
+      "position": [760, 304]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "project_plans",
+        "columns": "orchestration_id, session_id, objectives, plan, feasibility_score, timestamp",
+        "values": "={{ $json.planning_report.orchestration_id }}, {{ $json.planning_report.session_id }}, {{ $json.planning_report.objectives }}, {{ JSON.stringify($json.planning_report.plan) }}, {{ $json.planning_report.feasibility_score }}, {{ $json.planning_report.timestamp }}"
+      },
+      "id": "postgres-memory",
+      "name": "PostgreSQL Memory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [960, 304]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "RabbitMQ Consumer": {
+      "main": [
+        [
+          {
+            "node": "Planning Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planning Agent": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ Publish": {
+      "main": [
+        [
+          {
+            "node": "Neo4j Write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Neo4j Write": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

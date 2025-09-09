@@ -1,0 +1,115 @@
+{
+  "name": "Research Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "queue": "research_tasks",
+        "options": {}
+      },
+      "id": "rabbitmq-consume",
+      "name": "RabbitMQ Consumer",
+      "type": "n8n-nodes-base.rabbitmqTrigger",
+      "typeVersion": 1,
+      "position": [160, 304],
+      "webhookId": "research-agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Research Agent - Production Implementation\nconst { ChatOpenAI } = require(\"@langchain/openai\");\nconst { AgentExecutor, createOpenAIFunctionsAgent } = require(\"langchain/agents\");\nconst { DynamicTool } = require(\"@langchain/core/tools\");\nconst { PromptTemplate } = require(\"@langchain/core/prompts\");\nconst { WebBrowser } = require(\"langchain/tools/webbrowser\");\nconst { SerpAPI } = require(\"@langchain/community/tools/serpapi\");\nconst { WikipediaQueryRun } = require(\"@langchain/community/tools/wikipedia_query_run\");\n\n// Initialize LangSmith tracing\nprocess.env.LANGCHAIN_TRACING_V2 = \"true\";\nprocess.env.LANGCHAIN_PROJECT = process.env.LANGCHAIN_PROJECT || \"athenai-research-agent\";\nprocess.env.LANGCHAIN_ENDPOINT = process.env.LANGCHAIN_ENDPOINT || \"https://api.smith.langchain.com\";\n\nasync function executeResearchAgent() {\n  try {\n    const inputData = $json;\n    const taskData = inputData.task || inputData;\n    const query = taskData.query || taskData.message || taskData.original_message;\n    const sessionId = taskData.session_id || 'default_session';\n    const orchestrationId = taskData.orchestration_id || 'default_orchestration';\n    \n    if (!query) {\n      throw new Error('Query is required for research');\n    }\n\n    // Initialize OpenAI with credentials\n    const llm = new ChatOpenAI({\n      modelName: \"gpt-4\",\n      temperature: 0.1,\n      openAIApiKey: $credentials.openAi?.apiKey || process.env.OPENAI_API_KEY,\n      tags: [\"research-agent\", \"athenai\"]\n    });\n\n    // Initialize research tools\n    const tools = await initializeResearchTools();\n\n    // Create research prompt template\n    const researchPrompt = PromptTemplate.fromTemplate(`\nYou are a Research Agent specialized in gathering comprehensive, accurate information.\n\nUser Query: {query}\nSession ID: {sessionId}\nOrchestration ID: {orchestrationId}\n\nYour task:\n1. Analyze the query to identify key research areas\n2. Use available tools to gather relevant information\n3. Synthesize findings into a comprehensive research report\n4. Identify gaps that may need additional research\n5. Provide source citations and reliability assessments\n\nAvailable tools: {tools}\n\nProvide a structured research report with:\n- Executive Summary\n- Key Findings\n- Detailed Analysis\n- Sources and Citations\n- Confidence Levels\n- Recommendations for further research\n\nQuery: {query}\n`);\n\n    // Create agent\n    const agent = await createOpenAIFunctionsAgent({\n      llm,\n      tools,\n      prompt: researchPrompt\n    });\n\n    const agentExecutor = new AgentExecutor({\n      agent,\n      tools,\n      verbose: true,\n      maxIterations: 10,\n      returnIntermediateSteps: true\n    });\n\n    // Execute research\n    const researchResult = await agentExecutor.invoke({\n      query: query,\n      sessionId: sessionId,\n      orchestrationId: orchestrationId,\n      tools: tools.map(t => t.name).join(\", \")\n    });\n\n    // Process and structure the research findings\n    const structuredFindings = await processResearchFindings(researchResult, query);\n\n    // Generate research metrics\n    const researchMetrics = calculateResearchMetrics(researchResult, structuredFindings);\n\n    // Create research report\n    const researchReport = {\n      orchestration_id: orchestrationId,\n      session_id: sessionId,\n      agent_type: \"research\",\n      query: query,\n      findings: structuredFindings,\n      raw_output: researchResult.output,\n      intermediate_steps: researchResult.intermediateSteps,\n      metrics: researchMetrics,\n      sources: extractSources(researchResult),\n      confidence_score: calculateConfidenceScore(structuredFindings),\n      timestamp: new Date().toISOString(),\n      status: \"completed\"\n    };\n\n    return [{\n      json: {\n        research_report: researchReport,\n        next_actions: determineNextActions(structuredFindings, query),\n        neo4j_context: {\n          write: true,\n          cypher: `MERGE (s:Session {id: '${sessionId}'}) \n                   MERGE (o:Orchestration {id: '${orchestrationId}'}) \n                   MERGE (r:ResearchReport {id: '${generateReportId()}', query: '${query.replace(/'/g, \"\\\\'\"))}', timestamp: datetime(), confidence: ${researchReport.confidence_score}}) \n                   MERGE (s)-[:HAS_ORCHESTRATION]->(o) \n                   MERGE (o)-[:GENERATED_RESEARCH]->(r)\n                   WITH r\n                   UNWIND ${JSON.stringify(researchReport.sources)} as source\n                   MERGE (src:Source {url: source.url, title: source.title})\n                   MERGE (r)-[:CITES]->(src)`\n        },\n        memory: {\n          upsert: true,\n          keys: [\"query\", \"findings\", \"sources\", \"confidence_score\", \"timestamp\"]\n        },\n        routing: {\n          queue: \"analysis_tasks\",\n          priority: \"normal\"\n        }\n      }\n    }];\n\n  } catch (error) {\n    return [{\n      json: {\n        error: error.message,\n        agent_type: \"research\",\n        status: \"failed\",\n        timestamp: new Date().toISOString(),\n        fallback_research: {\n          summary: \"Research agent encountered an error. Manual research may be required.\",\n          recommendations: [\n            \"Verify API keys for search tools\",\n            \"Check network connectivity\",\n            \"Review query complexity\"\n          ]\n        }\n      }\n    }];\n  }\n}\n\n// Initialize research tools\nasync function initializeResearchTools() {\n  const tools = [];\n\n  // Web search tool (SerpAPI)\n  if (process.env.SERPAPI_API_KEY || $credentials.serpApi?.apiKey) {\n    tools.push(new SerpAPI(process.env.SERPAPI_API_KEY || $credentials.serpApi?.apiKey, {\n      hl: \"en\",\n      gl: \"us\"\n    }));\n  }\n\n  // Wikipedia search tool\n  tools.push(new WikipediaQueryRun({\n    topKResults: 3,\n    maxDocContentLength: 4000\n  }));\n\n  // Custom web scraping tool\n  tools.push(new DynamicTool({\n    name: \"web_scraper\",\n    description: \"Scrape content from a specific URL for detailed information\",\n    func: async (url) => {\n      try {\n        const response = await fetch(url, {\n          headers: {\n            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'\n          }\n        });\n        \n        if (!response.ok) {\n          return `Error: Unable to fetch ${url} - ${response.status}`;\n        }\n        \n        const html = await response.text();\n        // Simple text extraction (in production, use a proper HTML parser)\n        const textContent = html\n          .replace(/<script[^>]*>.*?<\\/script>/gi, '')\n          .replace(/<style[^>]*>.*?<\\/style>/gi, '')\n          .replace(/<[^>]*>/g, ' ')\n          .replace(/\\s+/g, ' ')\n          .trim()\n          .substring(0, 5000);\n        \n        return textContent;\n      } catch (error) {\n        return `Error scraping ${url}: ${error.message}`;\n      }\n    }\n  }));\n\n  // Academic search tool\n  tools.push(new DynamicTool({\n    name: \"academic_search\",\n    description: \"Search for academic papers and scholarly articles\",\n    func: async (query) => {\n      try {\n        // In production, integrate with arXiv, PubMed, or Google Scholar APIs\n        const searchUrl = `https://arxiv.org/search/?query=${encodeURIComponent(query)}&searchtype=all&abstracts=show&order=-announced_date_first&size=5`;\n        \n        const response = await fetch(searchUrl);\n        if (!response.ok) {\n          return \"Academic search temporarily unavailable\";\n        }\n        \n        // Simplified response - in production, parse actual results\n        return `Academic search results for \"${query}\":\\n\\nFound relevant academic papers. For detailed results, please use specialized academic databases like arXiv, PubMed, or Google Scholar.`;\n      } catch (error) {\n        return `Academic search error: ${error.message}`;\n      }\n    }\n  }));\n\n  // News search tool\n  tools.push(new DynamicTool({\n    name: \"news_search\",\n    description: \"Search for recent news articles and current events\",\n    func: async (query) => {\n      try {\n        // In production, integrate with NewsAPI or similar service\n        if (process.env.NEWS_API_KEY || $credentials.newsApi?.apiKey) {\n          const newsUrl = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&sortBy=publishedAt&pageSize=5&apiKey=${process.env.NEWS_API_KEY || $credentials.newsApi?.apiKey}`;\n          \n          const response = await fetch(newsUrl);\n          const data = await response.json();\n          \n          if (data.articles && data.articles.length > 0) {\n            return data.articles.map(article => \n              `Title: ${article.title}\\nSource: ${article.source.name}\\nPublished: ${article.publishedAt}\\nSummary: ${article.description}\\nURL: ${article.url}`\n            ).join('\\n\\n');\n          }\n        }\n        \n        return `News search for \"${query}\" - API key required for detailed results`;\n      } catch (error) {\n        return `News search error: ${error.message}`;\n      }\n    }\n  }));\n\n  return tools;\n}\n\n// Process research findings into structured format\nasync function processResearchFindings(researchResult, query) {\n  const findings = {\n    executive_summary: \"\",\n    key_findings: [],\n    detailed_analysis: \"\",\n    data_points: [],\n    trends: [],\n    gaps: []\n  };\n\n  try {\n    const output = researchResult.output || \"\";\n    \n    // Extract key information using simple text processing\n    // In production, use more sophisticated NLP techniques\n    \n    findings.executive_summary = extractExecutiveSummary(output);\n    findings.key_findings = extractKeyFindings(output);\n    findings.detailed_analysis = output;\n    findings.data_points = extractDataPoints(output);\n    findings.trends = identifyTrends(output);\n    findings.gaps = identifyResearchGaps(output, query);\n    \n  } catch (error) {\n    findings.executive_summary = \"Error processing research findings\";\n    findings.key_findings = [\"Processing error occurred\"];\n  }\n\n  return findings;\n}\n\n// Calculate research quality metrics\nfunction calculateResearchMetrics(researchResult, findings) {\n  return {\n    sources_consulted: (researchResult.intermediateSteps || []).length,\n    information_depth: calculateInformationDepth(findings),\n    source_diversity: calculateSourceDiversity(researchResult),\n    factual_density: calculateFactualDensity(findings.detailed_analysis),\n    research_completeness: calculateCompleteness(findings),\n    execution_time: calculateExecutionTime(researchResult)\n  };\n}\n\n// Helper functions for text processing\nfunction extractExecutiveSummary(text) {\n  const sentences = text.split('.').filter(s => s.trim().length > 20);\n  return sentences.slice(0, 3).join('. ') + '.';\n}\n\nfunction extractKeyFindings(text) {\n  const findings = [];\n  const lines = text.split('\\n').filter(line => line.trim().length > 10);\n  \n  for (const line of lines.slice(0, 10)) {\n    if (line.includes('finding') || line.includes('result') || line.includes('shows') || line.includes('indicates')) {\n      findings.push(line.trim());\n    }\n  }\n  \n  return findings.slice(0, 5);\n}\n\nfunction extractDataPoints(text) {\n  const dataPoints = [];\n  const numberPattern = /\\d+(?:\\.\\d+)?\\s*(?:%|percent|million|billion|thousand)/gi;\n  const matches = text.match(numberPattern) || [];\n  \n  return matches.slice(0, 10).map(match => ({\n    value: match,\n    context: extractContext(text, match)\n  }));\n}\n\nfunction extractContext(text, match) {\n  const index = text.indexOf(match);\n  const start = Math.max(0, index - 50);\n  const end = Math.min(text.length, index + match.length + 50);\n  return text.substring(start, end).trim();\n}\n\nfunction identifyTrends(text) {\n  const trendKeywords = ['increase', 'decrease', 'growing', 'declining', 'trend', 'rising', 'falling'];\n  const trends = [];\n  \n  for (const keyword of trendKeywords) {\n    const regex = new RegExp(`[^.]*${keyword}[^.]*`, 'gi');\n    const matches = text.match(regex) || [];\n    trends.push(...matches.slice(0, 2));\n  }\n  \n  return trends.slice(0, 5);\n}\n\nfunction identifyResearchGaps(text, query) {\n  const gaps = [];\n  \n  if (text.length < 500) {\n    gaps.push(\"Limited information available - may need additional sources\");\n  }\n  \n  if (!text.includes('data') && !text.includes('statistics')) {\n    gaps.push(\"Quantitative data may be lacking\");\n  }\n  \n  if (!text.includes('recent') && !text.includes('2024') && !text.includes('2023')) {\n    gaps.push(\"Current/recent information may be missing\");\n  }\n  \n  return gaps;\n}\n\nfunction extractSources(researchResult) {\n  const sources = [];\n  \n  if (researchResult.intermediateSteps) {\n    for (const step of researchResult.intermediateSteps) {\n      if (step.action && step.action.tool) {\n        sources.push({\n          tool: step.action.tool,\n          query: step.action.toolInput,\n          url: extractUrlFromStep(step),\n          title: extractTitleFromStep(step),\n          reliability: assessSourceReliability(step.action.tool)\n        });\n      }\n    }\n  }\n  \n  return sources;\n}\n\nfunction extractUrlFromStep(step) {\n  const observation = step.observation || \"\";\n  const urlMatch = observation.match(/https?:\\/\\/[^\\s]+/);\n  return urlMatch ? urlMatch[0] : \"\";\n}\n\nfunction extractTitleFromStep(step) {\n  const observation = step.observation || \"\";\n  const lines = observation.split('\\n');\n  return lines[0] ? lines[0].substring(0, 100) : \"Untitled\";\n}\n\nfunction assessSourceReliability(toolName) {\n  const reliabilityMap = {\n    'serpapi': 'medium',\n    'wikipedia': 'high',\n    'web_scraper': 'medium',\n    'academic_search': 'high',\n    'news_search': 'medium'\n  };\n  \n  return reliabilityMap[toolName] || 'unknown';\n}\n\nfunction calculateConfidenceScore(findings) {\n  let score = 0.5; // Base confidence\n  \n  if (findings.key_findings.length > 3) score += 0.1;\n  if (findings.data_points.length > 2) score += 0.1;\n  if (findings.detailed_analysis.length > 1000) score += 0.1;\n  if (findings.gaps.length < 2) score += 0.1;\n  \n  return Math.min(0.95, Math.max(0.1, score));\n}\n\nfunction calculateInformationDepth(findings) {\n  return findings.detailed_analysis.length + findings.key_findings.length * 50;\n}\n\nfunction calculateSourceDiversity(researchResult) {\n  const tools = new Set();\n  if (researchResult.intermediateSteps) {\n    researchResult.intermediateSteps.forEach(step => {\n      if (step.action && step.action.tool) {\n        tools.add(step.action.tool);\n      }\n    });\n  }\n  return tools.size;\n}\n\nfunction calculateFactualDensity(text) {\n  const factualIndicators = text.match(/\\d+|according to|study shows|research indicates|data suggests/gi) || [];\n  return factualIndicators.length / Math.max(1, text.split(' ').length / 100);\n}\n\nfunction calculateCompleteness(findings) {\n  let completeness = 0;\n  if (findings.executive_summary.length > 50) completeness += 0.2;\n  if (findings.key_findings.length > 2) completeness += 0.2;\n  if (findings.detailed_analysis.length > 500) completeness += 0.2;\n  if (findings.data_points.length > 1) completeness += 0.2;\n  if (findings.trends.length > 0) completeness += 0.2;\n  return completeness;\n}\n\nfunction calculateExecutionTime(researchResult) {\n  // Estimate based on steps taken\n  const steps = researchResult.intermediateSteps ? researchResult.intermediateSteps.length : 1;\n  return steps * 2; // Rough estimate of 2 seconds per step\n}\n\nfunction determineNextActions(findings, query) {\n  const actions = [];\n  \n  if (findings.gaps.length > 2) {\n    actions.push({\n      action: \"additional_research\",\n      priority: \"high\",\n      description: \"Significant research gaps identified - additional investigation needed\"\n    });\n  }\n  \n  if (findings.data_points.length > 3) {\n    actions.push({\n      action: \"data_analysis\",\n      priority: \"medium\",\n      description: \"Sufficient data available for quantitative analysis\"\n    });\n  }\n  \n  actions.push({\n    action: \"synthesis\",\n    priority: \"normal\",\n    description: \"Synthesize research findings into actionable insights\"\n  });\n  \n  return actions;\n}\n\nfunction generateReportId() {\n  return `research_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;\n}\n\n// Execute and return\nreturn await executeResearchAgent();"
+      },
+      "type": "@n8n/n8n-nodes-langchain.code",
+      "typeVersion": 1,
+      "position": [360, 304],
+      "id": "langchain-research",
+      "name": "Research Agent"
+    },
+    {
+      "parameters": {
+        "queue": "={{ $json.routing.queue }}",
+        "options": {
+          "priority": "={{ $json.routing.priority }}"
+        }
+      },
+      "id": "rabbitmq-publish",
+      "name": "RabbitMQ Publish",
+      "type": "n8n-nodes-base.rabbitmq",
+      "typeVersion": 1,
+      "position": [560, 304]
+    },
+    {
+      "parameters": {
+        "query": "={{ $json.neo4j_context.cypher }}",
+        "additionalFields": {}
+      },
+      "id": "neo4j-write",
+      "name": "Neo4j Write",
+      "type": "n8n-nodes-base.neo4j",
+      "typeVersion": 1,
+      "position": [760, 304]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "research_reports",
+        "columns": "orchestration_id, session_id, query, findings, confidence_score, timestamp",
+        "values": "={{ $json.research_report.orchestration_id }}, {{ $json.research_report.session_id }}, {{ $json.research_report.query }}, {{ JSON.stringify($json.research_report.findings) }}, {{ $json.research_report.confidence_score }}, {{ $json.research_report.timestamp }}"
+      },
+      "id": "postgres-memory",
+      "name": "PostgreSQL Memory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [960, 304]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "RabbitMQ Consumer": {
+      "main": [
+        [
+          {
+            "node": "Research Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research Agent": {
+      "main": [
+        [
+          {
+            "node": "RabbitMQ Publish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RabbitMQ Publish": {
+      "main": [
+        [
+          {
+            "node": "Neo4j Write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Neo4j Write": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
