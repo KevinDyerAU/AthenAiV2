@@ -84,7 +84,7 @@ class DatabaseService {
     return data;
   }
 
-  async getConversationHistory(sessionId, limit = 10) {
+  async getConversations(sessionId, limit = 10) {
     if (!this.supabase) {
       logger.warn('Supabase not initialized, returning empty history');
       return [];
@@ -99,6 +99,32 @@ class DatabaseService {
 
     if (error) throw error;
     return data;
+  }
+
+  async getConversationHistory(sessionId, limit = 10) {
+    return this.getConversations(sessionId, limit);
+  }
+
+  async updateConversation(conversationId, updates) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping conversation update');
+      return null;
+    }
+
+    const { data, error } = await this.supabase
+      .from('conversations')
+      .update(updates)
+      .eq('id', conversationId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  validateConversationData(conversationData) {
+    const required = ['session_id', 'message'];
+    return required.every(field => conversationData && conversationData[field]);
   }
 
   // Neo4j operations
@@ -123,6 +149,37 @@ class DatabaseService {
     } finally {
       await session.close();
     }
+  }
+
+  async createKnowledgeRelationship(fromNodeId, toNodeId, relationshipType, properties = {}) {
+    if (!this.neo4jDriver) {
+      logger.warn('Neo4j not initialized, skipping relationship creation');
+      return null;
+    }
+
+    const session = this.neo4jDriver.session();
+    try {
+      const result = await session.run(
+        `MATCH (a), (b) WHERE id(a) = $fromNodeId AND id(b) = $toNodeId
+         CREATE (a)-[r:${relationshipType} $properties]->(b)
+         RETURN r`,
+        { fromNodeId, toNodeId, properties }
+      );
+      return result.records[0]?.get('r').properties;
+    } finally {
+      await session.close();
+    }
+  }
+
+  async queryKnowledgeGraph(cypher, parameters = {}) {
+    return this.queryKnowledge(cypher, parameters);
+  }
+
+  validateCypherQuery(cypher) {
+    if (!cypher || typeof cypher !== 'string') return false;
+    const validKeywords = ['MATCH', 'CREATE', 'MERGE', 'RETURN', 'WHERE', 'WITH', 'UNWIND'];
+    const upperCypher = cypher.toUpperCase();
+    return validKeywords.some(keyword => upperCypher.includes(keyword));
   }
 
   async queryKnowledge(cypher, parameters = {}) {
@@ -158,12 +215,23 @@ class DatabaseService {
     return value ? JSON.parse(value) : null;
   }
 
-  async cacheDel(key) {
+  async cacheDelete(key) {
     if (!this.redisClient) {
       logger.warn('Redis not initialized, skipping cache delete');
       return;
     }
     await this.redisClient.del(key);
+  }
+
+  async cacheDel(key) {
+    return this.cacheDelete(key);
+  }
+
+  validateCacheKey(key) {
+    if (!key || typeof key !== 'string' || key.length === 0) {
+      return false;
+    }
+    return true;
   }
 
   // Cleanup
