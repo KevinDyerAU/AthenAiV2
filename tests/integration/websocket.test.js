@@ -41,8 +41,8 @@ describe('WebSocket Integration Tests', () => {
         // Simulate AI response for AI queries
         if (data.message && data.message.toLowerCase().includes('research')) {
           setTimeout(() => {
-            socket.emit('ai_response', {
-              type: 'ai_response',
+            socket.emit('agent_response', {
+              type: 'agent_response',
               content: 'AI research response',
               timestamp: new Date().toISOString()
             });
@@ -132,12 +132,12 @@ describe('WebSocket Integration Tests', () => {
 
     // Remove any existing listeners to avoid interference
     clientSocket.removeAllListeners('new_message');
-    clientSocket.removeAllListeners('ai_response');
+    clientSocket.removeAllListeners('agent_response');
 
     clientSocket.emit('send_message', aiQuery);
 
-    clientSocket.on('ai_response', (data) => {
-      expect(data.type).toBe('ai_response');
+    clientSocket.on('agent_response', (data) => {
+      expect(data.type).toBe('agent_response');
       expect(data.content).toBeDefined();
       done();
     });

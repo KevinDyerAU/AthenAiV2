@@ -112,6 +112,58 @@
             background: #555;
             cursor: not-allowed;
         }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .loading-indicator {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #555;
+            border-radius: 50%;
+            border-top-color: #0066cc;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .history-container {
+            background: #2d2d2d;
+            border-bottom: 1px solid #444;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .history-toggle {
+            background: none;
+            border: none;
+            color: #0066cc;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .history-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 0.5rem;
+            display: none;
+        }
+
+        .history-item {
+            padding: 0.5rem;
+            border-bottom: 1px solid #444;
+            cursor: pointer;
+        }
+
+        .history-item:hover {
+            background: #3d3d3d;
+        }
         
         .user-info {
             display: flex;
@@ -140,26 +192,33 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>AthenAI Chat</h1>
-        <div class="user-info">
-            <div class="room-users">Room: <span id="roomId">general</span> | Users: <span id="userCount">0</span></div>
-            <div class="status" id="status">Disconnected</div>
+    <div class="container">
+        <div class="header">
+            <h1>AthenAI Chat Interface</h1>
+            <div class="user-info">
+                <span id="user-id">User: guest</span>
+                <span id="connection-status" class="status status-disconnected">Disconnected</span>
+            </div>
         </div>
-    </div>
-    
-    <div class="chat-container">
-        <div class="messages" id="messages"></div>
         
-        <div class="input-container">
-            <input 
-                type="text" 
-                id="messageInput" 
-                class="message-input" 
-                placeholder="Type your message..."
-                disabled
-            >
-            <button id="sendButton" class="send-button" disabled>Send</button>
+        <div class="history-container">
+            <button class="history-toggle" onclick="toggleHistory()">Show Conversation History</button>
+            <div class="history-list" id="history-list"></div>
+        </div>
+        
+        <div class="chat-container">
+            <div class="messages" id="messages"></div>
+            
+            <div class="input-container">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    class="message-input" 
+                    placeholder="Type your message..."
+                    disabled
+                >
+                <button id="sendButton" class="send-button" disabled>Send</button>
+            </div>
         </div>
     </div>
 
@@ -171,6 +230,7 @@
                 this.username = `User_${this.userId.slice(-4)}`;
                 this.roomId = 'general';
                 this.connected = false;
+                this.conversationHistory = [];
                 
                 this.initializeElements();
                 this.connect();
@@ -214,16 +274,6 @@
                     this.disableInput();
                 });
                 
-                this.socket.on('joined_room', (data) => {
-                    this.addSystemMessage(`Joined room: ${data.roomId}`);
-                    this.userCountElement.textContent = data.users.length;
-                    
-                    // Load message history
-                    data.messageHistory.forEach(msg => {
-                        this.displayMessage(msg);
-                    });
-                });
-                
                 this.socket.on('user_joined', (data) => {
                     this.addSystemMessage(`${data.username} joined the room`);
                     this.userCountElement.textContent = data.userCount;
@@ -236,10 +286,14 @@
                 
                 this.socket.on('new_message', (data) => {
                     this.displayMessage(data);
+                    this.addToHistory(data.message, 'user');
+                    this.setLoadingState(false);
                 });
                 
                 this.socket.on('agent_response', (data) => {
                     this.displayMessage(data);
+                    this.addToHistory(data.message || data.content, 'agent');
+                    this.setLoadingState(false);
                 });
                 
                 this.socket.on('error', (data) => {
@@ -257,17 +311,28 @@
             }
             
             sendMessage() {
-                const message = this.messageInput.value.trim();
+                const input = this.messageInput;
+                const message = input.value.trim();
+                
                 if (!message || !this.connected) return;
                 
-                this.socket.emit('send_message', {
-                    roomId: this.roomId,
-                    message: message,
-                    userId: this.userId,
-                    username: this.username
-                });
+                // Show loading state
+                this.setLoadingState(true);
                 
-                this.messageInput.value = '';
+                // Clear input
+                input.value = '';
+                
+                // Add user message to chat and history
+                this.addMessage(message, 'user', this.username);
+                this.addToHistory(message, 'user');
+                
+                // Send to server
+                this.socket.emit('send_message', {
+                    room: this.roomId,
+                    message: message,
+                    sender: this.username,
+                    userId: this.userId
+                });
             }
             
             displayMessage(data) {
@@ -318,6 +383,60 @@
             disableInput() {
                 this.messageInput.disabled = true;
                 this.sendButton.disabled = true;
+            }
+            
+            setLoadingState(loading) {
+                if (loading) {
+                    this.sendButton.innerHTML = 'Sending<span class="loading-indicator"></span>';
+                    this.sendButton.disabled = true;
+                    this.messageInput.disabled = true;
+                } else {
+                    this.sendButton.innerHTML = 'Send';
+                    this.sendButton.disabled = false;
+                    this.messageInput.disabled = false;
+                }
+            }
+            
+            addToHistory(message, type) {
+                this.conversationHistory.push({
+                    message,
+                    type,
+                    timestamp: new Date().toISOString()
+                });
+                this.updateHistoryDisplay();
+            }
+            
+            updateHistoryDisplay() {
+                const historyList = document.getElementById('history-list');
+                historyList.innerHTML = '';
+                
+                this.conversationHistory.slice(-10).forEach((item, index) => {
+                    const historyItem = document.createElement('div');
+                    historyItem.className = 'history-item';
+                    historyItem.innerHTML = `
+                        <strong>${item.type === 'user' ? 'You' : 'AthenAI'}:</strong> 
+                        ${item.message.substring(0, 50)}${item.message.length > 50 ? '...' : ''}
+                    `;
+                    historyItem.onclick = () => {
+                        this.messageInput.value = item.message;
+                        this.messageInput.focus();
+                    };
+                    historyList.appendChild(historyItem);
+                });
+            }
+        }
+        
+        // Global function for history toggle
+        function toggleHistory() {
+            const historyList = document.getElementById('history-list');
+            const toggleButton = document.querySelector('.history-toggle');
+            
+            if (historyList.style.display === 'none' || historyList.style.display === '') {
+                historyList.style.display = 'block';
+                toggleButton.textContent = 'Hide Conversation History';
+            } else {
+                historyList.style.display = 'none';
+                toggleButton.textContent = 'Show Conversation History';
             }
         }
         

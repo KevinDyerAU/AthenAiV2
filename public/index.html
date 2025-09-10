@@ -215,12 +215,14 @@ socket.emit('join_room', {
 
     async function testAPI() {
       try {
+        showOutput('Chat API', 'Loading...');
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: 'Hello AthenAI!',
-            sessionId: 'test_' + Date.now()
+            sessionId: 'test_' + Date.now(),
+            userId: 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
           })
         });
         const data = await response.json();
@@ -232,6 +234,7 @@ socket.emit('join_room', {
 
     async function testResearch() {
       try {
+        showOutput('Research API', 'Loading...');
         const response = await fetch('/api/research', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
