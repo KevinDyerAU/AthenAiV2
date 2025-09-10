@@ -69,13 +69,15 @@ class DatabaseService {
     const { data, error } = await this.supabase
       .from('conversations')
       .insert({
-        session_id: sessionId,
-        user_id: userId,
-        message,
-        response,
-        agent_type: agentType,
-        metadata,
-        created_at: new Date().toISOString()
+        title: `Session ${sessionId}`,
+        metadata: {
+          session_id: sessionId,
+          user_id: userId,
+          message,
+          response,
+          agent_type: agentType,
+          ...metadata
+        }
       })
       .select()
       .single();

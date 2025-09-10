@@ -16,6 +16,8 @@ const { databaseService } = require('./services/database');
 const { chatroomService } = require('./services/chatroom');
 const { MasterOrchestrator } = require('./agents/MasterOrchestrator');
 const { ResearchAgent } = require('./agents/ResearchAgent');
+const { AnalysisAgent } = require('./agents/analysisAgent');
+const { CreativeAgent } = require('./agents/creativeAgent');
 
 const app = express();
 const server = createServer(app);
@@ -33,6 +35,8 @@ const PORT = process.env.PORT || 3000;
 // Initialize agents
 const masterOrchestrator = new MasterOrchestrator();
 const researchAgent = new ResearchAgent();
+const analysisAgent = new AnalysisAgent();
+const creativeAgent = new CreativeAgent();
 
 // Initialize database connections
 async function initializeApp() {
@@ -55,7 +59,8 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
       connectSrc: ["'self'", "ws://localhost:3000", "http://localhost:3000"]
     }
   }
@@ -157,6 +162,7 @@ io.on('connection', (socket) => {
   socket.on('send_message', async (data) => {
     try {
       const { roomId, message, userId, username } = data;
+      logger.info('Processing message', { roomId, message, userId, username });
       
       // Add message to room
       const messageData = await chatroomService.addMessage(roomId, userId, message, 'user');
@@ -168,36 +174,103 @@ io.on('connection', (socket) => {
       });
       
       // Process with AI agents
-      const orchestrationResult = await masterOrchestrator.executeOrchestration({
-        message,
-        sessionId: roomId,
-        userId
-      });
-
-      // Execute primary agent
+      logger.info('Calling Master Orchestrator', { message });
       let agentResult = null;
-      if (orchestrationResult.routing?.primary === 'research') {
-        agentResult = await researchAgent.executeResearch(
+      
+      try {
+        const orchestrationResult = await masterOrchestrator.executeOrchestration({
           message,
-          roomId,
-          orchestrationResult.orchestration_id
-        );
+          sessionId: roomId,
+          userId
+        });
+        logger.info('Orchestration result', { orchestrationResult });
+
+        // Execute primary agent
+        const primaryAgent = orchestrationResult.orchestration_result?.routing?.primary;
+        logger.info('Executing agent', { primaryAgent });
+        
+        if (primaryAgent === 'research') {
+          logger.info('Calling research agent');
+          agentResult = await researchAgent.executeResearch(
+            message,
+            roomId,
+            orchestrationResult.session_id
+          );
+        } else if (primaryAgent === 'analysis') {
+          logger.info('Calling analysis agent');
+          agentResult = await analysisAgent.executeAnalysis(
+            message,
+            roomId,
+            orchestrationResult.session_id
+          );
+        } else if (primaryAgent === 'creative') {
+          logger.info('Calling creative agent');
+          agentResult = await creativeAgent.executeCreative(
+            message,
+            roomId,
+            orchestrationResult.session_id
+          );
+        } else {
+          // For general messages, provide a helpful response
+          logger.info('Using general response for agent:', primaryAgent);
+          agentResult = {
+            summary: `Hello! I'm AthenAI. I can help you with research, analysis, creative tasks, and more. What would you like to explore today?`,
+            agent_type: 'general',
+            confidence: 0.9
+          };
+        }
+        logger.info('Agent result', { agentResult });
+      } catch (agentError) {
+        logger.error('Agent execution failed:', agentError);
+        // Fallback to simple response if AI agents fail
+        agentResult = {
+          summary: `I'm processing your request. How can I help you today?`,
+          agent_type: 'general',
+          confidence: 0.7
+        };
       }
 
       // Add agent response to room
-      if (agentResult && agentResult.summary) {
+      if (agentResult) {
+        logger.info('Processing agent result for broadcast', { agentResult });
+        
+        // Extract and format response text from agent result
+        let responseText = '';
+        
+        if (agentResult.summary && typeof agentResult.summary === 'string') {
+          responseText = agentResult.summary;
+        } else if (agentResult.results && agentResult.results.summary) {
+          // Format research agent response
+          responseText = `I've completed research on "${agentResult.query}". ${agentResult.results.summary}`;
+          if (agentResult.results.analysis && agentResult.results.analysis !== 'Analysis completed') {
+            responseText += `\n\nKey findings: ${agentResult.results.analysis}`;
+          }
+          if (agentResult.results.recommendations && agentResult.results.recommendations.length > 0 && agentResult.results.recommendations[0] !== 'Recommendation 1') {
+            responseText += `\n\nRecommendations: ${agentResult.results.recommendations.join(', ')}`;
+          }
+        } else if (agentResult.response) {
+          responseText = agentResult.response;
+        } else if (agentResult.content) {
+          responseText = agentResult.content;
+        } else {
+          // Fallback for unstructured responses
+          responseText = `I processed your request about "${message}". How can I help you further?`;
+        }
+        
         const responseData = await chatroomService.addAgentResponse(
           roomId,
           messageData.id,
-          agentResult.summary,
-          orchestrationResult.routing?.primary
+          responseText,
+          agentResult.agent_type || 'general'
         );
 
-        // Broadcast agent response
-        io.to(roomId).emit('agent_response', {
+        logger.info('Broadcasting agent response', { responseData });
+        
+        // Broadcast agent response using the same event as user messages
+        io.to(roomId).emit('new_message', {
           ...responseData,
-          agentResult,
-          orchestration: orchestrationResult
+          username: 'AthenAI',
+          messageType: 'agent'
         });
       }
       

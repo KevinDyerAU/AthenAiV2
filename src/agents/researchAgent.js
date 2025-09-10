@@ -99,35 +99,37 @@ class ResearchAgent {
 
   async executeResearch(inputData) {
     try {
-      const query = inputData.query || inputData.task || inputData;
-      const validation = await this.validateQuery(query);
+      const query = typeof inputData === 'string' ? inputData : (inputData.query || inputData.task || inputData);
+      logger.info('Research Agent executing query', { query });
       
-      if (!validation.is_valid) {
-        throw new Error(`Invalid query: ${validation.validation_issues.join(', ')}`);
-      }
+      // Use OpenAI to generate research response
+      const prompt = `You are a research assistant. Provide a comprehensive, informative response about: ${query}
 
-      const plan = await this.generateResearchPlan(query);
-      
-      const rawResults = {
-        findings: [`Research finding for: ${query}`],
-        sources: ['Academic Source 1', 'Web Source 2'],
-        confidence: 0.85,
-        processing_time: 150
-      };
+Please provide:
+1. A clear summary of the topic
+2. Key insights and findings
+3. Practical recommendations or next steps
 
-      const formattedResults = await this.formatResults(rawResults);
+Keep the response conversational and helpful, as if speaking directly to the user.`;
+
+      const response = await this.llm.invoke(prompt);
+      const researchContent = response.content || response.text || response;
 
       return {
-        research_id: `research_${Date.now()}`,
-        query,
-        validation,
-        research_plan: plan,
-        results: formattedResults,
-        status: 'completed'
+        summary: researchContent,
+        agent_type: 'research',
+        confidence: 0.9,
+        query: query
       };
     } catch (error) {
       logger.error('Research execution failed', { error: error.message });
-      throw error;
+      // Return fallback response if OpenAI fails
+      return {
+        summary: `I'd be happy to help you research "${query}". Could you provide more specific details about what aspects you'd like me to focus on?`,
+        agent_type: 'research',
+        confidence: 0.7,
+        query: query
+      };
     }
   }
 

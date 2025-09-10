@@ -364,9 +364,9 @@
                 
                 // Send to server
                 this.socket.emit('send_message', {
-                    room: this.roomId,
+                    roomId: this.roomId,
                     message: message,
-                    sender: this.username,
+                    username: this.username,
                     userId: this.userId
                 });
             }
@@ -463,12 +463,13 @@
                 this.conversationHistory.slice(-10).forEach((item, index) => {
                     const historyItem = document.createElement('div');
                     historyItem.className = 'history-item';
+                    const message = item.message || '';
                     historyItem.innerHTML = `
                         <strong>${item.type === 'user' ? 'You' : 'AthenAI'}:</strong> 
-                        ${item.message.substring(0, 50)}${item.message.length > 50 ? '...' : ''}
+                        ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}
                     `;
                     historyItem.onclick = () => {
-                        this.messageInput.value = item.message;
+                        this.messageInput.value = message;
                         this.messageInput.focus();
                     };
                     historyList.appendChild(historyItem);
