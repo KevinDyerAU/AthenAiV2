@@ -134,14 +134,20 @@ describe('WebSocket Integration Tests', () => {
     clientSocket.removeAllListeners('new_message');
     clientSocket.removeAllListeners('agent_response');
 
+    // Set a timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      done(new Error('AI response test timed out'));
+    }, 5000);
+
     clientSocket.emit('send_message', aiQuery);
 
     clientSocket.on('agent_response', (data) => {
+      clearTimeout(timeout);
       expect(data.type).toBe('agent_response');
       expect(data.content).toBeDefined();
       done();
     });
-  }, 10000); // Allow 10s for AI response
+  }, 6000); // Reduced timeout
 
   test('Should leave room successfully', (done) => {
     clientSocket.emit('leave_room', {

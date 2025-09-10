@@ -11,6 +11,7 @@ process.env.NEO4J_USER = 'neo4j';
 process.env.NEO4J_PASSWORD = 'test-password';
 process.env.REDIS_URL = 'redis://localhost:6379';
 process.env.OPENAI_API_KEY = 'test-openai-key';
+process.env.LANGCHAIN_CALLBACKS_BACKGROUND = 'true';
 
 // Increase timeout for integration tests
 jest.setTimeout(30000);

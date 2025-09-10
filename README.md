@@ -74,6 +74,154 @@ npm run dev
 - **Chat Interface**: http://localhost:3000/public/chat.html
 - **API Health**: http://localhost:3000/health
 
+## UI Components
+
+AthenAI provides several user interface components for different aspects of the platform:
+
+### Core UI Components
+
+#### 1. Main Portal (`/` or `/public/index.html`)
+**Purpose**: Primary dashboard and entry point for the AthenAI platform
+
+**Features**:
+- Interactive system overview with real-time health monitoring
+- Quick access to all platform features and APIs
+- Live API testing capabilities
+- System metrics and performance monitoring
+- Configuration examples and setup guides
+
+**Access**: http://localhost:3000/ or http://localhost:3000/public/index.html
+
+#### 2. Chat Interface (`/public/chat.html`)
+**Purpose**: Real-time chat interface for interacting with AI agents
+
+**Features**:
+- WebSocket-powered real-time messaging
+- Multi-agent conversation support (Research, Analysis, Creative, Development, etc.)
+- Conversation history management
+- User presence and room management
+- Message threading and context preservation
+- Loading indicators and connection status
+
+**Access**: http://localhost:3000/public/chat.html
+
+**Usage**:
+```javascript
+// The chat interface automatically connects via WebSocket
+// Users can join rooms and interact with various AI agents
+// Messages are processed by the Master Orchestrator for intelligent routing
+```
+
+### Analytics and Monitoring UI Components
+
+#### 3. QA Analytics Dashboard (`/examples/ui/qa_analytics.html`)
+**Purpose**: Quality assurance monitoring and validation analytics
+
+**Features**:
+- Real-time quality gate monitoring
+- Pass/fail rate tracking with trend visualization
+- Error rate and latency P95 metrics
+- Historical validation run analysis
+- WebSocket integration for live updates (`/qa` namespace)
+- Manual validation trigger capabilities
+
+**Access**: Open `examples/ui/qa_analytics.html` in browser
+**Configuration**: Requires API base URL and optional JWT token
+
+**Key Metrics**:
+- Pass Rate percentage
+- Error Rate tracking
+- Latency P95 measurements
+- Quality gate status (PASS/FAIL)
+
+#### 4. Self-Healing Operations Dashboard (`/examples/ui/self_healing_dashboard.html`)
+**Purpose**: System operations monitoring and self-healing capabilities
+
+**Features**:
+- Real-time system metrics visualization
+- Trend analysis with forecasting capabilities
+- Live event monitoring via WebSocket
+- Quality gate integration
+- Manual validation triggers
+- Multi-metric support (error_rate, cpu_load, latency_p95, queue_depth, memory_usage)
+
+**Access**: Open `examples/ui/self_healing_dashboard.html` in browser
+**Configuration**: Requires API base URL and JWT authentication
+
+**Supported Metrics**:
+- Error rate monitoring
+- CPU load tracking
+- Latency P95 analysis
+- Queue depth monitoring
+- Memory usage statistics
+
+### UI Component Setup and Configuration
+
+#### Prerequisites for All UI Components
+```bash
+# Ensure the AthenAI server is running
+npm run dev
+
+# Server should be accessible at http://localhost:3000
+```
+
+#### Configuration for Analytics Dashboards
+
+**QA Analytics Dashboard**:
+```javascript
+// Required configuration
+API Base: http://localhost:3000/api
+JWT Token: [Optional - required for history/run operations]
+
+// WebSocket connection
+Namespace: /qa
+Events: qa.validation.report, qa.gates.updated
+```
+
+**Self-Healing Dashboard**:
+```javascript
+// Required configuration  
+API Base: http://localhost:3000/api
+JWT Token: [Required for authenticated operations]
+
+// Supported endpoints
+GET /self_healing/metrics/trend
+GET /self_healing/metrics/forecast
+POST /validation/run
+```
+
+#### Accessing UI Components
+
+1. **Start the AthenAI Server**:
+   ```bash
+   npm run dev
+   ```
+
+2. **Access Core Components**:
+   - Main Portal: http://localhost:3000/
+   - Chat Interface: http://localhost:3000/public/chat.html
+
+3. **Access Analytics Dashboards**:
+   - Open `examples/ui/qa_analytics.html` directly in your browser
+   - Open `examples/ui/self_healing_dashboard.html` directly in your browser
+   - Configure API endpoints to point to your running AthenAI instance
+
+#### UI Component Integration
+
+All UI components integrate with the AthenAI backend through:
+- **REST API**: Standard HTTP endpoints for data retrieval and operations
+- **WebSocket**: Real-time updates and live monitoring
+- **Authentication**: JWT-based authentication for secure operations
+
+#### Customization and Extension
+
+The UI components are built with modern web technologies:
+- **Vanilla JavaScript**: No framework dependencies for easy customization
+- **Chart.js**: For data visualization and trend analysis
+- **Socket.IO**: For real-time WebSocket communication
+- **Responsive Design**: Mobile-friendly interfaces
+- **Dark Theme**: Consistent dark mode across all components
+
 ## Architecture
 
 AthenAI uses a simplified, cost-optimized architecture:

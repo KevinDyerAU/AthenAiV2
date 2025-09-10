@@ -50,7 +50,16 @@ async function initializeApp() {
 }
 
 // Security and performance middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", "ws://localhost:3000", "http://localhost:3000"]
+    }
+  }
+}));
 app.use(compression());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 

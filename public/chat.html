@@ -244,9 +244,17 @@
                 this.messagesContainer = document.getElementById('messages');
                 this.messageInput = document.getElementById('messageInput');
                 this.sendButton = document.getElementById('sendButton');
-                this.statusElement = document.getElementById('status');
-                this.userCountElement = document.getElementById('userCount');
-                this.roomIdElement = document.getElementById('roomId');
+                this.statusElement = document.getElementById('connection-status');
+                this.userIdElement = document.getElementById('user-id');
+                
+                // Debug logging
+                console.log('Elements found:', {
+                    messagesContainer: !!this.messagesContainer,
+                    messageInput: !!this.messageInput,
+                    sendButton: !!this.sendButton,
+                    statusElement: !!this.statusElement,
+                    userIdElement: !!this.userIdElement
+                });
                 
                 // Event listeners
                 this.sendButton.addEventListener('click', () => this.sendMessage());
@@ -259,29 +267,49 @@
             }
             
             connect() {
-                this.socket = io();
-                
-                this.socket.on('connect', () => {
-                    this.connected = true;
-                    this.updateStatus('Connected', 'connected');
-                    this.enableInput();
-                    this.joinRoom();
-                });
-                
-                this.socket.on('disconnect', () => {
-                    this.connected = false;
-                    this.updateStatus('Disconnected', 'disconnected');
-                    this.disableInput();
-                });
+                try {
+                    console.log('Attempting to connect to Socket.IO...');
+                    this.socket = io('http://localhost:3000', {
+                        transports: ['websocket', 'polling']
+                    });
+                    
+                    this.socket.on('connect', () => {
+                        try {
+                            console.log('Socket.IO connected successfully');
+                            this.connected = true;
+                            this.updateStatus('Connected', 'connected');
+                            this.enableInput();
+                            this.joinRoom();
+                        } catch (error) {
+                            console.error('Error in connect handler:', error);
+                        }
+                    });
+                    
+                    this.socket.on('disconnect', () => {
+                        try {
+                            console.log('Socket.IO disconnected');
+                            this.connected = false;
+                            this.updateStatus('Disconnected', 'disconnected');
+                            this.disableInput();
+                        } catch (error) {
+                            console.error('Error in disconnect handler:', error);
+                        }
+                    });
+                    
+                    this.socket.on('connect_error', (error) => {
+                        console.error('Socket.IO connection error:', error);
+                        this.updateStatus('Connection Error', 'disconnected');
+                    });
+                } catch (error) {
+                    console.error('Error in connect method:', error);
+                }
                 
                 this.socket.on('user_joined', (data) => {
                     this.addSystemMessage(`${data.username} joined the room`);
-                    this.userCountElement.textContent = data.userCount;
                 });
                 
                 this.socket.on('user_left', (data) => {
                     this.addSystemMessage(`User left the room`);
-                    this.userCountElement.textContent = data.userCount;
                 });
                 
                 this.socket.on('new_message', (data) => {
@@ -307,7 +335,10 @@
                     userId: this.userId,
                     username: this.username
                 });
-                this.roomIdElement.textContent = this.roomId;
+                // Update user display
+                if (this.userIdElement) {
+                    this.userIdElement.textContent = `User: ${this.username}`;
+                }
             }
             
             sendMessage() {
@@ -323,7 +354,12 @@
                 input.value = '';
                 
                 // Add user message to chat and history
-                this.addMessage(message, 'user', this.username);
+                this.displayMessage({
+                    message: message,
+                    messageType: 'user',
+                    username: this.username,
+                    timestamp: new Date().toISOString()
+                });
                 this.addToHistory(message, 'user');
                 
                 // Send to server
@@ -336,6 +372,11 @@
             }
             
             displayMessage(data) {
+                if (!this.messagesContainer) {
+                    console.error('Messages container not found');
+                    return;
+                }
+                
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${data.messageType || 'user'}`;
                 
@@ -370,6 +411,10 @@
             }
             
             updateStatus(text, className) {
+                if (!this.statusElement) {
+                    console.error('Status element not found');
+                    return;
+                }
                 this.statusElement.textContent = text;
                 this.statusElement.className = `status ${className}`;
             }
@@ -408,6 +453,11 @@
             
             updateHistoryDisplay() {
                 const historyList = document.getElementById('history-list');
+                if (!historyList) {
+                    console.error('History list element not found');
+                    return;
+                }
+                
                 historyList.innerHTML = '';
                 
                 this.conversationHistory.slice(-10).forEach((item, index) => {

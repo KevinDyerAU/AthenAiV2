@@ -38,7 +38,13 @@ class ChatroomService {
   }
 
   joinRoom(roomId, userId, socketId) {
-    const room = this.createRoom(roomId);
+    // Create room if it doesn't exist
+    if (!this.rooms.has(roomId)) {
+      this.createRoom(roomId);
+    }
+    
+    // Get the actual room object
+    const room = this.rooms.get(roomId);
     room.users.add(userId);
     
     this.userSockets.set(userId, socketId);
