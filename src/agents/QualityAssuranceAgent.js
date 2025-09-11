@@ -6,6 +6,7 @@ const { PromptTemplate } = require('@langchain/core/prompts');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
+const { progressBroadcaster } = require('../services/progressBroadcaster');
 
 class QualityAssuranceAgent {
   constructor() {
@@ -59,7 +60,20 @@ class QualityAssuranceAgent {
     try {
       logger.info('Starting QA task', { sessionId, orchestrationId });
       
+      // Start progress tracking
+      const progressId = progressBroadcaster.startProgress(
+        sessionId, 
+        'QualityAssurance', 
+        `Quality assurance analysis: ${inputData.message || inputData.task || 'content review'}`
+      );
+      
       // PHASE 1: Strategic Planning and Reasoning
+      progressBroadcaster.updateProgress(
+        sessionId, 
+        'strategic_planning', 
+        'Analyzing quality requirements and planning assessment approach...'
+      );
+      
       const strategyPlan = await this.reasoning.planStrategy(inputData, {
         time_constraint: inputData.urgency || 'normal',
         quality_priority: 'high',
@@ -76,6 +90,16 @@ class QualityAssuranceAgent {
                                typeof global.it === 'function' ||
                                process.env.JEST_WORKER_ID !== undefined;
 
+      // PHASE 2: Knowledge Substrate Integration
+      progressBroadcaster.updateProgress(
+        sessionId, 
+        'knowledge_integration', 
+        'Retrieving relevant knowledge and context from substrate...'
+      );
+      
+      // Retrieve relevant knowledge from the substrate
+      const knowledgeContext = await this.retrieveKnowledgeContext(content, qaType, sessionId);
+
       let result;
       if (isTestEnvironment) {
         result = {
@@ -83,10 +107,17 @@ class QualityAssuranceAgent {
           intermediateSteps: []
         };
       } else {
+        // PHASE 3: QA Execution
+        progressBroadcaster.updateProgress(
+          sessionId, 
+          'qa_execution', 
+          'Executing quality assurance analysis with enhanced context...'
+        );
+        
         // Initialize QA tools
-        const tools = this.initializeQATools();
+        const tools = this.initializeQATools(sessionId);
 
-        // Create QA prompt with explicit reasoning
+        // Create QA prompt with explicit reasoning and knowledge context
         const prompt = PromptTemplate.fromTemplate(`
 You are a Quality Assurance Agent with advanced reasoning capabilities specialized in validating outputs, ensuring quality standards, and providing improvement recommendations. Before conducting your assessment, think through your approach step by step.
 
@@ -102,6 +133,7 @@ Content to Review: {content}
 QA Type: {qaType}
 Quality Standards: {standards}
 Context: {context}
+Knowledge Context: {knowledgeContext}
 Session ID: {sessionId}
 
 STEP-BY-STEP QA PROCESS:
@@ -150,7 +182,7 @@ Current assessment: {qaType} review of provided content
           returnIntermediateSteps: true
         });
 
-        // PHASE 2: Execute the QA task with strategy
+        // PHASE 4: Execute the QA task with strategy
         result = await agentExecutor.invoke({
           content: typeof content === 'object' ? JSON.stringify(content) : content,
           qaType,
@@ -159,12 +191,22 @@ Current assessment: {qaType} review of provided content
             testLevel: strategyPlan.selected_strategy.name,
             strategy: strategyPlan.selected_strategy.name
           }),
+          knowledgeContext: JSON.stringify(knowledgeContext),
           sessionId,
           tools: tools.map(t => t.name).join(', ')
         });
         
-        // PHASE 3: Self-Evaluation
+        // PHASE 5: Self-Evaluation and Knowledge Storage
+        progressBroadcaster.updateProgress(
+          sessionId, 
+          'evaluation', 
+          'Evaluating results and storing insights in knowledge substrate...'
+        );
+        
         const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
+        
+        // Store results and insights in knowledge substrate
+        await this.storeKnowledgeInsights(result, evaluation, sessionId, orchestrationId);
       }
 
       // Process and structure the results
@@ -203,16 +245,28 @@ Current assessment: {qaType} review of provided content
           qaResult,
           3600 // 1 hour TTL
         );
+
+        // Complete progress tracking
+        progressBroadcaster.completeProgress(sessionId, {
+          agentType: 'QualityAssurance',
+          executionTime: qaResult.qa_time_ms,
+          confidence: qaResult.confidence_score,
+          qaType,
+          status: 'completed'
+        });
+
+        logger.info('Quality assurance completed', {
+          sessionId,
+          orchestrationId,
+          qaType,
+          executionTime: qaResult.qa_time_ms
+        });
+
+        return qaResult;
+
+      } else {
+        return qaResult;
       }
-
-      logger.info('Quality assurance completed', {
-        sessionId,
-        orchestrationId,
-        qaType,
-        executionTime: qaResult.execution_time_ms
-      });
-
-      return qaResult;
 
     } catch (error) {
       logger.error('Quality assurance failed', {
@@ -220,6 +274,9 @@ Current assessment: {qaType} review of provided content
         orchestrationId,
         error: error.message
       });
+
+      // Report error to progress broadcaster
+      progressBroadcaster.errorProgress(sessionId, error);
 
       return {
         session_id: sessionId,

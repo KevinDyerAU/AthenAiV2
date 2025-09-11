@@ -27,6 +27,8 @@ class MasterOrchestrator {
         modelName: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENAI_API_KEY,
+        timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+        maxRetries: 2,
         tags: ['master-orchestrator', 'athenai', 'openai']
       });
     }
@@ -42,18 +44,29 @@ class MasterOrchestrator {
       // Ensure task is a string
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
       
-      // AI-powered complexity analysis
+      // AI-powered complexity analysis with explicit reasoning
       const complexityPrompt = PromptTemplate.fromTemplate(`
-Analyze the complexity of this user request and provide a structured assessment.
+You are an expert task complexity analyzer. Before providing your assessment, think through your analysis step by step.
+
+REASONING PHASE:
+1. First, break down the user request into its core components
+2. Identify the types of knowledge and skills required
+3. Estimate the number of steps and sub-tasks involved
+4. Consider the interdependencies between different parts
+5. Assess the time and resource requirements
+6. Determine which specialized agents would be most effective
 
 User Request: {message}
 
-Consider:
+ANALYSIS CRITERIA:
 1. How many steps or sub-tasks are involved?
 2. What level of expertise is required?
 3. How much research or analysis is needed?
 4. Are there multiple domains of knowledge involved?
 5. How long might this reasonably take?
+
+STEP-BY-STEP REASONING:
+Think through each criterion above and explain your reasoning for the complexity level.
 
 Respond in this exact JSON format:
 {{
@@ -61,9 +74,8 @@ Respond in this exact JSON format:
   "factors": ["list", "of", "complexity", "factors"],
   "estimated_time": number_in_seconds,
   "required_agents": ["list", "of", "agent", "types"],
-  "reasoning": "brief explanation of the complexity assessment"
-}}
-`);
+  "reasoning": "detailed step-by-step explanation of your complexity assessment including your reasoning process"
+}}`);
 
       const chain = complexityPrompt.pipe(this.llm).pipe(new StringOutputParser());
       
@@ -138,9 +150,16 @@ Respond in this exact JSON format:
       // Ensure task is a string
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
       
-      // AI-powered agent routing using LangChain
+      // AI-powered agent routing with explicit reasoning
       const routingPrompt = PromptTemplate.fromTemplate(`
-Analyze the following user message and determine the most appropriate AI agent to handle it.
+You are an expert agent routing specialist. Before selecting an agent, think through your decision step by step.
+
+REASONING PHASE:
+1. First, analyze the core intent and requirements of the user message
+2. Identify the primary domain of expertise needed
+3. Consider what tools and capabilities would be most effective
+4. Evaluate which agent's specialization best matches the task
+5. Consider any secondary agents that might be helpful
 
 User Message: {message}
 
@@ -155,13 +174,13 @@ Available Agents:
 - qa: For quality assurance, validation, testing, review processes
 - general: For casual conversation, greetings, simple questions
 
-Consider:
-1. The primary intent and goal of the message
-2. What type of expertise is needed
-3. What tools and capabilities would be most useful
+STEP-BY-STEP ANALYSIS:
+1. What is the primary intent and goal of the message?
+2. What type of expertise is needed?
+3. What tools and capabilities would be most useful?
+4. Which agent's core competencies align best with these requirements?
 
-Respond with ONLY the agent name (research, creative, analysis, development, planning, execution, communication, qa, or general).
-`);
+Think through your reasoning, then respond with ONLY the agent name (research, creative, analysis, development, planning, execution, communication, qa, or general).`);
 
       const chain = routingPrompt.pipe(this.llm).pipe(new StringOutputParser());
       
@@ -188,8 +207,14 @@ Respond with ONLY the agent name (research, creative, analysis, development, pla
         secondary = ['analysis'];
         executionOrder = ['research', 'analysis'];
       } else if (selectedAgent === 'analysis') {
-        secondary = ['research'];
-        executionOrder = ['analysis', 'research'];
+        // For GitHub URLs and repository analysis, research should come first
+        if (taskString.includes('github.com') || taskString.includes('repository') || taskString.includes('repo')) {
+          secondary = ['research'];
+          executionOrder = ['research', 'analysis'];
+        } else {
+          secondary = ['research'];
+          executionOrder = ['analysis', 'research'];
+        }
       } else if (selectedAgent === 'creative') {
         secondary = ['analysis'];
         executionOrder = ['creative', 'analysis'];

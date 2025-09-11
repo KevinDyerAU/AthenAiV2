@@ -7,6 +7,7 @@ const { AgentExecutor } = require('langchain/agents');
 const { ChatAgent } = require('langchain/agents');
 const axios = require('axios');
 const { logger } = require('../utils/logger');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
 
 class ResearchAgent {
   constructor() {
@@ -32,6 +33,8 @@ class ResearchAgent {
         modelName: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENAI_API_KEY,
+        timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+        maxRetries: 2,
         tags: ['research-agent', 'athenai', 'openai']
       });
     }
@@ -42,6 +45,9 @@ class ResearchAgent {
     this.tools = [];
     this.agent = null;
     this.agentExecutor = null;
+    
+    // Initialize reasoning framework
+    this.reasoning = new ReasoningFramework('ResearchAgent');
     
     // Initialize tools after constructor
     this.initializeTools();
@@ -96,12 +102,58 @@ class ResearchAgent {
       }),
       
       new DynamicTool({
+        name: 'think',
+        description: 'Think through complex research challenges step by step, evaluate different research approaches, and reason about the optimal research strategy',
+        func: async (input) => {
+          try {
+            // Broadcast thinking progress if sessionId is available
+            const sessionId = this.currentSessionId;
+            if (sessionId && typeof progressBroadcaster !== 'undefined') {
+              progressBroadcaster.updateThinking(sessionId, 'research_analysis', 'Analyzing research challenge and planning approach...');
+            }
+
+            const thinkPrompt = PromptTemplate.fromTemplate(`
+You are working through a complex research challenge. Break down your research reasoning step by step.
+
+Research Challenge: {problem}
+
+Think through this systematically:
+1. What is the core research question or information need?
+2. What different research approaches or methodologies could I use?
+3. What are the potential sources of information for each approach?
+4. What are the strengths and limitations of each research method?
+5. What biases or gaps might exist in available information?
+6. What is my recommended research strategy and why?
+7. How will I validate and cross-reference my findings?
+8. What follow-up research questions might emerge?
+
+Provide your step-by-step research reasoning:
+`);
+
+            const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+            const thinking = await chain.invoke({ problem: input });
+            
+            if (sessionId && typeof progressBroadcaster !== 'undefined') {
+              progressBroadcaster.updateThinking(sessionId, 'research_strategy', thinking.substring(0, 200) + '...');
+            }
+            
+            return `RESEARCH THINKING PROCESS:\n${thinking}`;
+          } catch (error) {
+            return `Thinking error: ${error.message}`;
+          }
+        }
+      }),
+
+      new DynamicTool({
         name: 'knowledge_synthesis',
         description: 'Synthesize information from multiple sources and provide comprehensive analysis',
         func: async (input) => {
           try {
             const synthesisPrompt = PromptTemplate.fromTemplate(`
-Synthesize the following information and provide a comprehensive analysis:
+Available tools: {tools}
+- Use the 'think' tool when you need to reason through complex research challenges step by step
+
+Think through your reasoning process, then provide comprehensive research with:
 
 Topic: {topic}
 Context: {context}
@@ -286,18 +338,42 @@ Format as a clear, actionable plan.
     }
   }
 
-  async executeResearch(inputData, roomId, sessionId) {
+  async executeResearch(message, sessionId, orchestrationId, options = {}) {
+    // Store session ID for think tool access
+    this.currentSessionId = options.sessionId || sessionId;
     try {
-      const query = typeof inputData === 'string' ? inputData : (inputData.query || inputData.task || inputData);
-      logger.info('Research Agent executing advanced query', { query, roomId, sessionId });
+      const query = typeof message === 'string' ? message : (message.query || message.task || message);
+      logger.info('Research Agent executing advanced query', { query, sessionId });
+      
+      // PHASE 1: Strategic Planning and Reasoning
+      const strategyPlan = await this.reasoning.planStrategy(query, {
+        time_constraint: 'normal',
+        quality_priority: 'high',
+        creativity_needed: false
+      });
+      
+      logger.info('Research strategy planned', { 
+        strategy: strategyPlan.selected_strategy.name,
+        confidence: strategyPlan.confidence,
+        reasoning: strategyPlan.reasoning
+      });
       
       // Ensure tools are properly initialized
       if (!this.tools || this.tools.length === 0) {
         this.initializeTools();
       }
       
-      // Use enhanced direct research with tool integration
-      const researchResult = await this.enhancedDirectResearch(query);
+      // PHASE 2: Execute Research with Strategy
+      const researchResult = await this.enhancedDirectResearch(query, strategyPlan);
+      
+      // PHASE 3: Self-Evaluation
+      const evaluation = await this.reasoning.evaluateOutput(researchResult, query, strategyPlan);
+      
+      logger.info('Research self-evaluation completed', {
+        overall_rating: evaluation.overall_rating,
+        confidence_score: evaluation.confidence_score,
+        meets_criteria: evaluation.meets_success_criteria
+      });
       
       // Generate research plan for complex queries
       const researchPlan = await this.generateAdvancedResearchPlan(query);
@@ -305,12 +381,15 @@ Format as a clear, actionable plan.
       return {
         summary: researchResult,
         agent_type: 'research',
-        confidence: 0.9,
+        confidence: evaluation.confidence_score,
         query: query,
         research_plan: researchPlan,
         session_id: sessionId,
         tools_used: this.tools.map(tool => tool.name),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        strategy_plan: strategyPlan,
+        self_evaluation: evaluation,
+        reasoning_logs: this.reasoning.getReasoningLogs()
       };
     } catch (error) {
       logger.error('Research execution failed', { error: error.message });
@@ -325,7 +404,7 @@ Format as a clear, actionable plan.
     }
   }
 
-  async enhancedDirectResearch(query) {
+  async enhancedDirectResearch(query, strategyPlan = null) {
     try {
       // Step 1: Try web search if available
       let webSearchResults = '';
@@ -353,27 +432,41 @@ Format as a clear, actionable plan.
         }
       }
 
-      // Step 3: Generate comprehensive research response
-      const enhancedPrompt = PromptTemplate.fromTemplate(`
-You are an expert research assistant conducting comprehensive research on the following topic:
+      // Step 3: Create comprehensive research response using LLM with reasoning
+      const researchPrompt = PromptTemplate.fromTemplate(`
+You are a research specialist with advanced reasoning capabilities. Before providing your analysis, think through your approach step by step.
 
-Topic: {query}
+REASONING PHASE:
+1. First, analyze what the user is really asking for
+2. Consider what approach would be most effective for this query
+3. Evaluate the quality and relevance of available information
+4. Plan how to structure your response for maximum value
 
-${webSearchResults ? 'Web Search Results:\n{webResults}\n\n' : ''}${synthesizedKnowledge ? 'Synthesized Knowledge:\n{synthesis}\n\n' : ''}Provide a thorough research response that includes:
+Query: {query}
+Strategy Selected: {strategy}
 
-1. **Executive Summary**: Clear overview of the topic and key findings
-2. **Detailed Analysis**: In-depth examination of important aspects
-3. **Current Developments**: Latest trends, news, or updates if available
-4. **Key Insights**: Critical findings and their implications
-5. **Practical Applications**: How this information can be used
-6. **Further Research**: Areas that warrant additional investigation
+Web Search Results:
+{webResults}
 
-Make your response comprehensive, well-structured, and actionable.
+Synthesized Knowledge:
+{synthesis}
+
+Now provide a thorough research response that includes:
+1. Executive Summary
+2. Key Findings  
+3. Analysis and Insights
+4. Supporting Evidence
+5. Implications and Recommendations
+6. Areas for Further Research
+7. Confidence Assessment
+
+Be comprehensive, accurate, and cite sources where applicable. Show your reasoning process where helpful.
 `);
 
-      const chain = enhancedPrompt.pipe(this.llm).pipe(new StringOutputParser());
+      const chain = researchPrompt.pipe(this.llm).pipe(new StringOutputParser());
       return await chain.invoke({
         query,
+        strategy: strategyPlan ? strategyPlan.selected_strategy.name : 'direct',
         webResults: webSearchResults || 'No web search results available',
         synthesis: synthesizedKnowledge || 'No additional synthesis available'
       });
@@ -384,26 +477,13 @@ Make your response comprehensive, well-structured, and actionable.
   }
   
   async fallbackResearch(query) {
-    // Try to use web search even in fallback mode
-    let webSearchResults = '';
-    if (process.env.FIRECRAWL_API_KEY && this.tools && Array.isArray(this.tools)) {
-      try {
-        const webTool = this.tools.find(tool => tool && tool.name === 'web_search');
-        if (webTool && typeof webTool.func === 'function') {
-          webSearchResults = await webTool.func(query);
-        }
-      } catch (error) {
-        logger.warn('Firecrawl search failed in fallback mode:', error);
-      }
-    }
-    
-    const enhancedPrompt = PromptTemplate.fromTemplate(`
+    try {
+      const fallbackPrompt = PromptTemplate.fromTemplate(`
 You are an expert research assistant with deep knowledge across multiple domains. Conduct comprehensive research on the following topic:
 
 Topic: {query}
 
-${webSearchResults ? 'Web Search Results:\n{webResults}\n\n' : ''}Provide a thorough response that includes:
-
+Provide a thorough response that includes:
 1. **Overview**: Clear explanation of the topic and its significance
 2. **Key Insights**: Important findings, facts, and current understanding
 3. **Analysis**: Critical examination of different perspectives or approaches
@@ -413,11 +493,12 @@ ${webSearchResults ? 'Web Search Results:\n{webResults}\n\n' : ''}Provide a thor
 Make your response informative, well-structured, and engaging. Use examples where helpful.
 `);
     
-    const chain = enhancedPrompt.pipe(this.llm).pipe(new StringOutputParser());
-    return await chain.invoke({ 
-      query,
-      webResults: webSearchResults || 'No web search results available'
-    });
+      const chain = fallbackPrompt.pipe(this.llm).pipe(new StringOutputParser());
+      return await chain.invoke({ query });
+    } catch (error) {
+      logger.error('Fallback research failed:', error);
+      return 'Fallback research failed';
+    }
   }
   
   async generateAdvancedResearchPlan(query) {
