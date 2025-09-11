@@ -734,8 +734,8 @@ UNSTRUCTURED_API_KEY=your-unstructured-key
 UNSTRUCTURED_API_URL=https://api.unstructured.io
 FIRECRAWL_API_KEY=your-firecrawl-key
 
-# Document Processing Worker
-UNSTRUCTURED_WORKER_URL=http://localhost:8080
+# Document Processing Worker (Docker service name for container communication)
+UNSTRUCTURED_WORKER_URL=http://unstructured-worker:8080
 ```
 
 ### Database Schema Setup
