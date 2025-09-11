@@ -5,19 +5,31 @@ const { databaseService } = require('../services/database');
 
 class AgentHandlers {
   constructor() {
-    this.llm = new ChatOpenAI({
-      modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
-      temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
-      openAIApiKey: process.env.OPENROUTER_API_KEY,
-      configuration: {
-        baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
-        defaultHeaders: {
-          'HTTP-Referer': 'https://athenai.local',
-          'X-Title': 'AthenAI Agent Handlers'
-        }
-      },
-      tags: ['agent-handlers', 'athenai']
-    });
+    // Primary OpenAI configuration with OpenRouter fallback
+    const useOpenRouter = process.env.USE_OPENROUTER === 'true';
+    
+    if (useOpenRouter) {
+      this.llm = new ChatOpenAI({
+        modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+        temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
+        openAIApiKey: process.env.OPENROUTER_API_KEY,
+        configuration: {
+          baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+          defaultHeaders: {
+            'HTTP-Referer': 'https://athenai.local',
+            'X-Title': 'AthenAI Agent Handlers'
+          }
+        },
+        tags: ['agent-handlers', 'athenai', 'openrouter']
+      });
+    } else {
+      this.llm = new ChatOpenAI({
+        modelName: process.env.OPENAI_MODEL || 'gpt-4',
+        temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
+        openAIApiKey: process.env.OPENAI_API_KEY,
+        tags: ['agent-handlers', 'athenai', 'openai']
+      });
+    }
     
     this.agents = new Map();
     this.agentStatus = new Map();

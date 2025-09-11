@@ -383,12 +383,18 @@
                 const headerDiv = document.createElement('div');
                 headerDiv.className = 'message-header';
                 
+                const formatTimestamp = (timestamp) => {
+                    if (!timestamp) return new Date().toLocaleTimeString();
+                    const date = new Date(timestamp);
+                    return isNaN(date.getTime()) ? new Date().toLocaleTimeString() : date.toLocaleTimeString();
+                };
+                
                 if (data.messageType === 'agent') {
-                    headerDiv.textContent = `AthenAI (${data.agentType || 'assistant'}) • ${new Date(data.timestamp).toLocaleTimeString()}`;
+                    headerDiv.textContent = `AthenAI (${data.agentType || 'assistant'}) • ${formatTimestamp(data.timestamp)}`;
                 } else if (data.messageType === 'system') {
-                    headerDiv.textContent = `System • ${new Date(data.timestamp).toLocaleTimeString()}`;
+                    headerDiv.textContent = `System • ${formatTimestamp(data.timestamp)}`;
                 } else {
-                    headerDiv.textContent = `${data.username || 'User'} • ${new Date(data.timestamp).toLocaleTimeString()}`;
+                    headerDiv.textContent = `${data.username || 'User'} • ${formatTimestamp(data.timestamp)}`;
                 }
                 
                 const contentDiv = document.createElement('div');

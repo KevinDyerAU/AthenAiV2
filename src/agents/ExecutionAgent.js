@@ -13,19 +13,31 @@ const { databaseService } = require('../services/database');
 
 class ExecutionAgent {
   constructor() {
-    this.llm = new ChatOpenAI({
-      modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
-      temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.2,
-      openAIApiKey: process.env.OPENROUTER_API_KEY,
-      configuration: {
-        baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
-        defaultHeaders: {
-          'HTTP-Referer': 'https://athenai.local',
-          'X-Title': 'AthenAI Execution Agent'
-        }
-      },
-      tags: ['execution-agent', 'athenai']
-    });
+    // Primary OpenAI configuration with OpenRouter fallback
+    const useOpenRouter = process.env.USE_OPENROUTER === 'true';
+    
+    if (useOpenRouter) {
+      this.llm = new ChatOpenAI({
+        modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+        temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.2,
+        openAIApiKey: process.env.OPENROUTER_API_KEY,
+        configuration: {
+          baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+          defaultHeaders: {
+            'HTTP-Referer': 'https://athenai.local',
+            'X-Title': 'AthenAI Execution Agent'
+          }
+        },
+        tags: ['execution-agent', 'athenai', 'openrouter']
+      });
+    } else {
+      this.llm = new ChatOpenAI({
+        modelName: process.env.OPENAI_MODEL || 'gpt-4',
+        temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.2,
+        openAIApiKey: process.env.OPENAI_API_KEY,
+        tags: ['execution-agent', 'athenai', 'openai']
+      });
+    }
     this.executionQueue = [];
     this.runningTasks = new Map();
     this.maxConcurrentTasks = process.env.MAX_CONCURRENT_TASKS || 5;

@@ -31,20 +31,31 @@ class CreativeAgent {
         throw new Error('Content is required for creative synthesis');
       }
 
-      // Initialize OpenRouter
-      this.llm = new ChatOpenAI({
-        modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
-        temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.7,
-        openAIApiKey: this.apiKey || process.env.OPENROUTER_API_KEY,
-        configuration: {
-          baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
-          defaultHeaders: {
-            'HTTP-Referer': 'https://athenai.local',
-            'X-Title': 'AthenAI Creative Agent'
-          }
-        },
-        tags: ['creative-agent', 'athenai']
-      });
+      // Primary OpenAI configuration with OpenRouter fallback
+      const useOpenRouter = process.env.USE_OPENROUTER === 'true';
+      
+      if (useOpenRouter) {
+        this.llm = new ChatOpenAI({
+          modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+          temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.7,
+          openAIApiKey: this.apiKey || process.env.OPENROUTER_API_KEY,
+          configuration: {
+            baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+            defaultHeaders: {
+              'HTTP-Referer': 'https://athenai.local',
+              'X-Title': 'AthenAI Creative Agent'
+            }
+          },
+          tags: ['creative-agent', 'athenai', 'openrouter']
+        });
+      } else {
+        this.llm = new ChatOpenAI({
+          modelName: process.env.OPENAI_MODEL || 'gpt-4',
+          temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.7,
+          openAIApiKey: this.apiKey || process.env.OPENAI_API_KEY,
+          tags: ['creative-agent', 'athenai', 'openai']
+        });
+      }
 
       const tools = this.initializeCreativeTools();
       const creativePrompt = this.createCreativePrompt();

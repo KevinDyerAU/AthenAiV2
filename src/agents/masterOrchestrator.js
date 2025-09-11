@@ -5,19 +5,31 @@ const { logger } = require('../utils/logger');
 
 class MasterOrchestrator {
   constructor() {
-    this.llm = new ChatOpenAI({
-      modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
-      temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
-      openAIApiKey: process.env.OPENROUTER_API_KEY,
-      configuration: {
-        baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
-        defaultHeaders: {
-          'HTTP-Referer': 'https://athenai.local',
-          'X-Title': 'AthenAI Master Orchestrator'
-        }
-      },
-      tags: ['master-orchestrator', 'athenai']
-    });
+    // Primary OpenAI configuration with OpenRouter fallback
+    const useOpenRouter = process.env.USE_OPENROUTER === 'true';
+    
+    if (useOpenRouter) {
+      this.llm = new ChatOpenAI({
+        modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+        temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
+        openAIApiKey: process.env.OPENROUTER_API_KEY,
+        configuration: {
+          baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+          defaultHeaders: {
+            'HTTP-Referer': 'https://athenai.local',
+            'X-Title': 'AthenAI Master Orchestrator'
+          }
+        },
+        tags: ['master-orchestrator', 'athenai', 'openrouter']
+      });
+    } else {
+      this.llm = new ChatOpenAI({
+        modelName: process.env.OPENAI_MODEL || 'gpt-4',
+        temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
+        openAIApiKey: process.env.OPENAI_API_KEY,
+        tags: ['master-orchestrator', 'athenai', 'openai']
+      });
+    }
     
     this.name = 'MasterOrchestrator';
     this.capabilities = ['task-analysis', 'agent-routing', 'orchestration'];
@@ -54,7 +66,21 @@ Respond in this exact JSON format:
 `);
 
       const chain = complexityPrompt.pipe(this.llm).pipe(new StringOutputParser());
-      const response = await chain.invoke({ message: taskString });
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('OpenRouter API timeout')), 10000); // 10 second timeout
+      });
+      
+      const response = await Promise.race([
+        chain.invoke({ message: taskString }),
+        timeoutPromise
+      ]);
+      
+      // Check for rate limiting
+      if (response && response.includes && response.includes('429')) {
+        throw new Error('Rate limit exceeded');
+      }
       
       try {
         // Parse the JSON response
@@ -138,7 +164,16 @@ Respond with ONLY the agent name (research, creative, analysis, development, pla
 `);
 
       const chain = routingPrompt.pipe(this.llm).pipe(new StringOutputParser());
-      const primaryAgent = await chain.invoke({ message: taskString });
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('OpenRouter API timeout')), 10000); // 10 second timeout
+      });
+      
+      const primaryAgent = await Promise.race([
+        chain.invoke({ message: taskString }),
+        timeoutPromise
+      ]);
       
       // Clean and validate the response
       const cleanAgent = primaryAgent.toLowerCase().trim();
