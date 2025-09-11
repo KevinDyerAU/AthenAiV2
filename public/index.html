@@ -80,7 +80,7 @@
         <h3>🤖 AI Chat Interface</h3>
         <div class="desc">Real-time chat with AI agents including research, analysis, and creative capabilities.</div>
         <div class="links">
-          <a href="http://localhost:3000/public/chat.html" target="_blank">Launch Chat Interface</a>
+          <a href="chat.html" target="_blank">Launch Chat Interface</a>
         </div>
       </div>
 
@@ -112,26 +112,227 @@
     </section>
 
     <section>
-      <h2 class="section-title">Getting Started</h2>
-      <div class="cols">
+      <h2 class="section-title">🔧 Service Configuration</h2>
+      <div class="grid">
         <div class="card">
-          <h3>1) Install Dependencies</h3>
-          <div class="desc">Install Node.js packages for the simplified architecture.</div>
-          <pre><code>npm install</code></pre>
+          <h3>🗄️ Supabase (PostgreSQL + pgvector)</h3>
+          <div class="desc">Primary database with vector embeddings for document search and knowledge storage.</div>
+          <div class="links">
+            <a href="https://supabase.com/" target="_blank">🌐 Supabase Dashboard</a>
+          </div>
         </div>
 
         <div class="card">
-          <h3>2) Configure Environment</h3>
-          <div class="desc">Copy and configure your environment variables.</div>
-          <pre><code>cp .env.simplified.example .env
+          <h3>🤖 OpenAI Platform</h3>
+          <div class="desc">Primary AI model provider for chat completions and embeddings.</div>
+          <div class="links">
+            <a href="https://platform.openai.com/" target="_blank">🌐 OpenAI Platform</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔀 OpenRouter</h3>
+          <div class="desc">Multi-model AI API gateway for cost optimization and model diversity.</div>
+          <div class="links">
+            <a href="https://openrouter.ai/" target="_blank">🌐 OpenRouter Dashboard</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🕸️ Firecrawl</h3>
+          <div class="desc">Web scraping and content extraction for research capabilities.</div>
+          <div class="links">
+            <a href="https://www.firecrawl.dev/" target="_blank">🌐 Firecrawl Dashboard</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>📄 Unstructured.io</h3>
+          <div class="desc">Document processing API for PDF, DOCX, and other file formats.</div>
+          <div class="links">
+            <a href="https://docs.unstructured.io/" target="_blank">🌐 Unstructured Documentation</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>📊 Neo4j (Optional)</h3>
+          <div class="desc">Graph database for advanced knowledge relationships and patterns.</div>
+          <div class="links">
+            <a href="https://console-preview.neo4j.io/" target="_blank">🌐 Neo4j Console</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>⚡ Redis Cloud (Optional)</h3>
+          <div class="desc">Caching layer for improved performance and reduced API costs.</div>
+          <div class="links">
+            <a href="https://cloud.redis.io/#/login" target="_blank">🌐 Redis Cloud</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔍 LangSmith</h3>
+          <div class="desc">LangChain monitoring and debugging for agent performance tracking.</div>
+          <div class="links">
+            <a href="https://smith.langchain.com/" target="_blank">🌐 LangSmith Dashboard</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔎 SerpAPI</h3>
+          <div class="desc">Google Search API for enhanced web search capabilities in research agents.</div>
+          <div class="links">
+            <a href="https://serpapi.com/dashboard" target="_blank">🌐 SerpAPI Dashboard</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">📋 Environment Variables</h2>
+      <div class="card">
+        <div class="desc">Required environment variables for AthenAI configuration:</div>
+        <pre><code># Application Configuration
+NODE_ENV=development
+PORT=3000
+APP_NAME=athenai
+
+# AI API Configuration
+USE_OPENROUTER=true
+OPENROUTER_API_KEY=sk-or-v1-***************************
+OPENROUTER_MODEL=x-ai/grok-code-fast-1
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_TEMPERATURE=0.1
+OPENAI_API_KEY=sk-proj-***************************
+OPENAI_MODEL=gpt-4
+OPENAI_TEMPERATURE=0.1
+
+# Database Configuration
+SUPABASE_URL=https://***************************
+SUPABASE_ANON_KEY=eyJ***************************
+SUPABASE_SERVICE_ROLE_KEY=eyJ***************************
+POSTGRES_URL=postgresql://postgres:***@db.***.supabase.co:5432/postgres
+
+# Neo4j Configuration
+NEO4J_URI=neo4j+s://***.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=***************************
+
+# Redis Configuration
+REDIS_URL=redis://redis-***.***.redns.redis-cloud.com:***
+
+# Langchain and Langsmith Configuration
+LANGCHAIN_API_KEY=lsv2_pt_***************************
+LANGCHAIN_PROJECT=athenai
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_CALLBACKS_BACKGROUND=true
+
+# Document Processing
+UNSTRUCTURED_API_KEY=***************************
+UNSTRUCTURED_API_URL=https://api.unstructuredapp.io/general/v0/general
+
+# Document Processing Worker
+UNSTRUCTURED_WORKER_URL=http://unstructured-worker:8080
+
+# Document Processing Configuration
+WORKER_CONCURRENCY=2
+LOG_LEVEL=INFO
+UPLOAD_DIR=./data/unstructured/input
+EMBEDDING_MODEL=text-embedding-3-small
+
+# Search APIs (Optional)
+SERPAPI_API_KEY=***************************
+FIRECRAWL_API_KEY=fc-***************************
+API_SECRET_KEY=***************************</code></pre>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">🛠️ Convenience Scripts</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>⚡ Quick Setup Commands</h3>
+          <div class="desc">One-command setup for different platforms.</div>
+          <pre><code># Windows
+npm run setup:win
+npm run init-db:win
+npm run docs:setup:win
+
+# Unix/Linux/macOS
+npm run setup:unix
+npm run init-db:unix
+npm run docs:setup:unix</code></pre>
+        </div>
+
+        <div class="card">
+          <h3>🐳 Docker Management</h3>
+          <div class="desc">Docker Compose shortcuts for easy deployment.</div>
+          <pre><code># Simplified setup (2 services)
+npm run docker:simplified
+npm run docker:simplified:logs
+npm run docker:simplified:down
+
+# Full setup (all services)
+npm run docker:full
+npm run docker:full:logs
+npm run docker:full:down</code></pre>
+        </div>
+
+        <div class="card">
+          <h3>🔧 Development & Testing</h3>
+          <div class="desc">Development workflow and quality assurance.</div>
+          <pre><code># Development
+npm run dev
+npm run lint
+npm run lint:fix
+
+# Testing
+npm test
+npm run test:watch
+npm run test:coverage</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">🚀 Getting Started</h2>
+      <div class="cols">
+        <div class="card">
+          <h3>1) Quick Setup (Recommended)</h3>
+          <div class="desc">Use convenience scripts for automated setup.</div>
+          <pre><code># Windows
+npm run setup:win
+
+# Unix/Linux/macOS
+npm run setup:unix</code></pre>
+        </div>
+
+        <div class="card">
+          <h3>2) Manual Setup</h3>
+          <div class="desc">Step-by-step manual configuration.</div>
+          <pre><code>npm install
+cp .env.simplified.example .env
 # Edit .env with your API keys</code></pre>
         </div>
 
         <div class="card">
-          <h3>3) Start the Server</h3>
-          <div class="desc">Launch the AthenAI server with WebSocket support.</div>
-          <pre><code>npm run dev
-# Server runs on http://localhost:3000</code></pre>
+          <h3>3) Initialize Database</h3>
+          <div class="desc">Setup Supabase with knowledge substrate.</div>
+          <pre><code># Automated (Recommended)
+npm run init-db:win  # or init-db:unix
+
+# Manual
+# Run init-knowledge-substrate.sql in Supabase</code></pre>
+        </div>
+
+        <div class="card">
+          <h3>4) Start Services</h3>
+          <div class="desc">Launch with Docker or local development.</div>
+          <pre><code># Docker (Recommended)
+npm run docker:simplified
+
+# Local Development
+npm run dev</code></pre>
         </div>
       </div>
     </section>
