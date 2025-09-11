@@ -57,37 +57,30 @@ class ResearchAgent {
 
   async retrieveKnowledgeContext(query, sessionId) {
     try {
-      // Query knowledge substrate for relevant research context
-      const knowledgeQuery = {
-        content_type: 'research_context',
-        query_hash: this.generateQueryHash(query),
-        session_id: sessionId
-      };
-
-      // Retrieve similar research queries and findings
-      const domain = this.inferQueryDomain(query);
-      const similarResearch = await databaseService.queryKnowledgeGraph(
-        `MATCH (n:research_finding) WHERE n.domain = $domain RETURN n LIMIT 5`,
-        { domain }
-      );
-
-      // Retrieve cached web search results for similar queries
       const queryHash = this.generateQueryHash(query);
-      const cachedResults = await databaseService.queryKnowledgeGraph(
-        `MATCH (n:web_search_cache) WHERE n.query_hash = $queryHash RETURN n LIMIT 3`,
-        { queryHash }
-      );
+      const domain = this.inferQueryDomain(query);
 
+      // Retrieve similar research insights from Supabase
+      const similarResearch = await databaseService.getResearchInsightsByQueryHash(queryHash, 3);
+      
+      // Retrieve knowledge entities by domain
+      const domainEntities = await databaseService.getKnowledgeEntitiesByDomain(domain, 5);
+      
+      // Check web search cache
+      const cachedWebSearch = await databaseService.getWebSearchCache(queryHash);
+      
       return {
         similar_research: similarResearch || [],
-        cached_results: cachedResults || [],
-        domain_context: this.inferQueryDomain(query),
+        domain_entities: domainEntities || [],
+        cached_results: cachedWebSearch ? [cachedWebSearch] : [],
+        domain_context: domain,
         retrieved_at: new Date().toISOString()
       };
     } catch (error) {
       logger.warn('Failed to retrieve research knowledge context', { error: error.message });
       return {
         similar_research: [],
+        domain_entities: [],
         cached_results: [],
         domain_context: 'general',
         retrieved_at: new Date().toISOString()
@@ -97,26 +90,70 @@ class ResearchAgent {
 
   async storeResearchInsights(query, results, sessionId, orchestrationId) {
     try {
-      // Store research insights in knowledge substrate
-      const insights = {
+      const queryHash = this.generateQueryHash(query);
+      const domain = this.inferQueryDomain(query);
+      const patterns = this.extractResearchPatterns(results);
+
+      // Store research insights in Supabase
+      const insightsData = {
+        query: query,
+        query_hash: queryHash,
+        domain: domain,
+        patterns: patterns,
+        search_results: { results: results, timestamp: new Date().toISOString() },
         session_id: sessionId,
         orchestration_id: orchestrationId,
-        query: query,
-        query_hash: this.generateQueryHash(query),
-        domain: this.inferQueryDomain(query),
-        search_results: results,
-        research_patterns: this.extractResearchPatterns(results),
-        created_at: new Date().toISOString()
+        metadata: {
+          agent_type: 'ResearchAgent',
+          result_length: results.length,
+          patterns_found: patterns.length
+        }
       };
 
-      await databaseService.createKnowledgeNode(
-        sessionId,
-        orchestrationId,
-        'ResearchInsights',
-        insights
-      );
+      await databaseService.storeResearchInsights(insightsData);
 
-      logger.info('Research insights stored in knowledge substrate', { sessionId, orchestrationId });
+      // Also create a knowledge entity for significant findings
+      if (results.length > 100) { // Only for substantial research
+        const entityData = {
+          external_id: `research_${queryHash}_${Date.now()}`,
+          content: results.substring(0, 1000), // First 1000 chars
+          entity_type: 'research_finding',
+          domain: domain,
+          query_hash: queryHash,
+          metadata: {
+            full_results_length: results.length,
+            session_id: sessionId,
+            orchestration_id: orchestrationId,
+            patterns: patterns
+          },
+          confidence_score: 0.8,
+          source_type: 'research_agent'
+        };
+
+        await databaseService.createKnowledgeEntity(entityData);
+      }
+
+      // Store web search cache for future efficiency
+      const cacheData = {
+        query_hash: queryHash,
+        query_text: query,
+        domain: domain,
+        results: { content: results, patterns: patterns },
+        metadata: {
+          agent_type: 'ResearchAgent',
+          session_id: sessionId
+        }
+      };
+
+      await databaseService.storeWebSearchCache(cacheData);
+
+      logger.info('Research insights stored in knowledge substrate', { 
+        sessionId, 
+        orchestrationId, 
+        queryHash, 
+        domain,
+        patternsCount: patterns.length
+      });
     } catch (error) {
       logger.warn('Failed to store research insights', { error: error.message });
     }
@@ -176,20 +213,44 @@ class ResearchAgent {
             
             const knowledgeContext = await this.retrieveKnowledgeContext(query, sessionId);
             
-            // If we have sufficient cached results, use them
-            if (knowledgeContext.cached_results.length > 0) {
+            // Check for cached results and existing knowledge
+            const hasCachedResults = knowledgeContext.cached_results.length > 0;
+            const hasSimilarResearch = knowledgeContext.similar_research.length > 0;
+            const hasDomainEntities = knowledgeContext.domain_entities.length > 0;
+
+            if (hasCachedResults || hasSimilarResearch || hasDomainEntities) {
               if (sessionId) {
-                progressBroadcaster.updateProgress(sessionId, 'knowledge_utilization', 'Found relevant cached research, enhancing with fresh data...');
+                progressBroadcaster.updateProgress(sessionId, 'knowledge_utilization', 'Found relevant knowledge substrate data, enhancing with fresh research...');
               }
               
-              const cachedSummary = knowledgeContext.cached_results.map((result, index) => 
-                `${index + 1}. [CACHED] ${result.title || 'Cached Result'}\n   ${result.summary || result.content || 'No summary available'}`
-              ).join('\n\n');
+              let knowledgeContent = '';
+              
+              // Add cached web search results
+              if (hasCachedResults) {
+                const cached = knowledgeContext.cached_results[0];
+                knowledgeContent += `CACHED WEB SEARCH RESULTS:\n${JSON.stringify(cached.results, null, 2)}\n\n`;
+              }
+              
+              // Add similar research insights
+              if (hasSimilarResearch) {
+                const researchSummary = knowledgeContext.similar_research.map((insight, index) => 
+                  `${index + 1}. [RESEARCH INSIGHT] Query: ${insight.query}\n   Domain: ${insight.domain}\n   Patterns: ${insight.patterns?.join(', ') || 'None'}\n   Results: ${JSON.stringify(insight.search_results).substring(0, 200)}...`
+                ).join('\n\n');
+                knowledgeContent += `SIMILAR RESEARCH INSIGHTS:\n${researchSummary}\n\n`;
+              }
+              
+              // Add domain knowledge entities
+              if (hasDomainEntities) {
+                const entitiesSummary = knowledgeContext.domain_entities.map((entity, index) => 
+                  `${index + 1}. [KNOWLEDGE ENTITY] Type: ${entity.entity_type}\n   Content: ${entity.content.substring(0, 200)}...\n   Confidence: ${entity.confidence_score}`
+                ).join('\n\n');
+                knowledgeContent += `DOMAIN KNOWLEDGE ENTITIES:\n${entitiesSummary}\n\n`;
+              }
               
               // Still perform a limited web search for fresh data
               const freshResults = await this.performWebSearch(query, 2); // Limited search
               
-              const combinedResults = `KNOWLEDGE SUBSTRATE RESULTS:\n${cachedSummary}\n\nFRESH WEB SEARCH RESULTS:\n${freshResults}`;
+              const combinedResults = `${knowledgeContent}FRESH WEB SEARCH RESULTS:\n${freshResults}`;
               
               // Store the new insights
               await this.storeResearchInsights(query, combinedResults, sessionId, sessionId);
