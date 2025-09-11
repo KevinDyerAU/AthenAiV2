@@ -1,206 +1,199 @@
--- Unified PostgreSQL Schema for NeoV3
--- Safe to run multiple times (uses IF EXISTS/IF NOT EXISTS where possible)
+-- Knowledge Substrate Initialization Script
+-- This script creates the complete knowledge substrate schema for AthenAI
 
--- Extensions
-CREATE EXTENSION IF NOT EXISTS pgcrypto;           -- gen_random_uuid()
-CREATE EXTENSION IF NOT EXISTS pg_trgm;            -- FTS helpers
-CREATE EXTENSION IF NOT EXISTS vector;             -- pgvector
-
--- =====================
--- Schema Versioning
--- =====================
-CREATE TABLE IF NOT EXISTS schema_migrations (
-  id BIGSERIAL PRIMARY KEY,
-  version VARCHAR(100) NOT NULL,
-  description TEXT,
-  applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- =====================
--- User Management
+-- Drop existing tables (in reverse dependency order)
 -- =====================
-CREATE TABLE IF NOT EXISTS roles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(100) UNIQUE NOT NULL,
-  description TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 
-CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  username VARCHAR(255) UNIQUE NOT NULL,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS user_roles (
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
-  PRIMARY KEY (user_id, role_id)
-);
-
-CREATE TABLE IF NOT EXISTS api_keys (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  name VARCHAR(255),
-  key_hash VARCHAR(255) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  last_used_at TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS auth_sessions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  user_agent TEXT,
-  ip_address INET,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  expires_at TIMESTAMP,
-  revoked BOOLEAN DEFAULT FALSE
-);
-
-CREATE TABLE IF NOT EXISTS refresh_tokens (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  token_hash VARCHAR(255) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  expires_at TIMESTAMP,
-  revoked BOOLEAN DEFAULT FALSE
-);
+DROP TABLE IF EXISTS qa_insights CASCADE;
+DROP TABLE IF EXISTS web_search_cache CASCADE;
+DROP TABLE IF EXISTS research_insights CASCADE;
+DROP TABLE IF EXISTS knowledge_conflicts CASCADE;
+DROP TABLE IF EXISTS knowledge_provenance CASCADE;
+DROP TABLE IF EXISTS knowledge_entities CASCADE;
 
 -- =====================
--- Conversations
+-- Knowledge Management Tables
 -- =====================
-CREATE TABLE IF NOT EXISTS conversations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title VARCHAR(255),
-  created_by UUID REFERENCES users(id),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  is_active BOOLEAN DEFAULT TRUE,
-  metadata JSONB
-);
 
-CREATE TABLE IF NOT EXISTS conversation_participants (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  role VARCHAR(50) DEFAULT 'participant',
-  joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-  sender_id UUID REFERENCES users(id),
-  content TEXT NOT NULL,
-  content_tsv tsvector,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  metadata JSONB
-);
-
--- FTS trigger for messages
-CREATE OR REPLACE FUNCTION messages_tsv_trigger() RETURNS trigger AS $$
-BEGIN
-  NEW.content_tsv := to_tsvector('english', coalesce(NEW.content,''));
-  RETURN NEW;
-END
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS trg_messages_tsv ON messages;
-CREATE TRIGGER trg_messages_tsv BEFORE INSERT OR UPDATE
-  ON messages FOR EACH ROW EXECUTE FUNCTION messages_tsv_trigger();
-
-CREATE INDEX IF NOT EXISTS idx_messages_conv_time ON messages (conversation_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_messages_tsv ON messages USING GIN (content_tsv);
-
--- =====================
--- Knowledge Management
--- =====================
+-- Main knowledge entities table
 CREATE TABLE IF NOT EXISTS knowledge_entities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  external_id VARCHAR(255),
+  external_id VARCHAR(255) UNIQUE,
   content TEXT NOT NULL,
-  entity_type VARCHAR(100),
-  created_by UUID REFERENCES users(id),
+  entity_type VARCHAR(100) NOT NULL,
+  domain VARCHAR(100) DEFAULT 'general',
+  query_hash VARCHAR(64),
+  created_by UUID,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   version INTEGER DEFAULT 1,
   embedding vector(1536),
-  metadata JSONB
+  metadata JSONB DEFAULT '{}'::jsonb,
+  confidence_score FLOAT DEFAULT 0.0,
+  source_type VARCHAR(50) DEFAULT 'agent_generated'
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_external_id ON knowledge_entities(external_id);
-CREATE INDEX IF NOT EXISTS idx_knowledge_entity_type ON knowledge_entities(entity_type);
-CREATE INDEX IF NOT EXISTS idx_knowledge_embedding ON knowledge_entities USING ivfflat (embedding vector_cosine_ops) WITH (lists=100);
-
+-- Knowledge provenance tracking
 CREATE TABLE IF NOT EXISTS knowledge_provenance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id UUID REFERENCES knowledge_entities(id) ON DELETE CASCADE,
-  source VARCHAR(255),
+  source VARCHAR(255) NOT NULL,
   evidence TEXT,
-  actor UUID REFERENCES users(id),
+  actor_type VARCHAR(50) DEFAULT 'agent',
+  actor_id VARCHAR(255),
+  session_id VARCHAR(255),
+  orchestration_id VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  metadata JSONB
+  metadata JSONB DEFAULT '{}'::jsonb
 );
 
+-- Knowledge conflicts and resolution
 CREATE TABLE IF NOT EXISTS knowledge_conflicts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entity_id UUID REFERENCES knowledge_entities(id) ON DELETE CASCADE,
   field VARCHAR(100) NOT NULL,
   proposed_value JSONB NOT NULL,
-  status VARCHAR(30) DEFAULT 'open',         -- open|resolved|dismissed
+  current_value JSONB,
+  status VARCHAR(30) DEFAULT 'open',
+  priority VARCHAR(20) DEFAULT 'medium',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   resolved_at TIMESTAMP,
-  resolved_by UUID REFERENCES users(id),
-  resolution_note TEXT
+  resolved_by VARCHAR(255),
+  resolution_note TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb
 );
 
--- =====================
--- Workflows / Agents
--- =====================
-CREATE TABLE IF NOT EXISTS workflows (
+-- Research insights and patterns
+CREATE TABLE IF NOT EXISTS research_insights (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(255) UNIQUE NOT NULL,
-  definition JSONB NOT NULL,
-  created_by UUID REFERENCES users(id),
+  entity_id UUID REFERENCES knowledge_entities(id) ON DELETE CASCADE,
+  query TEXT NOT NULL,
+  query_hash VARCHAR(64) NOT NULL,
+  domain VARCHAR(100) DEFAULT 'general',
+  patterns JSONB DEFAULT '[]'::jsonb,
+  search_results JSONB DEFAULT '{}'::jsonb,
+  session_id VARCHAR(255),
+  orchestration_id VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  metadata JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TABLE IF NOT EXISTS workflow_runs (
+-- Web search cache for efficiency
+CREATE TABLE IF NOT EXISTS web_search_cache (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workflow_id UUID REFERENCES workflows(id) ON DELETE CASCADE,
-  status VARCHAR(30) DEFAULT 'pending',      -- pending|running|succeeded|failed|cancelled
-  started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  finished_at TIMESTAMP,
-  logs JSONB
+  query_hash VARCHAR(64) NOT NULL,
+  query_text TEXT NOT NULL,
+  domain VARCHAR(100) DEFAULT 'general',
+  results JSONB NOT NULL,
+  cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours'),
+  hit_count INTEGER DEFAULT 0,
+  metadata JSONB DEFAULT '{}'::jsonb
+);
+
+-- Quality assurance insights
+CREATE TABLE IF NOT EXISTS qa_insights (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id UUID REFERENCES knowledge_entities(id) ON DELETE CASCADE,
+  content_hash VARCHAR(64) NOT NULL,
+  qa_type VARCHAR(100) NOT NULL,
+  quality_metrics JSONB DEFAULT '{}'::jsonb,
+  improvement_patterns JSONB DEFAULT '[]'::jsonb,
+  session_id VARCHAR(255),
+  orchestration_id VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  metadata JSONB DEFAULT '{}'::jsonb
 );
 
 -- =====================
--- Audit Log
+-- Indexes for Performance
 -- =====================
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id BIGSERIAL PRIMARY KEY,
-  occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  actor_id UUID REFERENCES users(id),
-  action VARCHAR(100) NOT NULL,
-  target_type VARCHAR(100),
-  target_id UUID,
-  details JSONB
-);
 
--- Helpful views
-CREATE OR REPLACE VIEW v_conversation_latest AS
-SELECT c.id AS conversation_id,
-       c.title,
-       c.created_by,
-       m.id AS last_message_id,
-       m.content AS last_message,
-       m.created_at AS last_message_at
-FROM conversations c
-LEFT JOIN LATERAL (
-  SELECT * FROM messages m2 WHERE m2.conversation_id = c.id ORDER BY created_at DESC LIMIT 1
-) m ON TRUE;
+-- Knowledge entities indexes
+CREATE INDEX IF NOT EXISTS idx_knowledge_entities_type ON knowledge_entities(entity_type);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entities_domain ON knowledge_entities(domain);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entities_query_hash ON knowledge_entities(query_hash);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entities_created_at ON knowledge_entities(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entities_updated_at ON knowledge_entities(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_knowledge_entities_source_type ON knowledge_entities(source_type);
+
+-- Vector similarity index for embeddings
+CREATE INDEX IF NOT EXISTS idx_knowledge_entities_embedding 
+ON knowledge_entities USING ivfflat (embedding vector_cosine_ops) WITH (lists=100);
+
+-- Provenance indexes
+CREATE INDEX IF NOT EXISTS idx_knowledge_provenance_entity_id ON knowledge_provenance(entity_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_provenance_session_id ON knowledge_provenance(session_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_provenance_actor_type ON knowledge_provenance(actor_type);
+
+-- Research insights indexes
+CREATE INDEX IF NOT EXISTS idx_research_insights_query_hash ON research_insights(query_hash);
+CREATE INDEX IF NOT EXISTS idx_research_insights_domain ON research_insights(domain);
+CREATE INDEX IF NOT EXISTS idx_research_insights_session_id ON research_insights(session_id);
+
+-- Web search cache indexes
+CREATE INDEX IF NOT EXISTS idx_web_search_cache_query_hash ON web_search_cache(query_hash);
+CREATE INDEX IF NOT EXISTS idx_web_search_cache_domain ON web_search_cache(domain);
+CREATE INDEX IF NOT EXISTS idx_web_search_cache_expires_at ON web_search_cache(expires_at);
+
+-- QA insights indexes
+CREATE INDEX IF NOT EXISTS idx_qa_insights_content_hash ON qa_insights(content_hash);
+CREATE INDEX IF NOT EXISTS idx_qa_insights_qa_type ON qa_insights(qa_type);
+CREATE INDEX IF NOT EXISTS idx_qa_insights_session_id ON qa_insights(session_id);
+
+-- =====================
+-- Utility Functions
+-- =====================
+
+-- Function to clean expired cache entries
+CREATE OR REPLACE FUNCTION clean_expired_cache()
+RETURNS INTEGER AS $$
+DECLARE
+  deleted_count INTEGER;
+BEGIN
+  DELETE FROM web_search_cache WHERE expires_at < CURRENT_TIMESTAMP;
+  GET DIAGNOSTICS deleted_count = ROW_COUNT;
+  RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to update knowledge entity timestamps
+CREATE OR REPLACE FUNCTION update_knowledge_entity_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to automatically update timestamps
+DROP TRIGGER IF EXISTS trg_knowledge_entities_updated_at ON knowledge_entities;
+CREATE TRIGGER trg_knowledge_entities_updated_at
+  BEFORE UPDATE ON knowledge_entities
+  FOR EACH ROW EXECUTE FUNCTION update_knowledge_entity_timestamp();
+
+-- =====================
+-- Sample Data for Testing
+-- =====================
+
+-- Insert sample knowledge entities for testing
+INSERT INTO knowledge_entities (external_id, content, entity_type, domain, metadata) 
+SELECT * FROM (VALUES
+  ('test_entity_1', 'Sample research finding about AI capabilities', 'research_finding', 'ai', '{"confidence": 0.85, "source": "research_agent"}'::jsonb),
+  ('test_entity_2', 'Code analysis patterns for JavaScript applications', 'analysis_pattern', 'software', '{"confidence": 0.92, "source": "quality_assurance_agent"}'::jsonb),
+  ('test_entity_3', 'Security best practices for API development', 'best_practice', 'security', '{"confidence": 0.88, "source": "research_agent"}'::jsonb)
+) AS v(external_id, content, entity_type, domain, metadata)
+WHERE NOT EXISTS (SELECT 1 FROM knowledge_entities WHERE knowledge_entities.external_id = v.external_id);
+
+-- Insert sample provenance
+INSERT INTO knowledge_provenance (entity_id, source, evidence, actor_type, actor_id) 
+SELECT id, 'AthenAI Research Agent', 'Generated during research session', 'agent', 'research_agent'
+FROM knowledge_entities WHERE external_id = 'test_entity_1'
+ON CONFLICT DO NOTHING;
+
+COMMIT;
