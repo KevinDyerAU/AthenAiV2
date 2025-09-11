@@ -8,15 +8,23 @@ const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const axios = require('axios');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 
 class DevelopmentAgent {
   constructor() {
     this.llm = new ChatOpenAI({
-      modelName: 'gpt-4',
-      temperature: 0.1,
-      openAIApiKey: process.env.OPENAI_API_KEY,
+      modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+      temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
+      openAIApiKey: process.env.OPENROUTER_API_KEY,
+      configuration: {
+        baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+        defaultHeaders: {
+          'HTTP-Referer': 'https://athenai.local',
+          'X-Title': 'AthenAI Development Agent'
+        }
+      },
       tags: ['development-agent', 'athenai']
     });
     this.workspaceRoot = process.env.WORKSPACE_ROOT || './workspace';
@@ -182,25 +190,69 @@ Current task: {requirements}
   }
 
   initializeDevelopmentTools() {
-    return [
-      // Code Generation Tool
-      new DynamicTool({
-        name: 'generate_code',
-        description: 'Generate code based on specifications and requirements',
-        func: async (input) => {
-          try {
-            const { specification, language, filename } = JSON.parse(input);
-            
-            // Check if we're in test environment
-            const isTestEnvironment = process.env.NODE_ENV === 'test' || 
-                                     typeof global.it === 'function' ||
-                                     process.env.JEST_WORKER_ID !== undefined;
+    const tools = [];
 
-            let generatedCode;
-            if (isTestEnvironment) {
-              generatedCode = `// Generated ${language} code for: ${specification}\n// Mock code generated in test environment`;
-            } else {
-              const codePrompt = `Generate ${language} code for: ${specification}
+    // Web search for development resources and documentation using Firecrawl
+    if (process.env.FIRECRAWL_API_KEY) {
+      tools.push(new DynamicTool({
+        name: 'dev_resource_search',
+        description: 'Search and crawl development resources, documentation, and code examples using Firecrawl',
+        func: async (query) => {
+          try {
+            const response = await axios.post('https://api.firecrawl.dev/v0/search', {
+              query: query + ' programming documentation tutorial example',
+              pageOptions: {
+                onlyMainContent: true,
+                includeHtml: false,
+                waitFor: 0
+              },
+              searchOptions: {
+                limit: 5
+              }
+            }, {
+              headers: {
+                'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 15000
+            });
+            
+            const results = response.data.data || [];
+            if (results.length === 0) {
+              return `No development resources found for: ${query}`;
+            }
+            
+            const searchResults = results.map((result, index) => {
+              const content = result.content ? result.content.substring(0, 300) + '...' : 'No content available';
+              return `${index + 1}. ${result.metadata?.title || 'No title'}\n   ${content}\n   Source: ${result.metadata?.sourceURL || result.url}`;
+            }).join('\n\n');
+            
+            return `Development resources for "${query}":\n\n${searchResults}`;
+          } catch (error) {
+            return `Development resource search error: ${error.message}`;
+          }
+        }
+      }));
+    }
+
+    // Code generator tool
+    tools.push(new DynamicTool({
+      name: 'generate_code',
+      description: 'Generate code based on specifications and requirements',
+      func: async (input) => {
+        try {
+          const { specification, language, filename } = JSON.parse(input);
+          
+          // Check if we're in test environment
+          const isTestEnvironment = process.env.NODE_ENV === 'test' || 
+                                   typeof global.it === 'function' ||
+                                   process.env.JEST_WORKER_ID !== undefined;
+
+          let generatedCode;
+          if (isTestEnvironment) {
+            generatedCode = `// Generated ${language} code for: ${specification}\n// Mock code generated in test environment`;
+          } else {
+            const codePrompt = `Generate ${language} code for: ${specification}
             
 Requirements:
 - Follow ${language} best practices
@@ -209,29 +261,29 @@ Requirements:
 - Make it production-ready
 - Include type hints/annotations where applicable`;
 
-              const response = await this.llm.invoke(codePrompt);
-              generatedCode = response.content;
-            }
-
-            // Save code to file if filename provided (skip in test environment)
-            if (filename && !isTestEnvironment) {
-              await this.saveCodeToFile(filename, generatedCode, language);
-            }
-
-            return JSON.stringify({
-              code: generatedCode,
-              language,
-              filename: filename || null,
-              status: 'generated'
-            });
-          } catch (error) {
-            return JSON.stringify({ error: error.message });
+            const response = await this.llm.invoke(codePrompt);
+            generatedCode = response.content;
           }
-        }
-      }),
 
-      // Project Structure Tool
-      new DynamicTool({
+          // Save code to file if filename provided (skip in test environment)
+          if (filename && !isTestEnvironment) {
+            await this.saveCodeToFile(filename, generatedCode, language);
+          }
+
+          return JSON.stringify({
+            code: generatedCode,
+            language,
+            filename: filename || null,
+            status: 'generated'
+          });
+        } catch (error) {
+          return JSON.stringify({ error: error.message });
+        }
+      }
+    }));
+
+    // Project Structure Tool
+    tools.push(new DynamicTool({
         name: 'create_project_structure',
         description: 'Create project directory structure and configuration files',
         func: async (input) => {
@@ -243,10 +295,10 @@ Requirements:
             return JSON.stringify({ error: error.message });
           }
         }
-      }),
+      }));
 
-      // Code Analysis Tool
-      new DynamicTool({
+    // Code Analysis Tool
+    tools.push(new DynamicTool({
         name: 'analyze_code',
         description: 'Analyze existing code for quality, security, and best practices',
         func: async (input) => {
@@ -258,10 +310,10 @@ Requirements:
             return JSON.stringify({ error: error.message });
           }
         }
-      }),
+      }));
 
-      // Test Generation Tool
-      new DynamicTool({
+    // Test Generation Tool
+    tools.push(new DynamicTool({
         name: 'generate_tests',
         description: 'Generate unit tests for given code',
         func: async (input) => {
@@ -273,10 +325,10 @@ Requirements:
             return JSON.stringify({ error: error.message });
           }
         }
-      }),
+      }));
 
-      // Documentation Tool
-      new DynamicTool({
+    // Documentation Tool
+    tools.push(new DynamicTool({
         name: 'generate_documentation',
         description: 'Generate comprehensive documentation for code',
         func: async (input) => {
@@ -288,10 +340,10 @@ Requirements:
             return JSON.stringify({ error: error.message });
           }
         }
-      }),
+      }));
 
-      // Code Execution Tool (Sandboxed)
-      new DynamicTool({
+    // Code Execution Tool (Sandboxed)
+    tools.push(new DynamicTool({
         name: 'execute_code',
         description: 'Execute code in a sandboxed environment for testing',
         func: async (input) => {
@@ -303,8 +355,9 @@ Requirements:
             return JSON.stringify({ error: error.message });
           }
         }
-      })
-    ];
+      }));
+
+    return tools;
   }
 
   async saveCodeToFile(filename, code, _language) {

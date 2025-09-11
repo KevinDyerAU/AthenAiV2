@@ -18,6 +18,11 @@ const { MasterOrchestrator } = require('./agents/MasterOrchestrator');
 const { ResearchAgent } = require('./agents/ResearchAgent');
 const { AnalysisAgent } = require('./agents/analysisAgent');
 const { CreativeAgent } = require('./agents/creativeAgent');
+const { DevelopmentAgent } = require('./agents/DevelopmentAgent');
+const { PlanningAgent } = require('./agents/PlanningAgent');
+const { ExecutionAgent } = require('./agents/ExecutionAgent');
+const { CommunicationAgent } = require('./agents/CommunicationAgent');
+const { QualityAssuranceAgent } = require('./agents/QualityAssuranceAgent');
 
 const app = express();
 const server = createServer(app);
@@ -35,8 +40,13 @@ const PORT = process.env.PORT || 3000;
 // Initialize agents
 const masterOrchestrator = new MasterOrchestrator();
 const researchAgent = new ResearchAgent();
-const analysisAgent = new AnalysisAgent();
-const creativeAgent = new CreativeAgent();
+const analysisAgent = new AnalysisAgent(process.env.OPENAI_API_KEY);
+const creativeAgent = new CreativeAgent(process.env.OPENAI_API_KEY);
+const developmentAgent = new DevelopmentAgent();
+const planningAgent = new PlanningAgent();
+const executionAgent = new ExecutionAgent();
+const communicationAgent = new CommunicationAgent();
+const qaAgent = new QualityAssuranceAgent();
 
 // Initialize database connections
 async function initializeApp() {
@@ -198,23 +208,44 @@ io.on('connection', (socket) => {
           );
         } else if (primaryAgent === 'analysis') {
           logger.info('Calling analysis agent');
-          agentResult = await analysisAgent.executeAnalysis(
-            message,
-            roomId,
-            orchestrationResult.session_id
-          );
+          agentResult = await analysisAgent.executeAnalysis({
+            task: { message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+          });
         } else if (primaryAgent === 'creative') {
           logger.info('Calling creative agent');
-          agentResult = await creativeAgent.executeCreative(
-            message,
-            roomId,
-            orchestrationResult.session_id
-          );
+          agentResult = await creativeAgent.executeCreative({
+            task: { content: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+          });
+        } else if (primaryAgent === 'development') {
+          logger.info('Calling development agent');
+          agentResult = await developmentAgent.executeDevelopment({
+            task: { requirements: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+          });
+        } else if (primaryAgent === 'planning') {
+          logger.info('Calling planning agent');
+          agentResult = await planningAgent.executePlanning({
+            task: { objective: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+          });
+        } else if (primaryAgent === 'execution') {
+          logger.info('Calling execution agent');
+          agentResult = await executionAgent.executeTask({
+            task: { execution_plan: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+          });
+        } else if (primaryAgent === 'communication') {
+          logger.info('Calling communication agent');
+          agentResult = await communicationAgent.executeCommunication({
+            task: { message: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+          });
+        } else if (primaryAgent === 'qa') {
+          logger.info('Calling QA agent');
+          agentResult = await qaAgent.executeQualityAssurance({
+            task: { content: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+          });
         } else {
           // For general messages, provide a helpful response
           logger.info('Using general response for agent:', primaryAgent);
           agentResult = {
-            summary: `Hello! I'm AthenAI. I can help you with research, analysis, creative tasks, and more. What would you like to explore today?`,
+            summary: `Hello! I'm AthenAI. I can help you with research, analysis, creative tasks, development, planning, execution, communication, and quality assurance. What would you like to explore today?`,
             agent_type: 'general',
             confidence: 0.9
           };

@@ -32,10 +32,17 @@ class AnalysisAgent {
       }
 
       // Initialize OpenAI
-      const llm = new ChatOpenAI({
-        modelName: 'gpt-4',
-        temperature: 0.1,
-        openAIApiKey: this.apiKey,
+      this.llm = new ChatOpenAI({
+        modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+        temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
+        openAIApiKey: this.apiKey || process.env.OPENROUTER_API_KEY,
+        configuration: {
+          baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+          defaultHeaders: {
+            'HTTP-Referer': 'https://athenai.local',
+            'X-Title': 'AthenAI Analysis Agent'
+          }
+        },
         tags: ['analysis-agent', 'athenai']
       });
 
@@ -146,6 +153,51 @@ Data: {data}
 
   initializeAnalysisTools() {
     const tools = [];
+
+    // Web search tool for current data and trends using Firecrawl
+    if (process.env.FIRECRAWL_API_KEY) {
+      tools.push(new DynamicTool({
+        name: 'web_search_analysis',
+        description: 'Search and crawl web content for current data, trends, and analytical insights using Firecrawl',
+        func: async (query) => {
+          try {
+            const axios = require('axios');
+            const response = await axios.post('https://api.firecrawl.dev/v0/search', {
+              query: query + ' data trends analysis statistics',
+              pageOptions: {
+                onlyMainContent: true,
+                includeHtml: false,
+                waitFor: 0
+              },
+              searchOptions: {
+                limit: 5
+              }
+            }, {
+              headers: {
+                'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 15000
+            });
+            
+            const results = response.data.data || [];
+            if (results.length === 0) {
+              return `No analytical data found for: ${query}`;
+            }
+            
+            const searchResults = results.map((result, index) => {
+              const content = result.content ? result.content.substring(0, 300) + '...' : 'No content available';
+              return `${index + 1}. ${result.metadata?.title || 'No title'}\n   ${content}\n   Source: ${result.metadata?.sourceURL || result.url}`;
+            }).join('\n\n');
+            
+            return `Current data and trends for "${query}":\n\n${searchResults}`;
+          } catch (error) {
+            return `Web search error: ${error.message}`;
+          }
+        }
+      }));
+    }
+
 
     // Statistical analysis tool
     tools.push(new DynamicTool({

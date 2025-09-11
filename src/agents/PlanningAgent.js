@@ -9,9 +9,16 @@ const { databaseService } = require('../services/database');
 class PlanningAgent {
   constructor() {
     this.llm = new ChatOpenAI({
-      modelName: 'gpt-4',
-      temperature: 0.2,
-      openAIApiKey: process.env.OPENAI_API_KEY,
+      modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+      temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.2,
+      openAIApiKey: process.env.OPENROUTER_API_KEY,
+      configuration: {
+        baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+        defaultHeaders: {
+          'HTTP-Referer': 'https://athenai.local',
+          'X-Title': 'AthenAI Planning Agent'
+        }
+      },
       tags: ['planning-agent', 'athenai']
     });
   }
