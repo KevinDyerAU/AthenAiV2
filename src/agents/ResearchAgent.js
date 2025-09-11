@@ -8,6 +8,8 @@ const { ChatAgent } = require('langchain/agents');
 const axios = require('axios');
 const { logger } = require('../utils/logger');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
+const { databaseService } = require('../services/database');
+const { progressBroadcaster } = require('../services/progressBroadcaster');
 
 class ResearchAgent {
   constructor() {
@@ -53,51 +55,171 @@ class ResearchAgent {
     this.initializeTools();
   }
 
+  async retrieveKnowledgeContext(query, sessionId) {
+    try {
+      // Query knowledge substrate for relevant research context
+      const knowledgeQuery = {
+        content_type: 'research_context',
+        query_hash: this.generateQueryHash(query),
+        session_id: sessionId
+      };
+
+      // Retrieve similar research queries and findings
+      const domain = this.inferQueryDomain(query);
+      const similarResearch = await databaseService.queryKnowledgeGraph(
+        `MATCH (n:research_finding) WHERE n.domain = $domain RETURN n LIMIT 5`,
+        { domain }
+      );
+
+      // Retrieve cached web search results for similar queries
+      const queryHash = this.generateQueryHash(query);
+      const cachedResults = await databaseService.queryKnowledgeGraph(
+        `MATCH (n:web_search_cache) WHERE n.query_hash = $queryHash RETURN n LIMIT 3`,
+        { queryHash }
+      );
+
+      return {
+        similar_research: similarResearch || [],
+        cached_results: cachedResults || [],
+        domain_context: this.inferQueryDomain(query),
+        retrieved_at: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.warn('Failed to retrieve research knowledge context', { error: error.message });
+      return {
+        similar_research: [],
+        cached_results: [],
+        domain_context: 'general',
+        retrieved_at: new Date().toISOString()
+      };
+    }
+  }
+
+  async storeResearchInsights(query, results, sessionId, orchestrationId) {
+    try {
+      // Store research insights in knowledge substrate
+      const insights = {
+        session_id: sessionId,
+        orchestration_id: orchestrationId,
+        query: query,
+        query_hash: this.generateQueryHash(query),
+        domain: this.inferQueryDomain(query),
+        search_results: results,
+        research_patterns: this.extractResearchPatterns(results),
+        created_at: new Date().toISOString()
+      };
+
+      await databaseService.createKnowledgeNode(
+        sessionId,
+        orchestrationId,
+        'ResearchInsights',
+        insights
+      );
+
+      logger.info('Research insights stored in knowledge substrate', { sessionId, orchestrationId });
+    } catch (error) {
+      logger.warn('Failed to store research insights', { error: error.message });
+    }
+  }
+
+  generateQueryHash(query) {
+    // Simple hash for query similarity matching
+    const str = typeof query === 'string' ? query.toLowerCase() : JSON.stringify(query).toLowerCase();
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16);
+  }
+
+  inferQueryDomain(query) {
+    const str = typeof query === 'string' ? query.toLowerCase() : JSON.stringify(query).toLowerCase();
+    
+    if (str.includes('github') || str.includes('repository') || str.includes('code')) return 'software';
+    if (str.includes('security') || str.includes('vulnerability')) return 'security';
+    if (str.includes('api') || str.includes('endpoint')) return 'api';
+    if (str.includes('performance') || str.includes('optimization')) return 'performance';
+    if (str.includes('data') || str.includes('analysis')) return 'data';
+    if (str.includes('ai') || str.includes('machine learning') || str.includes('ml')) return 'ai';
+    
+    return 'general';
+  }
+
+  extractResearchPatterns(results) {
+    // Extract research patterns for future reference
+    const patterns = [];
+    
+    if (results.includes('documentation')) patterns.push('documentation_research');
+    if (results.includes('tutorial') || results.includes('guide')) patterns.push('educational_content');
+    if (results.includes('github') || results.includes('repository')) patterns.push('code_repository_research');
+    if (results.includes('api') || results.includes('endpoint')) patterns.push('api_research');
+    if (results.includes('security') || results.includes('vulnerability')) patterns.push('security_research');
+    
+    return patterns;
+  }
+
   initializeTools() {
     this.tools = [
       new DynamicTool({
-        name: 'web_search',
-        description: 'Search and crawl web content using Firecrawl API',
+        name: 'knowledge_enhanced_web_search',
+        description: 'Search web content with knowledge substrate enhancement - checks existing knowledge before performing web searches',
         func: async (query) => {
           try {
-            if (!process.env.FIRECRAWL_API_KEY) {
-              return 'Web search unavailable: Firecrawl API key not configured';
+            const sessionId = this.currentSessionId || 'default_session';
+            
+            // PHASE 1: Check knowledge substrate first
+            if (sessionId) {
+              progressBroadcaster.updateProgress(sessionId, 'knowledge_retrieval', 'Checking knowledge substrate for existing research...');
             }
             
-            // Use Firecrawl search endpoint
-            const response = await axios.post('https://api.firecrawl.dev/v0/search', {
-              query: query,
-              pageOptions: {
-                onlyMainContent: true,
-                includeHtml: false,
-                waitFor: 0
-              },
-              searchOptions: {
-                limit: 5
+            const knowledgeContext = await this.retrieveKnowledgeContext(query, sessionId);
+            
+            // If we have sufficient cached results, use them
+            if (knowledgeContext.cached_results.length > 0) {
+              if (sessionId) {
+                progressBroadcaster.updateProgress(sessionId, 'knowledge_utilization', 'Found relevant cached research, enhancing with fresh data...');
               }
-            }, {
-              headers: {
-                'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`,
-                'Content-Type': 'application/json'
-              },
-              timeout: 15000
-            });
-            
-            const results = response.data.data || [];
-            if (results.length === 0) {
-              return `No search results found for: ${query}`;
+              
+              const cachedSummary = knowledgeContext.cached_results.map((result, index) => 
+                `${index + 1}. [CACHED] ${result.title || 'Cached Result'}\n   ${result.summary || result.content || 'No summary available'}`
+              ).join('\n\n');
+              
+              // Still perform a limited web search for fresh data
+              const freshResults = await this.performWebSearch(query, 2); // Limited search
+              
+              const combinedResults = `KNOWLEDGE SUBSTRATE RESULTS:\n${cachedSummary}\n\nFRESH WEB SEARCH RESULTS:\n${freshResults}`;
+              
+              // Store the new insights
+              await this.storeResearchInsights(query, combinedResults, sessionId, sessionId);
+              
+              return combinedResults;
             }
             
-            const searchResults = results.map((result, index) => {
-              const content = result.content ? result.content.substring(0, 300) + '...' : 'No content available';
-              return `${index + 1}. ${result.metadata?.title || 'No title'}\n   ${content}\n   Source: ${result.metadata?.sourceURL || result.url}`;
-            }).join('\n\n');
+            // PHASE 2: Perform full web search with knowledge context
+            if (sessionId) {
+              progressBroadcaster.updateProgress(sessionId, 'web_search', 'Performing enhanced web search with knowledge context...');
+            }
             
-            return `Web search results for "${query}":\n\n${searchResults}`;
+            const webResults = await this.performWebSearch(query, 5);
+            
+            // PHASE 3: Store insights for future use
+            await this.storeResearchInsights(query, webResults, sessionId, sessionId);
+            
+            return webResults;
           } catch (error) {
-            logger.error('Firecrawl search failed:', error);
-            return `Web search error: ${error.message}`;
+            logger.error('Knowledge-enhanced web search failed:', error);
+            return `Enhanced web search error: ${error.message}`;
           }
+        }
+      }),
+
+      new DynamicTool({
+        name: 'web_search',
+        description: 'Direct web search using Firecrawl API (fallback method)',
+        func: async (query) => {
+          return await this.performWebSearch(query, 5);
         }
       }),
       
@@ -236,6 +358,48 @@ Format as a clear, actionable plan.
         }
       })
     ];
+  }
+
+  async performWebSearch(query, limit = 5) {
+    try {
+      if (!process.env.FIRECRAWL_API_KEY) {
+        return 'Web search unavailable: Firecrawl API key not configured';
+      }
+      
+      // Use Firecrawl search endpoint
+      const response = await axios.post('https://api.firecrawl.dev/v0/search', {
+        query: query,
+        pageOptions: {
+          onlyMainContent: true,
+          includeHtml: false,
+          waitFor: 0
+        },
+        searchOptions: {
+          limit: limit
+        }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000
+      });
+      
+      const results = response.data.data || [];
+      if (results.length === 0) {
+        return `No search results found for: ${query}`;
+      }
+      
+      const searchResults = results.map((result, index) => {
+        const content = result.content ? result.content.substring(0, 300) + '...' : 'No content available';
+        return `${index + 1}. ${result.metadata?.title || 'No title'}\n   ${content}\n   Source: ${result.metadata?.sourceURL || result.url}`;
+      }).join('\n\n');
+      
+      return `Web search results for "${query}":\n\n${searchResults}`;
+    } catch (error) {
+      logger.error('Firecrawl search failed:', error);
+      return `Web search error: ${error.message}`;
+    }
   }
 
   async initialize() {
