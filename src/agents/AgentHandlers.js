@@ -1,5 +1,7 @@
 // Agent Handlers - Agent Lifecycle Management and Coordination
-const { ReasoningFramework } = require('./ReasoningFramework');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
+const { ChatOpenAI } = require('@langchain/openai');
+const { StringOutputParser } = require('@langchain/core/output_parsers');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { progressBroadcaster } = require('../services/progressBroadcaster');
@@ -28,6 +30,8 @@ class AgentHandlers {
         modelName: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENAI_API_KEY,
+        timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+        maxRetries: 2,
         tags: ['agent-handlers', 'athenai', 'openai']
       });
     }

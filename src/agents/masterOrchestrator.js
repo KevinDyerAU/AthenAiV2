@@ -27,6 +27,8 @@ class MasterOrchestrator {
         modelName: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENAI_API_KEY,
+        timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+        maxRetries: 2,
         tags: ['master-orchestrator', 'athenai', 'openai']
       });
     }
@@ -205,8 +207,14 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         secondary = ['analysis'];
         executionOrder = ['research', 'analysis'];
       } else if (selectedAgent === 'analysis') {
-        secondary = ['research'];
-        executionOrder = ['analysis', 'research'];
+        // For GitHub URLs and repository analysis, research should come first
+        if (taskString.includes('github.com') || taskString.includes('repository') || taskString.includes('repo')) {
+          secondary = ['research'];
+          executionOrder = ['research', 'analysis'];
+        } else {
+          secondary = ['research'];
+          executionOrder = ['analysis', 'research'];
+        }
       } else if (selectedAgent === 'creative') {
         secondary = ['analysis'];
         executionOrder = ['creative', 'analysis'];

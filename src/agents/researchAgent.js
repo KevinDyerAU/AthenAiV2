@@ -33,6 +33,8 @@ class ResearchAgent {
         modelName: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENAI_API_KEY,
+        timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+        maxRetries: 2,
         tags: ['research-agent', 'athenai', 'openai']
       });
     }

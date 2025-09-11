@@ -37,6 +37,8 @@ class QualityAssuranceAgent {
         modelName: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENAI_API_KEY,
+        timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+        maxRetries: 2,
         tags: ['qa-agent', 'athenai', 'openai']
       });
     }
@@ -130,7 +132,8 @@ QA Types:
 - performance: Evaluate efficiency and optimization
 
 Current assessment: {qaType} review of provided content
-`);
+
+{agent_scratchpad}`);
 
         // Create agent
         const agent = await createOpenAIFunctionsAgent({
@@ -149,11 +152,13 @@ Current assessment: {qaType} review of provided content
 
         // PHASE 2: Execute the QA task with strategy
         result = await agentExecutor.invoke({
-          qaRequest: typeof content === 'object' ? JSON.stringify(content) : content,
+          content: typeof content === 'object' ? JSON.stringify(content) : content,
           qaType,
-          testLevel: strategyPlan.selected_strategy.name,
-          criteria: JSON.stringify(standards),
-          strategy: strategyPlan.selected_strategy.name,
+          standards: JSON.stringify(standards),
+          context: JSON.stringify({
+            testLevel: strategyPlan.selected_strategy.name,
+            strategy: strategyPlan.selected_strategy.name
+          }),
           sessionId,
           tools: tools.map(t => t.name).join(', ')
         });

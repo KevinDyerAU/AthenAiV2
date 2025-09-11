@@ -26,13 +26,19 @@ class AnalysisAgent {
   async executeAnalysis(inputData) {
     try {
       const taskData = inputData.task || inputData;
-      const dataToAnalyze = taskData.data || taskData.research_findings || taskData.content;
+      let dataToAnalyze = taskData.data || taskData.research_findings || taskData.content || taskData.message;
       const analysisType = taskData.analysis_type || 'comprehensive';
       const sessionId = taskData.session_id || 'default_session';
       const orchestrationId = taskData.orchestration_id || 'default_orchestration';
       
+      // Handle GitHub URLs and other web content
       if (!dataToAnalyze) {
         throw new Error('Data is required for analysis');
+      }
+      
+      // If the data is a GitHub URL, fetch the repository information first
+      if (typeof dataToAnalyze === 'string' && dataToAnalyze.includes('github.com')) {
+        dataToAnalyze = await this.fetchGitHubRepositoryData(dataToAnalyze);
       }
 
       // PHASE 1: Strategic Planning and Reasoning
@@ -64,6 +70,8 @@ class AnalysisAgent {
           modelName: process.env.OPENAI_MODEL || 'gpt-4',
           temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
           openAIApiKey: this.apiKey || process.env.OPENAI_API_KEY,
+          timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+          maxRetries: 2,
           tags: ['analysis-agent', 'athenai', 'openai']
         });
       }
@@ -372,6 +380,73 @@ Risk Factors: ${predictions.risks.join(', ')}`;
     }));
 
     return tools;
+  }
+
+  async fetchGitHubRepositoryData(githubUrl) {
+    try {
+      // Extract repository information from GitHub URL
+      const urlMatch = githubUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+      if (!urlMatch) {
+        return `Unable to parse GitHub URL: ${githubUrl}`;
+      }
+
+      const [, owner, repo] = urlMatch;
+      const cleanRepo = repo.replace(/\.git$/, '');
+
+      // Use web search to gather repository information
+      if (process.env.FIRECRAWL_API_KEY) {
+        const axios = require('axios');
+        
+        try {
+          const response = await axios.post('https://api.firecrawl.dev/v0/search', {
+            query: `${owner} ${cleanRepo} github repository code analysis`,
+            pageOptions: {
+              onlyMainContent: true,
+              includeHtml: false,
+              waitFor: 0
+            },
+            searchOptions: {
+              limit: 3
+            }
+          }, {
+            headers: {
+              'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 15000
+          });
+
+          const results = response.data.data || [];
+          if (results.length > 0) {
+            const repositoryInfo = results.map((result, index) => {
+              const content = result.content ? result.content.substring(0, 500) + '...' : 'No content available';
+              return `${index + 1}. ${result.metadata?.title || 'Repository Info'}\n   ${content}\n   Source: ${result.metadata?.sourceURL || result.url}`;
+            }).join('\n\n');
+
+            return `GitHub Repository Analysis Data for ${owner}/${cleanRepo}:\n\n${repositoryInfo}`;
+          }
+        } catch (searchError) {
+          console.warn('Firecrawl search failed, using fallback approach:', searchError.message);
+        }
+      }
+
+      // Fallback: return structured information about the repository
+      return `GitHub Repository: ${owner}/${cleanRepo}
+URL: ${githubUrl}
+Repository Structure Analysis Required:
+- Owner: ${owner}
+- Repository Name: ${cleanRepo}
+- Analysis Type: Code repository review
+- Recommended Actions: 
+  1. Review repository structure and main files
+  2. Analyze code quality and architecture
+  3. Identify key technologies and frameworks used
+  4. Assess project complexity and scope
+  5. Provide high-level summary of functionality`;
+
+    } catch (error) {
+      return `Error fetching GitHub repository data: ${error.message}. URL: ${githubUrl}`;
+    }
   }
 
   parseNumericalData(data) {
