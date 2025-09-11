@@ -40,7 +40,8 @@
     "docs:worker": "python src/workers/unstructured_worker.py",
     "docs:test": "node -e \"console.log('Use docs:test:win or docs:test:unix for your platform')\"",
     "docs:test:win": "powershell -ExecutionPolicy Bypass -File ./test-document-processing.ps1",
-    "docs:test:unix": "./test-document-processing.sh"
+    "docs:test:unix": "./test-document-processing.sh",
+    "docs:worker:direct": "cd src/workers && python unstructured_worker.py"
   },
   "dependencies": {
     "@langchain/community": "^0.0.57",

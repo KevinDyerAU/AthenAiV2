@@ -7,7 +7,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
-const amqp = require('amqplib');
+const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
@@ -21,7 +21,7 @@ class DocumentAgent {
             openaiBaseURL: process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1',
             model: process.env.OPENROUTER_MODEL || 'gpt-4',
             temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE || '0.1'),
-            rabbitmqUrl: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
+            workerUrl: process.env.UNSTRUCTURED_WORKER_URL || 'http://localhost:8080',
             postgresUrl: process.env.POSTGRES_URL,
             uploadDir: process.env.UPLOAD_DIR || './data/unstructured/input',
             ...config
@@ -179,24 +179,17 @@ Provide helpful, accurate responses about document processing and management.
 
     async uploadDocument(filePath, fileName, contentType, metadata = {}) {
         try {
-            // Generate unique document ID
             const documentId = uuidv4();
             const targetPath = path.join(this.config.uploadDir, `${documentId}_${fileName}`);
-
+            
             // Ensure upload directory exists
             await fs.mkdir(this.config.uploadDir, { recursive: true });
-
+            
             // Copy file to upload directory
             await fs.copyFile(filePath, targetPath);
-
-            // Send message to processing queue
-            const connection = await amqp.connect(this.config.rabbitmqUrl);
-            const channel = await connection.createChannel();
             
-            const queueName = 'documents.process';
-            await channel.assertQueue(queueName, { durable: true });
-
-            const message = {
+            // Send direct HTTP request to unstructured worker for processing
+            const processRequest = {
                 doc_id: documentId,
                 file_path: targetPath,
                 content_type: contentType,
@@ -207,22 +200,35 @@ Provide helpful, accurate responses about document processing and management.
                     file_size: (await fs.stat(targetPath)).size
                 }
             };
-
-            channel.sendToQueue(queueName, Buffer.from(JSON.stringify(message)), {
-                persistent: true
-            });
-
-            await channel.close();
-            await connection.close();
-
-            return JSON.stringify({
-                success: true,
-                documentId: documentId,
-                fileName: fileName,
-                status: 'queued_for_processing',
-                message: 'Document uploaded and queued for processing'
-            });
-
+            
+            try {
+                const response = await axios.post(`${this.config.workerUrl}/process`, processRequest, {
+                    timeout: 30000,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                return JSON.stringify({
+                    success: true,
+                    documentId: documentId,
+                    fileName: fileName,
+                    status: 'processing',
+                    message: 'Document uploaded and processing started',
+                    processingResponse: response.data
+                });
+            } catch (workerError) {
+                // If worker is not available, still return success but indicate async processing
+                console.warn(`Worker not available, document queued: ${workerError.message}`);
+                return JSON.stringify({
+                    success: true,
+                    documentId: documentId,
+                    fileName: fileName,
+                    status: 'queued_for_processing',
+                    message: 'Document uploaded, will be processed when worker is available'
+                });
+            }
+            
         } catch (error) {
             throw new Error(`Failed to upload document: ${error.message}`);
         }

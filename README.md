@@ -357,12 +357,12 @@ Query → Knowledge Retrieval → Cached Results Check → Enhanced Web Search �
 - **Multi-Format Support**: PDF, DOCX, TXT, HTML, XLSX, PPTX via unstructured.io
 - **Semantic Search**: pgvector-powered similarity search across document content
 - **Email Attachments**: Automatic processing of email attachments with metadata extraction
-- **Asynchronous Processing**: RabbitMQ-based queue system for scalable document handling
+- **Direct Processing**: HTTP-based communication with unstructured worker for real-time processing
 - **Vector Storage**: Cost-effective pgvector integration with Supabase PostgreSQL
 - **Content Chunking**: Intelligent document segmentation with embedding generation
 
 **LangChain Tools**:
-- **Document Upload**: File processing and queue management
+- **Document Upload**: Direct file processing with HTTP worker communication
 - **Semantic Search**: Vector similarity search across document corpus
 - **Document Status**: Real-time processing status and metadata retrieval
 - **Content Summarization**: AI-powered document summarization
@@ -643,10 +643,8 @@ UNSTRUCTURED_API_KEY=your-unstructured-key
 UNSTRUCTURED_API_URL=https://api.unstructured.io
 FIRECRAWL_API_KEY=your-firecrawl-key
 
-# Message Queue (RabbitMQ)
-RABBITMQ_DEFAULT_USER=athenai_queue
-RABBITMQ_DEFAULT_PASS=your_rabbitmq_password_here
-RABBITMQ_URL=amqp://athenai_queue:your_rabbitmq_password_here@rabbitmq:5672/
+# Document Processing Worker
+UNSTRUCTURED_WORKER_URL=http://localhost:8080
 ```
 
 ### Database Schema Setup
@@ -754,6 +752,7 @@ npm run lint:fix              # Fix linting issues
 #### Simplified Setup with Document Processing
 ```bash
 # Quick start with document processing (recommended for new deployments)
+# Only requires Supabase - no local PostgreSQL or RabbitMQ needed
 docker-compose -f docker-compose.simplified.yml up --build -d
 
 # View logs
@@ -762,6 +761,10 @@ docker-compose -f docker-compose.simplified.yml logs -f
 # Stop services
 docker-compose -f docker-compose.simplified.yml down
 ```
+
+**Services Included**:
+- **AthenAI App**: Main application with DocumentAgent
+- **Unstructured Worker**: Document processing service with Supabase integration
 
 #### Full Production Deployment
 ```bash
@@ -784,13 +787,15 @@ NODE_ENV=production npm start
 
 ### Environment Setup Checklist
 
-- [ ] **Database Services**: Supabase, Neo4j Aura configured
+- [ ] **Database Services**: Supabase configured (no local PostgreSQL needed)
 - [ ] **AI Services**: OpenRouter API key configured
-- [ ] **Knowledge Substrate**: Schema files deployed to databases
+- [ ] **Document Processing**: Unstructured.io API key configured
+- [ ] **Knowledge Substrate**: Schema files deployed to Supabase
 - [ ] **Environment Variables**: All required variables set in `.env`
 - [ ] **Dependencies**: `npm install` completed successfully
 - [ ] **Health Check**: `/health` endpoint returns 200 OK
 - [ ] **Chat Interface**: `/chat.html` loads and connects via WebSocket
+- [ ] **Document Worker**: Unstructured worker accessible at port 8080
 
 ## 🧪 Testing
 

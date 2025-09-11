@@ -4,18 +4,17 @@ Processes documents using unstructured.io and stores embeddings in PostgreSQL wi
 
 import json
 import os
-import threading
 import time
-import hashlib
-import uuid
-from typing import List, Dict, Any
+import logging
 from datetime import datetime
-
-import psutil
-import pika
-import psycopg2
-import numpy as np
-from flask import Flask, jsonify
+from typing import Dict, Any, List
+from supabase import create_client, Client
+import openai
+from unstructured.partition.auto import partition
+from prometheus_client import Counter, Histogram, Gauge, start_http_server
+import threading
+from flask import Flask, jsonify, request
+import requests
 from flask_cors import CORS
 from prometheus_client import (
     CollectorRegistry,
@@ -31,16 +30,16 @@ import openai
 from openai import OpenAI
 
 # Configuration
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+UNSTRUCTURED_API_KEY = os.getenv('UNSTRUCTURED_API_KEY')
+UNSTRUCTURED_API_URL = os.getenv('UNSTRUCTURED_API_URL', 'https://api.unstructured.io')
+EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')
+WORKER_CONCURRENCY = int(os.getenv('WORKER_CONCURRENCY', '2'))
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 APP_PORT = int(os.getenv("HEALTH_CHECK_PORT", "8080"))
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-QUEUE_NAME = os.getenv("UNSTRUCTURED_QUEUE", "documents.process")
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
-POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://athenai_user:password@localhost:5432/athenai")
-
-# OpenAI/OpenRouter configuration
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
 # Initialize OpenAI client
 if OPENROUTER_API_KEY:
@@ -63,100 +62,81 @@ health_gauge = Gauge("unstructured_worker_health", "Health status (1=ok,0=down)"
 cpu_gauge = Gauge("unstructured_worker_cpu_percent", "CPU usage percent", registry=registry)
 mem_gauge = Gauge("unstructured_worker_mem_percent", "Memory usage percent", registry=registry)
 requests_counter = Counter("unstructured_worker_requests_total", "Total HTTP requests", registry=registry)
-processed_docs = Counter("unstructured_worker_documents_processed_total", "Documents processed", registry=registry)
-processed_chunks = Counter("unstructured_worker_chunks_processed_total", "Chunks processed", registry=registry)
-processing_errors = Counter("unstructured_worker_processing_errors_total", "Processing errors", registry=registry)
-docs_total = Counter("documents_processed_total", "Total documents processed", ["status", "file_type"], registry=registry)
-processing_hist = Histogram("document_processing_seconds", "Time spent processing a document", registry=registry)
-queue_size_gauge = Gauge("queue_size", "Current queue size (messages)", registry=registry)
+processed_docs = Counter('documents_processed_total', 'Total documents processed')
+processed_chunks = Counter('chunks_processed_total', 'Total chunks processed')
+processing_errors = Counter('processing_errors_total', 'Total processing errors')
+processing_hist = Histogram('document_processing_seconds', 'Time spent processing documents')
+docs_total = Counter('documents_total', 'Total documents by status and type', ['status', 'file_type'])
 embeddings_created = Counter("embeddings_created_total", "Total embeddings created", registry=registry)
+queue_size_gauge = Gauge("queue_size", "Current queue size (messages)", registry=registry)
+
+# Initialize Supabase client
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
-def get_postgres_connection():
-    """Get PostgreSQL connection"""
-    return psycopg2.connect(POSTGRES_URL)
 
 
 def create_embedding(text: str) -> List[float]:
     """Create embedding using OpenAI/OpenRouter"""
     try:
         response = client.embeddings.create(
-            model=EMBEDDING_MODEL,
-            input=text
+            input=text,
+            model=EMBEDDING_MODEL
         )
         embeddings_created.inc()
         return response.data[0].embedding
     except Exception as e:
         print(f"Error creating embedding: {e}")
-        return []
+        raise
 
 
-def store_document_with_embeddings(doc_id: str, content: str, chunks: List[str], metadata: Dict[str, Any]):
-    """Store document and chunks with embeddings in PostgreSQL"""
+def store_document_with_embeddings(doc_id: str, full_text: str, chunks: List[str], metadata: Dict[str, Any]):
+    """Store document and embeddings in Supabase with pgvector"""
     try:
-        with get_postgres_connection() as conn:
-            with conn.cursor() as cur:
-                # Create document embedding
-                doc_embedding = create_embedding(content[:8000])  # Limit content for embedding
-                
-                # Store main document
-                cur.execute("""
-                    INSERT INTO knowledge_entities (
-                        id, entity_type, content, metadata, embedding, 
-                        created_at, updated_at, version
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (id) DO UPDATE SET
-                        content = EXCLUDED.content,
-                        metadata = EXCLUDED.metadata,
-                        embedding = EXCLUDED.embedding,
-                        updated_at = EXCLUDED.updated_at,
-                        version = knowledge_entities.version + 1
-                """, (
-                    doc_id,
-                    'document',
-                    content,
-                    json.dumps(metadata),
-                    doc_embedding,
-                    datetime.utcnow(),
-                    datetime.utcnow(),
-                    1
-                ))
-                
-                # Store chunks with embeddings
-                for idx, chunk_text in enumerate(chunks):
-                    if not chunk_text.strip():
-                        continue
-                        
-                    chunk_id = f"{doc_id}:chunk:{idx}"
-                    chunk_embedding = create_embedding(chunk_text)
-                    
-                    cur.execute("""
-                        INSERT INTO knowledge_entities (
-                            id, entity_type, content, metadata, embedding,
-                            created_at, updated_at, version, parent_id
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (id) DO UPDATE SET
-                            content = EXCLUDED.content,
-                            embedding = EXCLUDED.embedding,
-                            updated_at = EXCLUDED.updated_at,
-                            version = knowledge_entities.version + 1
-                    """, (
-                        chunk_id,
-                        'chunk',
-                        chunk_text,
-                        json.dumps({**metadata, 'chunk_index': idx}),
-                        chunk_embedding,
-                        datetime.utcnow(),
-                        datetime.utcnow(),
-                        1,
-                        doc_id
-                    ))
-                
-                conn.commit()
-                print(f"Stored document {doc_id} with {len(chunks)} chunks and embeddings")
-                
+        # Store full document
+        full_embedding = create_embedding(full_text)
+        
+        document_data = {
+            'id': doc_id,
+            'content': full_text,
+            'metadata': metadata,
+            'embedding': full_embedding,
+            'created_at': datetime.utcnow().isoformat()
+        }
+        
+        # Upsert document
+        supabase.table('documents').upsert(document_data).execute()
+        
+        # Store chunks with embeddings
+        chunk_data = []
+        for i, chunk in enumerate(chunks):
+            chunk_id = f"{doc_id}_chunk_{i}"
+            chunk_embedding = create_embedding(chunk)
+            
+            chunk_metadata = {
+                **metadata,
+                'chunk_index': i,
+                'parent_document_id': doc_id,
+                'chunk_length': len(chunk)
+            }
+            
+            chunk_data.append({
+                'id': chunk_id,
+                'document_id': doc_id,
+                'content': chunk,
+                'metadata': chunk_metadata,
+                'embedding': chunk_embedding,
+                'created_at': datetime.utcnow().isoformat()
+            })
+        
+        # Batch insert chunks
+        if chunk_data:
+            supabase.table('document_chunks').upsert(chunk_data).execute()
+        
+        print(f"Stored document {doc_id} with {len(chunks)} chunks in Supabase")
+        
     except Exception as e:
-        print(f"Error storing document with embeddings: {e}")
+        print(f"Error storing document in Supabase: {e}")
         raise
 
 
