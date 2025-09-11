@@ -1,14 +1,18 @@
-// Creative Agent - Extracted Logic
+// Creative Agent - Content Creation and Synthesis
 const { ChatOpenAI } = require('@langchain/openai');
 const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
 
 class CreativeAgent {
   constructor(apiKey, langSmithConfig = {}) {
     this.apiKey = apiKey;
     this.langSmithConfig = langSmithConfig;
     this.setupLangSmith();
+    
+    // Initialize reasoning framework
+    this.reasoning = new ReasoningFramework('CreativeAgent');
   }
 
   setupLangSmith() {
@@ -30,6 +34,13 @@ class CreativeAgent {
       if (!content) {
         throw new Error('Content is required for creative synthesis');
       }
+
+      // PHASE 1: Strategic Planning and Reasoning
+      const strategyPlan = await this.reasoning.planStrategy(content, {
+        time_constraint: 'normal',
+        quality_priority: 'high',
+        creativity_needed: true
+      });
 
       // Primary OpenAI configuration with OpenRouter fallback
       const useOpenRouter = process.env.USE_OPENROUTER === 'true';
@@ -74,16 +85,21 @@ class CreativeAgent {
         returnIntermediateSteps: true
       });
 
-      const creativeResult = await agentExecutor.invoke({
-        content: JSON.stringify(content),
-        creativeType: creativeType,
-        sessionId: sessionId,
-        orchestrationId: orchestrationId,
+      // PHASE 2: Execute the task with strategy
+      const result = await agentExecutor.invoke({
+        content: typeof content === 'object' ? JSON.stringify(content) : content,
+        creativeType,
+        strategy: strategyPlan.selected_strategy.name,
+        sessionId,
+        orchestrationId,
         tools: tools.map(t => t.name).join(', ')
       });
 
-      const structuredOutput = await this.processCreativeOutput(creativeResult, content, creativeType);
-      const qualityMetrics = this.calculateQualityMetrics(structuredOutput, creativeResult);
+      // PHASE 3: Self-Evaluation
+      const evaluation = await this.reasoning.evaluateOutput(result.output, content, strategyPlan);
+
+      const structuredOutput = await this.processCreativeOutput(result, content, creativeType);
+      const qualityMetrics = this.calculateQualityMetrics(structuredOutput, result);
 
       const creativeReport = {
         orchestration_id: orchestrationId,
@@ -92,26 +108,29 @@ class CreativeAgent {
         creative_type: creativeType,
         input_summary: this.summarizeInput(content),
         creative_output: structuredOutput,
-        raw_output: creativeResult.output,
-        intermediate_steps: creativeResult.intermediateSteps,
+        raw_output: result.output,
+        intermediate_steps: result.intermediateSteps,
         quality_metrics: qualityMetrics,
-        engagement_score: this.calculateEngagementScore(structuredOutput),
+        confidence_score: evaluation.confidence_score,
         timestamp: new Date().toISOString(),
         status: 'completed'
       };
 
       return {
-        creative_report: creativeReport,
+        creative_output: structuredOutput,
         next_actions: this.determineNextActions(structuredOutput, creativeType),
-        neo4j_context: this.createNeo4jContext(sessionId, orchestrationId, creativeType, creativeReport.engagement_score),
+        neo4j_context: this.createNeo4jContext(sessionId, orchestrationId, creativeType, evaluation.confidence_score),
         memory: {
           upsert: true,
-          keys: ['creative_type', 'engagement_score', 'quality_metrics', 'timestamp']
+          keys: ['creative_type', 'key_takeaways', 'style_assessment', 'confidence_score', 'timestamp']
         },
         routing: {
-          queue: 'qa_tasks',
+          queue: 'quality_assurance_tasks',
           priority: 'normal'
-        }
+        },
+        strategy_plan: strategyPlan,
+        self_evaluation: evaluation,
+        reasoning_logs: this.reasoning.getReasoningLogs()
       };
 
     } catch (error) {
@@ -121,37 +140,78 @@ class CreativeAgent {
 
   createCreativePrompt() {
     return PromptTemplate.fromTemplate(`
-You are a Creative Agent specialized in content synthesis, storytelling, and engaging communication.
+You are a Creative Agent with advanced reasoning capabilities specialized in content synthesis, storytelling, and engaging communication. Before creating content, think through your approach step by step.
+
+REASONING PHASE:
+1. First, analyze the content structure and identify key themes, insights, and narrative elements
+2. Consider the target audience and determine the most effective tone and style
+3. Plan the creative approach that will best engage and inform the audience
+4. Think about how to balance creativity with accuracy and factual integrity
+5. Consider what supporting evidence and citations will strengthen the content
+6. Plan the optimal structure for maximum impact and clarity
 
 Content to Process: {content}
 Creative Type: {creativeType}
 Session ID: {sessionId}
 Orchestration ID: {orchestrationId}
 
-Your task:
-1. Analyze the provided content for key themes and insights
-2. Synthesize information into engaging, coherent narrative
-3. Adapt tone and style for target audience
-4. Ensure accuracy while maintaining creativity
-5. Include proper citations and references
-6. Generate compelling and actionable content
+STEP-BY-STEP CREATIVE PROCESS:
+1. Content Analysis: What are the core themes, insights, and key messages?
+2. Audience Consideration: Who is the target audience and what tone will resonate?
+3. Creative Strategy: What creative approach will be most effective?
+4. Structure Planning: How should the content be organized for maximum impact?
+5. Evidence Integration: What supporting evidence and citations are needed?
+6. Quality Assurance: How can accuracy be maintained while enhancing creativity?
 
 Available tools: {tools}
 
-Provide structured creative output with:
-- Executive Summary
-- Main Content/Narrative
-- Key Takeaways
-- Call to Action
-- Supporting Evidence
-- Style and Tone Assessment
+Think through your reasoning process, then provide structured creative output with:
+- Executive Summary (with confidence assessment)
+- Main Content/Narrative (with reasoning for creative choices)
+- Key Takeaways (prioritized by importance)
+- Call to Action (with justification for approach)
+- Supporting Evidence (with source credibility assessment)
+- Style and Tone Assessment (with audience fit analysis)
+- Confidence Score (0.0-1.0) and reasoning for your creative decisions
 
-Content: {content}
-`);
+Content: {content}`);
   }
 
   initializeCreativeTools() {
     const tools = [];
+
+    tools.push(new DynamicTool({
+      name: 'think',
+      description: 'Think through creative challenges step by step, explore different creative approaches, and reason about the most engaging solution',
+      func: async (input) => {
+        try {
+          const thinkPrompt = PromptTemplate.fromTemplate(`
+You are working through a creative challenge. Break down your creative reasoning step by step.
+
+Creative Challenge: {problem}
+
+Think through this systematically:
+1. What is the core creative goal or message I want to convey?
+2. Who is my target audience and what will resonate with them?
+3. What creative approaches or styles could I use?
+4. What are the strengths and potential impact of each approach?
+5. How can I balance creativity with clarity and effectiveness?
+6. What is my recommended creative direction and why?
+7. What creative risks should I consider?
+8. How will I measure the success of this creative approach?
+
+Provide your step-by-step creative reasoning:
+`);
+
+          const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+          const thinking = await chain.invoke({ problem: input });
+          
+          return `CREATIVE THINKING PROCESS:\n${thinking}`;
+        } catch (error) {
+          return `Thinking error: ${error.message}`;
+        }
+      }
+    }));
 
     tools.push(new DynamicTool({
       name: 'content_structurer',

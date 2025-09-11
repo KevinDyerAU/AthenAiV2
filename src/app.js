@@ -14,6 +14,7 @@ const { rateLimiter } = require('./middleware/rateLimiter');
 const routes = require('./routes');
 const { databaseService } = require('./services/database');
 const { chatroomService } = require('./services/chatroom');
+const { progressBroadcaster } = require('./services/progressBroadcaster');
 const { MasterOrchestrator } = require('./agents/MasterOrchestrator');
 const { ResearchAgent } = require('./agents/ResearchAgent');
 const { AnalysisAgent } = require('./agents/analysisAgent');
@@ -53,6 +54,10 @@ async function initializeApp() {
   try {
     await databaseService.initialize();
     logger.info('Database services initialized successfully');
+    
+    // Initialize progress broadcaster with Socket.IO
+    progressBroadcaster.initialize(io);
+    logger.info('Progress broadcaster initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize database services:', error);
     if (process.env.NODE_ENV !== 'test') {
@@ -204,7 +209,8 @@ io.on('connection', (socket) => {
           agentResult = await researchAgent.executeResearch(
             message,
             roomId,
-            orchestrationResult.session_id
+            orchestrationResult.session_id,
+            { sessionId: roomId }
           );
         } else if (primaryAgent === 'analysis') {
           logger.info('Calling analysis agent');

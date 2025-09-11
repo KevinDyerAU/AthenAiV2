@@ -69,6 +69,57 @@
             font-style: italic;
             max-width: 60%;
         }
+
+        .message.progress {
+            background: #2d4a5a;
+            margin: 0.5rem auto;
+            max-width: 70%;
+            border-left: 4px solid #0066cc;
+        }
+
+        .progress-content {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .progress-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #555;
+            border-radius: 50%;
+            border-top-color: #0066cc;
+            animation: spin 1s linear infinite;
+        }
+
+        .progress-phase {
+            font-weight: bold;
+            color: #0066cc;
+        }
+
+        .progress-description {
+            opacity: 0.9;
+        }
+
+        .thinking-content {
+            background: #1a2a3a;
+            border-radius: 4px;
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+        }
+
+        .progress-complete {
+            background: #2d5a2d;
+            border-left-color: #28a745;
+        }
+
+        .progress-error {
+            background: #5a2d2d;
+            border-left-color: #dc3545;
+        }
         
         .message-header {
             font-size: 0.8rem;
@@ -323,6 +374,10 @@
                     this.addToHistory(data.message || data.content, 'agent');
                     this.setLoadingState(false);
                 });
+
+                this.socket.on('agent_progress', (data) => {
+                    this.displayProgressMessage(data);
+                });
                 
                 this.socket.on('error', (data) => {
                     this.addSystemMessage(`Error: ${data.message}`);
@@ -405,6 +460,117 @@
                 
                 this.messagesContainer.appendChild(messageDiv);
                 this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+
+            displayProgressMessage(data) {
+                if (!this.messagesContainer) {
+                    console.error('Messages container not found');
+                    return;
+                }
+
+                // Find existing progress message or create new one
+                let progressDiv = document.getElementById(`progress-${data.progressId}`);
+                
+                if (data.type === 'progress_start') {
+                    progressDiv = document.createElement('div');
+                    progressDiv.id = `progress-${data.progressId}`;
+                    progressDiv.className = 'message progress';
+                    
+                    const headerDiv = document.createElement('div');
+                    headerDiv.className = 'message-header';
+                    headerDiv.textContent = `AthenAI (${data.agentType}) • Processing...`;
+                    
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'progress-content';
+                    contentDiv.innerHTML = `
+                        <div class="progress-spinner"></div>
+                        <div class="progress-phase">Starting</div>
+                        <div class="progress-description">${data.taskDescription}</div>
+                    `;
+                    
+                    progressDiv.appendChild(headerDiv);
+                    progressDiv.appendChild(contentDiv);
+                    this.messagesContainer.appendChild(progressDiv);
+                    
+                } else if (data.type === 'progress_update') {
+                    if (progressDiv) {
+                        const contentDiv = progressDiv.querySelector('.progress-content');
+                        if (contentDiv) {
+                            contentDiv.innerHTML = `
+                                <div class="progress-spinner"></div>
+                                <div class="progress-phase">${this.formatPhase(data.phase)}</div>
+                                <div class="progress-description">${data.description}</div>
+                            `;
+                        }
+                    }
+                    
+                } else if (data.type === 'thinking_update') {
+                    if (progressDiv) {
+                        let thinkingDiv = progressDiv.querySelector('.thinking-content');
+                        if (!thinkingDiv) {
+                            thinkingDiv = document.createElement('div');
+                            thinkingDiv.className = 'thinking-content';
+                            progressDiv.appendChild(thinkingDiv);
+                        }
+                        thinkingDiv.textContent = `💭 ${data.thinkingStep}: ${data.content}`;
+                    }
+                    
+                } else if (data.type === 'progress_complete') {
+                    if (progressDiv) {
+                        progressDiv.className = 'message progress progress-complete';
+                        const contentDiv = progressDiv.querySelector('.progress-content');
+                        if (contentDiv) {
+                            contentDiv.innerHTML = `
+                                <div style="color: #28a745;">✓</div>
+                                <div class="progress-phase">Completed</div>
+                                <div class="progress-description">Task finished in ${data.duration}ms</div>
+                            `;
+                        }
+                        // Remove progress message after 3 seconds
+                        setTimeout(() => {
+                            if (progressDiv && progressDiv.parentNode) {
+                                progressDiv.parentNode.removeChild(progressDiv);
+                            }
+                        }, 3000);
+                    }
+                    
+                } else if (data.type === 'progress_error') {
+                    if (progressDiv) {
+                        progressDiv.className = 'message progress progress-error';
+                        const contentDiv = progressDiv.querySelector('.progress-content');
+                        if (contentDiv) {
+                            contentDiv.innerHTML = `
+                                <div style="color: #dc3545;">✗</div>
+                                <div class="progress-phase">Error</div>
+                                <div class="progress-description">${data.error}</div>
+                            `;
+                        }
+                        // Remove error message after 5 seconds
+                        setTimeout(() => {
+                            if (progressDiv && progressDiv.parentNode) {
+                                progressDiv.parentNode.removeChild(progressDiv);
+                            }
+                        }, 5000);
+                    }
+                }
+                
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+
+            formatPhase(phase) {
+                const phaseMap = {
+                    'strategic_planning': '🎯 Planning',
+                    'execution': '⚡ Executing',
+                    'evaluation': '📊 Evaluating',
+                    'thinking': '💭 Thinking',
+                    'research': '🔍 Researching',
+                    'analysis': '📈 Analyzing',
+                    'creative': '🎨 Creating',
+                    'development': '💻 Developing',
+                    'communication': '📢 Communicating',
+                    'qa': '🔍 Quality Check'
+                };
+                return phaseMap[phase] || phase.replace('_', ' ').toUpperCase();
             }
             
             addSystemMessage(text) {

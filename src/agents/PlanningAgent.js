@@ -5,6 +5,7 @@ const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
 
 class PlanningAgent {
   constructor() {
@@ -33,6 +34,9 @@ class PlanningAgent {
         tags: ['planning-agent', 'athenai', 'openai']
       });
     }
+    
+    // Initialize reasoning framework
+    this.reasoning = new ReasoningFramework('PlanningAgent');
   }
 
   async executePlanning(inputData) {
@@ -42,6 +46,19 @@ class PlanningAgent {
 
     try {
       logger.info('Starting planning task', { sessionId, orchestrationId });
+      
+      // PHASE 1: Strategic Planning and Reasoning
+      const strategyPlan = await this.reasoning.planStrategy(inputData, {
+        time_constraint: inputData.urgency || 'normal',
+        quality_priority: 'high',
+        creativity_needed: inputData.complexity === 'high'
+      });
+      
+      logger.info('Planning strategy selected', {
+        strategy: strategyPlan.selected_strategy.name,
+        confidence: strategyPlan.confidence,
+        reasoning: strategyPlan.reasoning
+      });
 
       const taskData = inputData.task || inputData;
       const objective = taskData.objective || taskData.message || taskData.content;
@@ -69,37 +86,54 @@ class PlanningAgent {
         // Initialize planning tools
         const tools = this.initializePlanningTools();
 
-        // Create planning prompt
+        // Create enhanced planning prompt with reasoning
         const prompt = PromptTemplate.fromTemplate(`
-You are a Planning Agent specialized in breaking down complex objectives into actionable plans.
+You are a Planning Agent with advanced strategic reasoning capabilities. Before creating your plan, think through your approach systematically.
 
-Objective: {objective}
-Planning Type: {planningType}
-Constraints: {constraints}
+REASONING PHASE:
+1. Analyze the planning request to understand true objectives and constraints
+2. Assess complexity factors and determine optimal planning methodology
+3. Consider resource availability and timeline constraints
+4. Identify potential risks and success factors
+5. Select the most appropriate planning framework based on the strategy: {strategy}
+
+Planning Request: {planningRequest}
+Complexity Level: {complexity}
+Timeframe: {timeframe}
 Resources: {resources}
-Timeline: {timeline}
+Strategy Selected: {strategy}
 Session ID: {sessionId}
 
 Available tools: {tools}
 
-Your responsibilities:
-1. Analyze objectives and break them into manageable tasks
-2. Create detailed project plans with timelines and dependencies
-3. Identify required resources and potential bottlenecks
-4. Develop risk mitigation strategies
-5. Create milestone tracking and progress metrics
-6. Optimize task sequencing and resource allocation
-7. Generate contingency plans for different scenarios
+Your systematic approach:
+1. Break down complex tasks into manageable components with strategic focus
+2. Create detailed project plans with realistic timelines and dependencies
+3. Identify critical paths and potential bottlenecks
+4. Allocate resources efficiently based on priorities
+5. Define SMART milestones and measurable success criteria
+6. Anticipate risks and create comprehensive mitigation strategies
+7. Establish monitoring, control, and adaptation mechanisms
+8. Include confidence assessments for all planning elements
 
-Planning types:
-- project: Full project planning with phases and milestones
-- task: Detailed task breakdown and sequencing
-- resource: Resource allocation and optimization planning
-- timeline: Schedule optimization and critical path analysis
-- risk: Risk assessment and mitigation planning
-- strategic: High-level strategic planning and roadmapping
+Planning methodologies available:
+- waterfall: Sequential phases with clear dependencies (best for well-defined projects)
+- agile: Iterative development with flexible adaptation (best for uncertain requirements)
+- hybrid: Combination of structured and adaptive elements (best for mixed complexity)
+- lean: Minimal viable approach with continuous improvement (best for resource constraints)
 
-Current objective: {objective}
+Provide a comprehensive plan including:
+- Executive Summary with confidence level
+- Work Breakdown Structure with effort estimates
+- Timeline with critical milestones
+- Resource allocation and dependencies
+- Risk assessment with mitigation strategies
+- Success metrics and monitoring approach
+- Adaptation strategies for changing requirements
+
+Show your reasoning process where it adds strategic value.
+
+Current planning task: {complexity} - {planningRequest}
 `);
 
         // Create agent
@@ -117,30 +151,36 @@ Current objective: {objective}
           returnIntermediateSteps: true
         });
 
-        // Execute planning task
+        // PHASE 2: Execute the planning task with strategy
         result = await agentExecutor.invoke({
-          objective,
-          planningType,
-          constraints: JSON.stringify(constraints),
+          planningRequest: typeof inputData === 'object' ? JSON.stringify(inputData) : inputData,
+          complexity: inputData.complexity,
+          timeframe: inputData.timeframe,
           resources: JSON.stringify(resources),
-          timeline,
+          strategy: strategyPlan.selected_strategy.name,
           sessionId,
           tools: tools.map(t => t.name).join(', ')
         });
+        
+        // PHASE 3: Self-Evaluation
+        const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
       }
 
       // Process and structure the results
       const planningResult = {
         session_id: sessionId,
         orchestration_id: orchestrationId,
-        objective,
-        planning_type: planningType,
-        constraints,
+        planning_request: inputData,
+        complexity: inputData.complexity,
+        timeframe: inputData.timeframe,
         resources,
-        timeline,
-        plan: result.output,
+        result: result.output,
         intermediate_steps: result.intermediateSteps,
-        execution_time_ms: Date.now() - startTime,
+        planning_time_ms: Date.now() - startTime,
+        confidence_score: evaluation.confidence_score,
+        strategy_plan: strategyPlan,
+        self_evaluation: evaluation,
+        reasoning_logs: this.reasoning.getReasoningLogs(),
         status: 'completed'
       };
 
@@ -195,6 +235,40 @@ Current objective: {objective}
 
   initializePlanningTools() {
     return [
+      // Think tool for step-by-step planning reasoning
+      new DynamicTool({
+        name: 'think',
+        description: 'Think through complex planning challenges step by step, evaluate different planning approaches, and reason about the optimal project strategy',
+        func: async (input) => {
+          try {
+            const thinkPrompt = PromptTemplate.fromTemplate(`
+You are working through a complex planning challenge. Break down your planning reasoning step by step.
+
+Planning Challenge: {problem}
+
+Think through this systematically:
+1. What is the core planning objective or goal?
+2. What are the key constraints and requirements (time, budget, resources, quality)?
+3. What different planning approaches or methodologies could I use?
+4. What are the trade-offs and risks of each approach?
+5. What dependencies and critical path considerations are important?
+6. What is my recommended planning strategy and why?
+7. What potential planning risks or obstacles should I anticipate?
+8. How will I measure success and track progress?
+
+Provide your step-by-step planning reasoning:
+`);
+
+            const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+            const thinking = await chain.invoke({ problem: input });
+            
+            return `PLANNING THINKING PROCESS:\n${thinking}`;
+          } catch (error) {
+            return `Thinking error: ${error.message}`;
+          }
+        }
+      }),
+
       // Task Breakdown Tool
       new DynamicTool({
         name: 'break_down_tasks',

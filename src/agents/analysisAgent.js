@@ -3,12 +3,16 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
 
 class AnalysisAgent {
   constructor(apiKey, langSmithConfig = {}) {
     this.apiKey = apiKey;
     this.langSmithConfig = langSmithConfig;
     this.setupLangSmith();
+    
+    // Initialize reasoning framework
+    this.reasoning = new ReasoningFramework('AnalysisAgent');
   }
 
   setupLangSmith() {
@@ -30,6 +34,13 @@ class AnalysisAgent {
       if (!dataToAnalyze) {
         throw new Error('Data is required for analysis');
       }
+
+      // PHASE 1: Strategic Planning and Reasoning
+      const strategyPlan = await this.reasoning.planStrategy(dataToAnalyze, {
+        time_constraint: 'normal',
+        quality_priority: 'high',
+        creativity_needed: analysisType === 'creative'
+      });
 
       // Primary OpenAI configuration with OpenRouter fallback
       const useOpenRouter = process.env.USE_OPENROUTER === 'true';
@@ -78,10 +89,11 @@ class AnalysisAgent {
         returnIntermediateSteps: true
       });
 
-      // Execute analysis
+      // PHASE 2: Execute analysis with strategy
       const analysisResult = await agentExecutor.invoke({
         data: JSON.stringify(dataToAnalyze),
         analysisType: analysisType,
+        strategy: strategyPlan.selected_strategy.name,
         sessionId: sessionId,
         orchestrationId: orchestrationId,
         tools: tools.map(t => t.name).join(', ')
@@ -89,6 +101,9 @@ class AnalysisAgent {
 
       // Process analysis results
       const structuredAnalysis = await this.processAnalysisResults(analysisResult, dataToAnalyze, analysisType);
+
+      // PHASE 3: Self-Evaluation
+      const evaluation = await this.reasoning.evaluateOutput(structuredAnalysis, dataToAnalyze, strategyPlan);
 
       // Calculate analysis metrics
       const analysisMetrics = this.calculateAnalysisMetrics(structuredAnalysis, analysisResult);
@@ -106,7 +121,7 @@ class AnalysisAgent {
         metrics: analysisMetrics,
         insights: this.extractInsights(structuredAnalysis),
         recommendations: this.generateRecommendations(structuredAnalysis),
-        confidence_score: this.calculateConfidenceScore(structuredAnalysis),
+        confidence_score: evaluation.confidence_score,
         timestamp: new Date().toISOString(),
         status: 'completed'
       };
@@ -114,7 +129,7 @@ class AnalysisAgent {
       return {
         analysis_report: analysisReport,
         next_actions: this.determineNextActions(structuredAnalysis, analysisType),
-        neo4j_context: this.createNeo4jContext(sessionId, orchestrationId, analysisType, analysisReport.confidence_score),
+        neo4j_context: this.createNeo4jContext(sessionId, orchestrationId, analysisType, evaluation.confidence_score),
         memory: {
           upsert: true,
           keys: ['analysis_type', 'insights', 'recommendations', 'confidence_score', 'timestamp']
@@ -122,7 +137,10 @@ class AnalysisAgent {
         routing: {
           queue: 'creative_tasks',
           priority: 'normal'
-        }
+        },
+        strategy_plan: strategyPlan,
+        self_evaluation: evaluation,
+        reasoning_logs: this.reasoning.getReasoningLogs()
       };
 
     } catch (error) {
@@ -132,31 +150,41 @@ class AnalysisAgent {
 
   createAnalysisPrompt() {
     return PromptTemplate.fromTemplate(`
-You are an Analysis Agent specialized in data analysis, pattern recognition, and insight generation.
+You are an Analysis Agent with advanced reasoning capabilities. Before conducting your analysis, think through your approach systematically.
+
+REASONING PHASE:
+1. Analyze the data structure and type to determine the most appropriate analytical approach
+2. Consider what insights would be most valuable for this specific analysis type
+3. Plan your analytical methodology based on the selected strategy
+4. Identify potential challenges and how to address them
 
 Data to Analyze: {data}
 Analysis Type: {analysisType}
+Strategy Selected: {strategy}
 Session ID: {sessionId}
 Orchestration ID: {orchestrationId}
 
-Your task:
-1. Examine the provided data thoroughly
-2. Identify patterns, trends, and anomalies
+Your systematic approach:
+1. Examine the provided data thoroughly with strategic focus
+2. Identify patterns, trends, and anomalies using the selected methodology
 3. Perform statistical analysis where applicable
-4. Generate actionable insights
-5. Provide confidence levels for your findings
+4. Generate actionable insights with confidence assessments
+5. Validate findings against success criteria
 6. Suggest areas for deeper analysis
 
 Available tools: {tools}
 
 Provide a structured analysis with:
-- Data Overview
-- Statistical Summary
-- Pattern Analysis
-- Trend Identification
-- Correlation Analysis
-- Predictive Insights
-- Recommendations
+- Data Overview and Quality Assessment
+- Statistical Summary with Confidence Intervals
+- Pattern Analysis with Supporting Evidence
+- Trend Identification and Significance Testing
+- Correlation Analysis with Causation Considerations
+- Predictive Insights with Uncertainty Quantification
+- Recommendations with Implementation Guidance
+- Self-Assessment of Analysis Quality
+
+Show your reasoning process where it adds value to understanding.
 
 Data: {data}
 `);
@@ -209,6 +237,40 @@ Data: {data}
       }));
     }
 
+
+    // Think tool for step-by-step reasoning
+    tools.push(new DynamicTool({
+      name: 'think',
+      description: 'Think through complex analytical problems step by step, evaluate different analytical approaches, and reason about the best methodology',
+      func: async (input) => {
+        try {
+          const thinkPrompt = PromptTemplate.fromTemplate(`
+You are analyzing a complex problem. Break down your analytical reasoning step by step.
+
+Problem/Question: {problem}
+
+Think through this systematically:
+1. What is the core analytical question or challenge?
+2. What data or information do I have available?
+3. What analytical methods could I apply?
+4. What are the strengths and limitations of each approach?
+5. What assumptions am I making and are they valid?
+6. What is my recommended analytical approach and why?
+7. What potential biases or errors should I watch for?
+8. How will I validate my findings?
+
+Provide your step-by-step analytical reasoning:
+`);
+
+          const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+          const thinking = await chain.invoke({ problem: input });
+          
+          return `ANALYTICAL THINKING PROCESS:\n${thinking}`;
+        } catch (error) {
+          return `Thinking error: ${error.message}`;
+        }
+      }
+    }));
 
     // Statistical analysis tool
     tools.push(new DynamicTool({

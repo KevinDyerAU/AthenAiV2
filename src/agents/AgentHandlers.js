@@ -1,7 +1,8 @@
 // Agent Handlers - Agent Lifecycle Management and Coordination
-const { ChatOpenAI } = require('@langchain/openai');
+const { ReasoningFramework } = require('./ReasoningFramework');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
+const { progressBroadcaster } = require('../services/progressBroadcaster');
 
 class AgentHandlers {
   constructor() {
@@ -36,6 +37,9 @@ class AgentHandlers {
     this.agentMetrics = new Map();
     this.healthCheckInterval = 30000; // 30 seconds
     this.maxRetries = 3;
+    
+    // Initialize reasoning framework
+    this.reasoningFramework = new ReasoningFramework(this.llm);
     
     // Start health monitoring
     this.startHealthMonitoring();
@@ -141,13 +145,59 @@ class AgentHandlers {
         throw new Error(`Agent ${agentId} is not active`);
       }
 
-      logger.info('Executing agent', { agentId, executionId });
+      logger.info('Executing agent with reasoning framework', { agentId, executionId });
 
       // Update status to executing
       this.agentStatus.set(agentId, 'executing');
 
-      // Execute the agent once (no retry logic here)
-      const result = await this.executeAgentWithTimeout(agentInfo.instance, inputData, options);
+      // Start progress tracking
+      const sessionId = options.sessionId || executionId;
+      const progressId = progressBroadcaster.startProgress(
+        sessionId, 
+        agentId, 
+        `Processing: ${inputData.message || inputData.task || 'agent task'}`
+      );
+
+      // Phase 1: Strategic Planning
+      progressBroadcaster.updateProgress(
+        sessionId, 
+        'strategic_planning', 
+        'Analyzing task and planning approach...'
+      );
+
+      const taskContext = {
+        agentId,
+        inputData,
+        options,
+        executionId,
+        agentMetrics: this.agentMetrics.get(agentId)
+      };
+
+      const strategyPlan = await this.reasoningFramework.planStrategy(
+        `Execute agent ${agentId} with input data`,
+        taskContext
+      );
+
+      logger.info('Agent execution strategy planned', { 
+        agentId, 
+        executionId, 
+        selectedStrategy: strategyPlan.selectedStrategy.name,
+        confidence: strategyPlan.confidence
+      });
+
+      // Phase 2: Execute with selected strategy
+      progressBroadcaster.updateProgress(
+        sessionId, 
+        'execution', 
+        `Executing ${strategyPlan.selectedStrategy.name} strategy...`,
+        { strategy: strategyPlan.selectedStrategy.name, confidence: strategyPlan.confidence }
+      );
+
+      const result = await this.executeAgentWithTimeout(
+        agentInfo.instance, 
+        inputData, 
+        { ...options, strategy: strategyPlan.selectedStrategy, sessionId }
+      );
       
       if (!result) {
         throw new Error('Agent execution failed');
@@ -155,16 +205,39 @@ class AgentHandlers {
 
       const executionTime = Math.max(1, Date.now() - startTime);
 
+      // Phase 3: Self-evaluation
+      progressBroadcaster.updateProgress(
+        sessionId, 
+        'evaluation', 
+        'Evaluating results and generating insights...'
+      );
+
+      const evaluationResult = await this.reasoningFramework.evaluateOutput(
+        result,
+        taskContext,
+        strategyPlan
+      );
+
       // Update metrics
       this.updateAgentMetrics(agentId, executionTime, true);
 
       // Update status back to active
       this.agentStatus.set(agentId, 'active');
 
-      logger.info('Agent execution completed', { 
+      // Complete progress tracking
+      progressBroadcaster.completeProgress(sessionId, {
+        agentType: agentId,
+        executionTime,
+        confidence: evaluationResult.confidence,
+        overallScore: evaluationResult.overallScore
+      });
+
+      logger.info('Agent execution completed with evaluation', { 
         agentId, 
         executionId, 
-        executionTime 
+        executionTime,
+        overallScore: evaluationResult.overallScore,
+        confidence: evaluationResult.confidence
       });
 
       return {
@@ -172,17 +245,29 @@ class AgentHandlers {
         status: 'completed',
         result,
         execution_time: executionTime,
-        attempts: 1
+        attempts: 1,
+        reasoning: {
+          strategy_plan: strategyPlan,
+          evaluation: evaluationResult,
+          confidence_score: evaluationResult.confidence,
+          reasoning_log: this.reasoningFramework.getReasoningLog()
+        }
       };
 
     } catch (error) {
-      const executionTime = Math.max(1, Date.now() - startTime); // Ensure minimum 1ms
+      logger.error('Agent execution failed', { agentId, executionId, error: error.message });
+      
+      // Report error to progress broadcaster
+      const sessionId = options.sessionId || executionId;
+      progressBroadcaster.errorProgress(sessionId, error);
       
       // Update metrics for failed execution
-      this.updateAgentMetrics(agentId, executionTime, false);
+      this.updateAgentMetrics(agentId, Date.now() - startTime, false);
+      
+      // Update status back to active
+      this.agentStatus.set(agentId, 'active');
 
-      // Update status back to active (or error if persistent)
-      this.agentStatus.set(agentId, 'error');
+      const executionTime = Date.now() - startTime;
 
       logger.error('Agent execution failed', { 
         agentId, 
@@ -195,7 +280,11 @@ class AgentHandlers {
         agent_id: agentId,
         status: 'failed',
         error: error.message,
-        execution_time: executionTime
+        execution_time: executionTime,
+        reasoning: {
+          error_analysis: await this.analyzeExecutionFailure(error, agentId, inputData),
+          reasoning_log: this.reasoningFramework.getReasoningLog()
+        }
       };
     }
   }
@@ -369,20 +458,43 @@ class AgentHandlers {
     const coordinationId = `coord_${Date.now()}`;
     const results = [];
 
-    logger.info('Starting agent coordination', { 
+    logger.info('Starting agent coordination with reasoning framework', { 
       coordinationId, 
       agentCount: agents.length, 
       executionMode: mode 
     });
 
+    // Phase 1: Strategic Planning for Coordination
+    const coordinationContext = {
+      agents,
+      mode,
+      inputData,
+      coordinationId,
+      agentMetrics: Object.fromEntries(
+        agents.map(agentId => [agentId, this.agentMetrics.get(agentId)])
+      )
+    };
+
+    const coordinationStrategy = await this.reasoningFramework.planStrategy(
+      `Coordinate ${agents.length} agents in ${mode} mode`,
+      coordinationContext
+    );
+
+    logger.info('Coordination strategy planned', {
+      coordinationId,
+      selectedStrategy: coordinationStrategy.selectedStrategy.name,
+      confidence: coordinationStrategy.confidence
+    });
+
+    // Phase 2: Execute coordination with strategy
     if (mode === 'parallel') {
       // Execute all agents in parallel
       const promises = agents.map(async (agentId) => {
         const result = await this.executeAgent(agentId, inputData);
         if (result.status === 'failed') {
-          return { agent_id: agentId, status: 'failed', error: result.error };
+          return { agent_id: agentId, status: 'failed', error: result.error, reasoning: result.reasoning };
         } else {
-          return { agent_id: agentId, status: 'completed', result };
+          return { agent_id: agentId, status: 'completed', result, reasoning: result.reasoning };
         }
       });
 
@@ -394,10 +506,16 @@ class AgentHandlers {
       for (const agentId of agents) {
         try {
           const result = await this.executeAgent(agentId, inputData);
-          results.push({ agent_id: agentId, status: 'completed', result });
+          results.push({ agent_id: agentId, status: 'completed', result, reasoning: result.reasoning });
         } catch (error) {
           logger.error('Agent execution failed in coordination', { agentId, error: error.message });
-          results.push({ agent_id: agentId, status: 'failed', error: error.message });
+          const errorAnalysis = await this.analyzeExecutionFailure(error, agentId, inputData);
+          results.push({ 
+            agent_id: agentId, 
+            status: 'failed', 
+            error: error.message,
+            reasoning: { error_analysis: errorAnalysis }
+          });
           break; // Stop on first failure in sequential mode
         }
       }
@@ -413,10 +531,19 @@ class AgentHandlers {
       overallStatus = 'failed';
     }
 
-    logger.info('Agent coordination completed', { 
+    // Phase 3: Evaluate coordination results
+    const coordinationEvaluation = await this.reasoningFramework.evaluateOutput(
+      { results, status: overallStatus, summary: { total: results.length, successful: successCount, failed: failureCount } },
+      coordinationContext,
+      coordinationStrategy
+    );
+
+    logger.info('Agent coordination completed with evaluation', { 
       coordinationId, 
       successCount, 
-      failureCount 
+      failureCount,
+      overallScore: coordinationEvaluation.overallScore,
+      confidence: coordinationEvaluation.confidence
     });
 
     return {
@@ -429,6 +556,12 @@ class AgentHandlers {
         total: results.length,
         successful: successCount,
         failed: failureCount
+      },
+      reasoning: {
+        strategy_plan: coordinationStrategy,
+        evaluation: coordinationEvaluation,
+        confidence_score: coordinationEvaluation.confidence,
+        reasoning_log: this.reasoningFramework.getReasoningLog()
       }
     };
   }
@@ -509,6 +642,61 @@ class AgentHandlers {
     }
 
     return score;
+  }
+
+  // Error Analysis and Reasoning Methods
+  async analyzeExecutionFailure(error, agentId, inputData) {
+    try {
+      const analysisContext = {
+        error: error.message,
+        agentId,
+        inputData,
+        agentMetrics: this.agentMetrics.get(agentId),
+        agentStatus: this.agentStatus.get(agentId),
+        timestamp: new Date().toISOString()
+      };
+
+      const analysis = await this.reasoningFramework.planStrategy(
+        `Analyze execution failure for agent ${agentId}: ${error.message}`,
+        analysisContext
+      );
+
+      return {
+        error_type: this.categorizeError(error),
+        root_cause_analysis: analysis.selectedStrategy.description,
+        recommended_actions: analysis.selectedStrategy.steps,
+        confidence: analysis.confidence,
+        timestamp: new Date().toISOString()
+      };
+    } catch (analysisError) {
+      logger.error('Failed to analyze execution failure', { 
+        agentId, 
+        originalError: error.message, 
+        analysisError: analysisError.message 
+      });
+      
+      return {
+        error_type: 'analysis_failed',
+        root_cause_analysis: 'Unable to perform detailed analysis',
+        recommended_actions: ['Check agent configuration', 'Verify input data', 'Review system logs'],
+        confidence: 0.1,
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  categorizeError(error) {
+    const errorMessage = error.message.toLowerCase();
+    
+    if (errorMessage.includes('timeout')) return 'timeout';
+    if (errorMessage.includes('not found')) return 'not_found';
+    if (errorMessage.includes('permission') || errorMessage.includes('unauthorized')) return 'permission';
+    if (errorMessage.includes('network') || errorMessage.includes('connection')) return 'network';
+    if (errorMessage.includes('memory') || errorMessage.includes('resource')) return 'resource';
+    if (errorMessage.includes('validation') || errorMessage.includes('invalid')) return 'validation';
+    if (errorMessage.includes('configuration') || errorMessage.includes('config')) return 'configuration';
+    
+    return 'unknown';
   }
 
   // Utility Methods

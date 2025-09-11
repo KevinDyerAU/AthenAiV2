@@ -10,6 +10,7 @@ const fs = require('fs').promises;
 // const path = require('path'); // Unused import
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
 
 class ExecutionAgent {
   constructor() {
@@ -41,6 +42,9 @@ class ExecutionAgent {
     this.executionQueue = [];
     this.runningTasks = new Map();
     this.maxConcurrentTasks = process.env.MAX_CONCURRENT_TASKS || 5;
+    
+    // Initialize reasoning framework
+    this.reasoning = new ReasoningFramework('ExecutionAgent');
   }
 
   async executeTask(inputData) {
@@ -50,6 +54,13 @@ class ExecutionAgent {
 
     try {
       logger.info('Starting execution task', { sessionId, orchestrationId });
+      
+      // PHASE 1: Strategic Planning and Reasoning
+      const strategyPlan = await this.reasoning.planStrategy(inputData, {
+        time_constraint: inputData.urgency || 'normal',
+        quality_priority: 'high',
+        creativity_needed: false
+      });
 
       const taskData = inputData.task || inputData;
       const executionPlan = taskData.execution_plan || taskData.plan || taskData.message;
@@ -76,9 +87,17 @@ class ExecutionAgent {
         // Initialize execution tools
         const tools = this.initializeExecutionTools();
 
-        // Create execution prompt
+        // Create execution prompt with explicit reasoning
         const prompt = PromptTemplate.fromTemplate(`
-You are an Execution Agent specialized in task execution, workflow management, and process automation.
+You are an Execution Agent with advanced reasoning capabilities specialized in task execution, workflow management, and process automation. Before executing any task, think through your approach step by step.
+
+REASONING PHASE:
+1. First, analyze the execution plan and identify all tasks, dependencies, and potential bottlenecks
+2. Consider the execution environment and any constraints or limitations
+3. Think about potential failure points and develop contingency strategies
+4. Plan the optimal execution sequence considering dependencies and resource usage
+5. Evaluate monitoring and logging requirements for visibility
+6. Consider performance optimization opportunities
 
 Execution Plan: {executionPlan}
 Execution Type: {executionType}
@@ -86,16 +105,22 @@ Environment: {environment}
 Parameters: {parameters}
 Session ID: {sessionId}
 
+STEP-BY-STEP EXECUTION PROCESS:
+1. Plan Analysis: What are the key tasks, dependencies, and execution requirements?
+2. Risk Assessment: What could go wrong and how can failures be mitigated?
+3. Resource Planning: What resources are needed and how should they be allocated?
+4. Execution Strategy: What is the optimal sequence and approach for execution?
+5. Monitoring Strategy: How will progress be tracked and issues detected?
+6. Recovery Planning: What contingency plans are needed for error scenarios?
+
 Available tools: {tools}
 
-Your responsibilities:
-1. Execute tasks and workflows according to plans
-2. Monitor task progress and handle failures
-3. Coordinate parallel and sequential task execution
-4. Manage task dependencies and prerequisites
-5. Handle error recovery and retry logic
-6. Provide real-time status updates and logging
-7. Optimize execution performance and resource usage
+Think through your reasoning process, then execute tasks with:
+- Clear progress tracking and status updates (with reasoning for execution decisions)
+- Proactive error handling and recovery (with failure analysis)
+- Optimal resource utilization (with performance reasoning)
+- Comprehensive logging and monitoring (with visibility strategy)
+- Include confidence score (0.0-1.0) and reasoning for your execution approach
 
 Execution types:
 - workflow: Execute multi-step workflows with dependencies
@@ -123,15 +148,19 @@ Current execution: {executionType} - {executionPlan}
           returnIntermediateSteps: true
         });
 
-        // Execute the task
+        // PHASE 2: Execute the task with strategy
         result = await agentExecutor.invoke({
           executionPlan: typeof executionPlan === 'object' ? JSON.stringify(executionPlan) : executionPlan,
           executionType,
           environment,
           parameters: JSON.stringify(parameters),
+          strategy: strategyPlan.selected_strategy.name,
           sessionId,
           tools: tools.map(t => t.name).join(', ')
         });
+        
+        // PHASE 3: Self-Evaluation
+        const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
       }
 
       // Process and structure the results
@@ -145,6 +174,10 @@ Current execution: {executionType} - {executionPlan}
         result: result.output,
         intermediate_steps: result.intermediateSteps,
         execution_time_ms: Date.now() - startTime,
+        confidence_score: evaluation.confidence_score,
+        strategy_plan: strategyPlan,
+        self_evaluation: evaluation,
+        reasoning_logs: this.reasoning.getReasoningLogs(),
         status: 'completed'
       };
 
@@ -204,6 +237,40 @@ Current execution: {executionType} - {executionPlan}
 
   initializeExecutionTools() {
     return [
+      // Think tool for step-by-step execution reasoning
+      new DynamicTool({
+        name: 'think',
+        description: 'Think through complex execution challenges step by step, evaluate different execution strategies, and reason about the optimal implementation approach',
+        func: async (input) => {
+          try {
+            const thinkPrompt = PromptTemplate.fromTemplate(`
+You are working through a complex execution challenge. Break down your execution reasoning step by step.
+
+Execution Challenge: {problem}
+
+Think through this systematically:
+1. What is the core execution objective or task?
+2. What are the key dependencies, prerequisites, and constraints?
+3. What different execution approaches or strategies could I use?
+4. What are the risks and potential failure points of each approach?
+5. What resources and monitoring will be needed?
+6. What is my recommended execution strategy and why?
+7. What error handling and recovery mechanisms should I implement?
+8. How will I ensure successful completion and validate results?
+
+Provide your step-by-step execution reasoning:
+`);
+
+            const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+            const thinking = await chain.invoke({ problem: input });
+            
+            return `EXECUTION THINKING PROCESS:\n${thinking}`;
+          } catch (error) {
+            return `Thinking error: ${error.message}`;
+          }
+        }
+      }),
+
       // Command Execution Tool
       new DynamicTool({
         name: 'execute_command',

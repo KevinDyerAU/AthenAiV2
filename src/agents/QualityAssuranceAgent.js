@@ -5,6 +5,7 @@ const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
 
 class QualityAssuranceAgent {
   constructor() {
@@ -12,6 +13,12 @@ class QualityAssuranceAgent {
     const useOpenRouter = process.env.USE_OPENROUTER === 'true';
     
     if (useOpenRouter) {
+      this.testSuites = new Map();
+      this.qualityMetrics = new Map();
+      this.maxConcurrentTests = process.env.MAX_CONCURRENT_TESTS || 3;
+      
+      // Initialize reasoning framework
+      this.reasoning = new ReasoningFramework('QualityAssuranceAgent');
       this.llm = new ChatOpenAI({
         modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
         temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
@@ -48,17 +55,19 @@ class QualityAssuranceAgent {
     const orchestrationId = inputData.orchestrationId || 'qa_orchestration_' + Date.now();
 
     try {
-      logger.info('Starting quality assurance task', { sessionId, orchestrationId });
+      logger.info('Starting QA task', { sessionId, orchestrationId });
+      
+      // PHASE 1: Strategic Planning and Reasoning
+      const strategyPlan = await this.reasoning.planStrategy(inputData, {
+        time_constraint: inputData.urgency || 'normal',
+        quality_priority: 'high',
+        creativity_needed: false
+      });
 
       const taskData = inputData.task || inputData;
       const content = taskData.content || taskData.output || taskData.message;
       const qaType = taskData.qa_type || 'comprehensive';
       const standards = taskData.standards || this.qualityStandards;
-      const context = taskData.context || {};
-
-      if (!content) {
-        throw new Error('Content is required for quality assurance');
-      }
 
       // Check if we're in test environment (NODE_ENV=test or jest is running)
       const isTestEnvironment = process.env.NODE_ENV === 'test' || 
@@ -75,9 +84,17 @@ class QualityAssuranceAgent {
         // Initialize QA tools
         const tools = this.initializeQATools();
 
-        // Create QA prompt
+        // Create QA prompt with explicit reasoning
         const prompt = PromptTemplate.fromTemplate(`
-You are a Quality Assurance Agent specialized in validating outputs, ensuring quality standards, and providing improvement recommendations.
+You are a Quality Assurance Agent with advanced reasoning capabilities specialized in validating outputs, ensuring quality standards, and providing improvement recommendations. Before conducting your assessment, think through your approach step by step.
+
+REASONING PHASE:
+1. First, analyze the content structure and identify key components to evaluate
+2. Consider the quality standards and requirements that need to be met
+3. Think about potential quality issues and areas of concern
+4. Plan your assessment approach based on the QA type and context
+5. Consider what evidence and metrics will support your evaluation
+6. Determine the most effective improvement recommendations
 
 Content to Review: {content}
 QA Type: {qaType}
@@ -85,17 +102,22 @@ Quality Standards: {standards}
 Context: {context}
 Session ID: {sessionId}
 
+STEP-BY-STEP QA PROCESS:
+1. Content Analysis: What are the key components and claims that need validation?
+2. Standards Assessment: How does the content measure against the required standards?
+3. Quality Evaluation: What quality dimensions need the most attention?
+4. Risk Identification: What potential issues or vulnerabilities exist?
+5. Improvement Planning: What specific recommendations would enhance quality?
+6. Confidence Assessment: How confident am I in my evaluation and recommendations?
+
 Available tools: {tools}
 
-Your responsibilities:
-1. Validate content accuracy and factual correctness
-2. Assess completeness and thoroughness
-3. Evaluate clarity and readability
-4. Check relevance to requirements
-5. Ensure consistency and coherence
-6. Identify potential issues and risks
-7. Provide specific improvement recommendations
-8. Generate quality scores and metrics
+Think through your reasoning process, then provide QA assessment with:
+- Detailed validation results (with reasoning for quality scores)
+- Comprehensive improvement recommendations (with justification)
+- Quality metrics and scores (with evaluation methodology)
+- Risk assessment and mitigation strategies (with priority analysis)
+- Include confidence score (0.0-1.0) and reasoning for your QA decisions
 
 QA Types:
 - comprehensive: Full quality assessment across all dimensions
@@ -125,15 +147,19 @@ Current assessment: {qaType} review of provided content
           returnIntermediateSteps: true
         });
 
-        // Execute QA assessment
+        // PHASE 2: Execute the QA task with strategy
         result = await agentExecutor.invoke({
-          content: typeof content === 'object' ? JSON.stringify(content) : content,
+          qaRequest: typeof content === 'object' ? JSON.stringify(content) : content,
           qaType,
-          standards: JSON.stringify(standards),
-          context: JSON.stringify(context),
+          testLevel: strategyPlan.selected_strategy.name,
+          criteria: JSON.stringify(standards),
+          strategy: strategyPlan.selected_strategy.name,
           sessionId,
           tools: tools.map(t => t.name).join(', ')
         });
+        
+        // PHASE 3: Self-Evaluation
+        const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
       }
 
       // Process and structure the results
@@ -143,9 +169,13 @@ Current assessment: {qaType} review of provided content
         original_content: content,
         qa_type: qaType,
         standards,
-        assessment: result.output,
+        result: result.output,
         intermediate_steps: result.intermediateSteps,
-        execution_time_ms: Date.now() - startTime,
+        qa_time_ms: Date.now() - startTime,
+        confidence_score: evaluation.confidence_score,
+        strategy_plan: strategyPlan,
+        self_evaluation: evaluation,
+        reasoning_logs: this.reasoning.getReasoningLogs(),
         status: 'completed'
       };
 
@@ -198,6 +228,40 @@ Current assessment: {qaType} review of provided content
 
   initializeQATools() {
     return [
+      // Think tool for step-by-step QA reasoning
+      new DynamicTool({
+        name: 'think',
+        description: 'Think through complex quality assurance challenges step by step, evaluate different QA approaches, and reason about the optimal validation strategy',
+        func: async (input) => {
+          try {
+            const thinkPrompt = PromptTemplate.fromTemplate(`
+You are working through a complex quality assurance challenge. Break down your QA reasoning step by step.
+
+QA Challenge: {problem}
+
+Think through this systematically:
+1. What is the core quality objective or standard I need to evaluate?
+2. What are the key quality dimensions to assess (accuracy, completeness, clarity, consistency)?
+3. What different QA approaches or methodologies could I use?
+4. What are the potential quality risks and failure modes?
+5. What validation methods and evidence will be most reliable?
+6. What is my recommended QA strategy and why?
+7. What quality metrics and thresholds should I apply?
+8. How will I ensure comprehensive and unbiased assessment?
+
+Provide your step-by-step QA reasoning:
+`);
+
+            const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+            const thinking = await chain.invoke({ problem: input });
+            
+            return `QA THINKING PROCESS:\n${thinking}`;
+          } catch (error) {
+            return `Thinking error: ${error.message}`;
+          }
+        }
+      }),
+
       // Content Validation Tool
       new DynamicTool({
         name: 'validate_content',

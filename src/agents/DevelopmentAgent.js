@@ -11,6 +11,7 @@ const execAsync = promisify(exec);
 const axios = require('axios');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
 
 class DevelopmentAgent {
   constructor() {
@@ -39,8 +40,12 @@ class DevelopmentAgent {
         tags: ['development-agent', 'athenai', 'openai']
       });
     }
-    this.workspaceRoot = process.env.WORKSPACE_ROOT || './workspace';
-    this.supportedLanguages = ['javascript', 'python', 'typescript', 'html', 'css', 'json', 'yaml', 'markdown'];
+    this.workspaceRoot = process.env.WORKSPACE_ROOT || process.cwd();
+    this.supportedLanguages = ['javascript', 'python', 'typescript', 'java', 'go', 'rust', 'cpp'];
+    this.maxConcurrentTasks = process.env.MAX_CONCURRENT_TASKS || 3;
+    
+    // Initialize reasoning framework
+    this.reasoning = new ReasoningFramework('DevelopmentAgent');
   }
 
   async executeDevelopment(inputData) {
@@ -50,6 +55,13 @@ class DevelopmentAgent {
 
     try {
       logger.info('Starting development task', { sessionId, orchestrationId });
+      
+      // PHASE 1: Strategic Planning and Reasoning
+      const strategyPlan = await this.reasoning.planStrategy(inputData, {
+        time_constraint: inputData.urgency || 'normal',
+        quality_priority: 'high',
+        creativity_needed: inputData.development_type === 'architecture'
+      });
 
       const taskData = inputData.task || inputData;
       const requirements = taskData.requirements || taskData.message || taskData.content;
@@ -75,35 +87,42 @@ class DevelopmentAgent {
         // Initialize development tools
         const tools = this.initializeDevelopmentTools();
 
-        // Create development prompt
+        // Create development prompt with explicit reasoning
         const prompt = PromptTemplate.fromTemplate(`
-You are a Development Agent specialized in code generation, project setup, and software development tasks.
+You are a Development Agent with advanced reasoning capabilities specialized in code generation, project setup, and software development tasks. Before implementing any solution, think through your approach step by step.
+
+REASONING PHASE:
+1. First, analyze the requirements and break them down into specific technical components
+2. Consider the project architecture and design patterns that would be most appropriate
+3. Think about potential challenges, edge cases, and security considerations
+4. Plan the implementation approach, including file structure and dependencies
+5. Consider testing strategies and quality assurance measures
+6. Evaluate performance implications and optimization opportunities
 
 Requirements: {requirements}
 Project Type: {projectType}
 Language: {language}
 Session ID: {sessionId}
 
+STEP-BY-STEP DEVELOPMENT PROCESS:
+1. Requirements Analysis: What are the core functional and non-functional requirements?
+2. Architecture Planning: What design patterns and architectural approaches are most suitable?
+3. Implementation Strategy: How should the code be structured and organized?
+4. Security Assessment: What security considerations need to be addressed?
+5. Testing Strategy: What testing approaches will ensure code quality?
+6. Performance Optimization: How can the solution be optimized for performance?
+
 Available tools: {tools}
 
-Your responsibilities:
-1. Analyze development requirements and break them into tasks
-2. Generate high-quality, production-ready code
-3. Create project structures and configuration files
-4. Implement best practices and design patterns
-5. Add comprehensive documentation and comments
-6. Suggest testing strategies and implementation
-7. Provide deployment and maintenance guidance
+Think through your reasoning process, then provide development output that is:
+- Clean, readable, and well-documented (with reasoning for design choices)
+- Following language-specific best practices (with justification)
+- Modular and maintainable (with architectural reasoning)
+- Secure and performant (with security and performance analysis)
+- Properly tested (with testing strategy explanation)
+- Include confidence score (0.0-1.0) and reasoning for your implementation decisions
 
-Generate code that is:
-- Clean, readable, and well-documented
-- Following language-specific best practices
-- Modular and maintainable
-- Secure and performant
-- Properly tested
-
-Current task: {requirements}
-`);
+Current task: {requirements}`);
 
         // Create agent
         const agent = await createOpenAIFunctionsAgent({
@@ -122,12 +141,17 @@ Current task: {requirements}
 
         // Execute development task
         result = await agentExecutor.invoke({
-          requirements,
-          projectType,
+          developmentRequest: typeof inputData === 'object' ? JSON.stringify(inputData) : inputData,
+          developmentType: inputData.development_type,
           language,
+          requirements: JSON.stringify(requirements),
+          strategy: strategyPlan.selected_strategy.name,
           sessionId,
           tools: tools.map(t => t.name).join(', ')
         });
+        
+        // PHASE 3: Self-Evaluation
+        const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
       }
 
       // Process and structure the results
@@ -137,11 +161,13 @@ Current task: {requirements}
         requirements,
         project_type: projectType,
         language,
-        code_generated: result.output,
+        result: result.output,
         intermediate_steps: result.intermediateSteps,
-        files_created: [],
-        recommendations: [],
-        execution_time_ms: Date.now() - startTime,
+        development_time_ms: Date.now() - startTime,
+        confidence_score: evaluation.confidence_score,
+        strategy_plan: strategyPlan,
+        self_evaluation: evaluation,
+        reasoning_logs: this.reasoning.getReasoningLogs(),
         status: 'completed'
       };
 
@@ -246,6 +272,40 @@ Current task: {requirements}
         }
       }));
     }
+
+    // Think tool for step-by-step development reasoning
+    tools.push(new DynamicTool({
+      name: 'think',
+      description: 'Think through complex development problems step by step, evaluate different architectural approaches, and reason about the best implementation strategy',
+      func: async (input) => {
+        try {
+          const thinkPrompt = PromptTemplate.fromTemplate(`
+You are working through a complex development challenge. Break down your technical reasoning step by step.
+
+Development Challenge: {problem}
+
+Think through this systematically:
+1. What is the core technical problem or requirement?
+2. What are the key constraints and considerations (performance, scalability, maintainability)?
+3. What different architectural or implementation approaches could I take?
+4. What are the trade-offs of each approach (pros/cons)?
+5. What technologies, patterns, or frameworks would be most suitable?
+6. What is my recommended technical approach and why?
+7. What potential technical risks or challenges should I anticipate?
+8. How will I ensure code quality, testing, and maintainability?
+
+Provide your step-by-step development reasoning:
+`);
+
+          const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+          const thinking = await chain.invoke({ problem: input });
+          
+          return `DEVELOPMENT THINKING PROCESS:\n${thinking}`;
+        } catch (error) {
+          return `Thinking error: ${error.message}`;
+        }
+      }
+    }));
 
     // Code generator tool
     tools.push(new DynamicTool({

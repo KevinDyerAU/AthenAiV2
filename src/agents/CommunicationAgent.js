@@ -7,6 +7,7 @@ const axios = require('axios');
 const nodemailer = require('nodemailer');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
 
 class CommunicationAgent {
   constructor() {
@@ -43,6 +44,14 @@ class CommunicationAgent {
       discord: process.env.DISCORD_WEBHOOK_URL,
       teams: process.env.TEAMS_WEBHOOK_URL
     };
+
+    // Initialize communication history and message queue
+    this.communicationHistory = new Map();
+    this.activeChannels = new Set();
+    this.messageQueue = [];
+
+    // Initialize reasoning framework
+    this.reasoning = new ReasoningFramework('CommunicationAgent');
   }
 
   async executeCommunication(inputData) {
@@ -52,6 +61,13 @@ class CommunicationAgent {
 
     try {
       logger.info('Starting communication task', { sessionId, orchestrationId });
+      
+      // PHASE 1: Strategic Planning and Reasoning
+      const strategyPlan = await this.reasoning.planStrategy(inputData, {
+        time_constraint: inputData.urgency || 'normal',
+        quality_priority: 'high',
+        creativity_needed: inputData.communication_type === 'creative'
+      });
 
       const taskData = inputData.task || inputData;
       const message = taskData.message || taskData.content;
@@ -79,9 +95,17 @@ class CommunicationAgent {
         // Initialize communication tools
         const tools = this.initializeCommunicationTools();
 
-        // Create communication prompt
+        // Create communication prompt with explicit reasoning
         const prompt = PromptTemplate.fromTemplate(`
-You are a Communication Agent specialized in message handling, formatting, and external communications.
+You are a Communication Agent with advanced reasoning capabilities specialized in message handling, formatting, and external communications. Before processing any communication, think through your approach step by step.
+
+REASONING PHASE:
+1. First, analyze the message content, tone, and intended audience
+2. Consider the communication channel and its specific requirements and constraints
+3. Think about the recipients and how to tailor the message for maximum effectiveness
+4. Plan the optimal formatting and structure for the target channel
+5. Consider compliance, tone consistency, and brand alignment requirements
+6. Evaluate potential risks and ensure appropriate messaging safeguards
 
 Message: {message}
 Communication Type: {communicationType}
@@ -90,16 +114,22 @@ Recipients: {recipients}
 Context: {context}
 Session ID: {sessionId}
 
+STEP-BY-STEP COMMUNICATION PROCESS:
+1. Message Analysis: What is the core message, tone, and intended outcome?
+2. Audience Assessment: Who are the recipients and what communication style will resonate?
+3. Channel Optimization: How should the message be formatted for the specific channel?
+4. Compliance Check: What compliance and brand guidelines need to be followed?
+5. Effectiveness Planning: How can the message be optimized for maximum impact?
+6. Risk Mitigation: What potential communication risks need to be addressed?
+
 Available tools: {tools}
 
-Your responsibilities:
-1. Format and optimize messages for different channels and audiences
-2. Handle multi-channel communication distribution
-3. Manage message templates and personalization
-4. Process incoming messages and route appropriately
-5. Maintain communication logs and analytics
-6. Handle notifications and alerts
-7. Ensure message compliance and tone consistency
+Think through your reasoning process, then provide communication output with:
+- Optimized message formatting (with reasoning for formatting choices)
+- Channel-specific adaptations (with justification for modifications)
+- Audience targeting strategies (with personalization reasoning)
+- Compliance and tone assessment (with brand alignment analysis)
+- Include confidence score (0.0-1.0) and reasoning for your communication decisions
 
 Communication types:
 - format: Format message for specific channel/audience
@@ -127,16 +157,19 @@ Current task: {communicationType} - {message}
           returnIntermediateSteps: true
         });
 
-        // Execute communication task
+        // PHASE 2: Execute the communication task with strategy
         result = await agentExecutor.invoke({
-          message,
+          communicationRequest: typeof inputData === 'object' ? JSON.stringify(inputData) : inputData,
           communicationType,
-          channel,
-          recipients: Array.isArray(recipients) ? recipients.join(', ') : recipients,
+          audience: inputData.audience || 'general',
           context: JSON.stringify(context),
+          strategy: strategyPlan.selected_strategy.name,
           sessionId,
           tools: tools.map(t => t.name).join(', ')
         });
+        
+        // PHASE 3: Self-Evaluation
+        const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
       }
 
       // Process and structure the results
@@ -149,8 +182,11 @@ Current task: {communicationType} - {message}
         recipients,
         processed_message: result.output,
         intermediate_steps: result.intermediateSteps,
-        delivery_status: 'processed',
-        execution_time_ms: Date.now() - startTime,
+        communication_time_ms: Date.now() - startTime,
+        confidence_score: evaluation.confidence_score,
+        strategy_plan: strategyPlan,
+        self_evaluation: evaluation,
+        reasoning_logs: this.reasoning.getReasoningLogs(),
         status: 'completed'
       };
 
@@ -206,6 +242,40 @@ Current task: {communicationType} - {message}
 
   initializeCommunicationTools() {
     return [
+      // Think tool for step-by-step communication reasoning
+      new DynamicTool({
+        name: 'think',
+        description: 'Think through complex communication challenges step by step, evaluate different messaging approaches, and reason about the optimal communication strategy',
+        func: async (input) => {
+          try {
+            const thinkPrompt = PromptTemplate.fromTemplate(`
+You are working through a complex communication challenge. Break down your communication reasoning step by step.
+
+Communication Challenge: {problem}
+
+Think through this systematically:
+1. What is the core message or communication objective?
+2. Who is the target audience and what are their needs/preferences?
+3. What different communication approaches or channels could I use?
+4. What are the tone, style, and format considerations for each approach?
+5. What potential communication barriers or risks should I consider?
+6. What is my recommended communication strategy and why?
+7. How will I ensure the message is clear, engaging, and actionable?
+8. How will I measure communication effectiveness and gather feedback?
+
+Provide your step-by-step communication reasoning:
+`);
+
+            const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+            const thinking = await chain.invoke({ problem: input });
+            
+            return `COMMUNICATION THINKING PROCESS:\n${thinking}`;
+          } catch (error) {
+            return `Thinking error: ${error.message}`;
+          }
+        }
+      }),
+
       // Message Formatting Tool
       new DynamicTool({
         name: 'format_message',
