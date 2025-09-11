@@ -1,6 +1,6 @@
 // Creative Agent - Content Creation and Synthesis
 const { ChatOpenAI } = require('@langchain/openai');
-const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
+const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
@@ -71,7 +71,7 @@ class CreativeAgent {
       const tools = this.initializeCreativeTools();
       const creativePrompt = this.createCreativePrompt();
 
-      const agent = await createOpenAIFunctionsAgent({
+      const agent = await createOpenAIToolsAgent({
         llm,
         tools,
         prompt: creativePrompt

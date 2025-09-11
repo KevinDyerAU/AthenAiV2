@@ -1,6 +1,6 @@
 // Planning Agent - Complex Task Planning and Project Management
 const { ChatOpenAI } = require('@langchain/openai');
-const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
+const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { logger } = require('../utils/logger');
@@ -137,7 +137,7 @@ Current planning task: {complexity} - {planningRequest}
 `);
 
         // Create agent
-        const agent = await createOpenAIFunctionsAgent({
+        const agent = await createOpenAIToolsAgent({
           llm: this.llm,
           tools,
           prompt

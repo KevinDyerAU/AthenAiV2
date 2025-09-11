@@ -140,8 +140,12 @@ class ProgressBroadcaster {
       return;
     }
 
-    // Broadcast to the specific room/session
+    // Broadcast to the specific room/session and general room
     this.io.to(sessionId).emit('agent_progress', data);
+    this.io.to('general').emit('agent_progress', data);
+    
+    // Also broadcast to all connected clients as fallback
+    this.io.emit('agent_progress', data);
   }
 
   // Get current progress for a session

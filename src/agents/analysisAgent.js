@@ -1,6 +1,6 @@
 // Analysis Agent - Extracted Logic
 const { ChatOpenAI } = require('@langchain/openai');
-const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
+const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
@@ -83,7 +83,7 @@ class AnalysisAgent {
       const analysisPrompt = this.createAnalysisPrompt();
 
       // Create agent
-      const agent = await createOpenAIFunctionsAgent({
+      const agent = await createOpenAIToolsAgent({
         llm,
         tools,
         prompt: analysisPrompt

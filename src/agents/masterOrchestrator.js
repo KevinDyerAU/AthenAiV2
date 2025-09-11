@@ -20,6 +20,8 @@ class MasterOrchestrator {
             'X-Title': 'AthenAI Master Orchestrator'
           }
         },
+        timeout: parseInt(process.env.OPENROUTER_TIMEOUT) || 30000,
+        maxRetries: 2,
         tags: ['master-orchestrator', 'athenai', 'openrouter']
       });
     } else {
@@ -79,15 +81,8 @@ Respond in this exact JSON format:
 
       const chain = complexityPrompt.pipe(this.llm).pipe(new StringOutputParser());
       
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('OpenRouter API timeout')), 10000); // 10 second timeout
-      });
-      
-      const response = await Promise.race([
-        chain.invoke({ message: taskString }),
-        timeoutPromise
-      ]);
+      // Execute with built-in timeout and retry logic
+      const response = await chain.invoke({ message: taskString });
       
       // Check for rate limiting
       if (response && response.includes && response.includes('429')) {

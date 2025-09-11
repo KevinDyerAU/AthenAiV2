@@ -1,8 +1,9 @@
 // Quality Assurance Agent - Output Validation and Quality Control
 const { ChatOpenAI } = require('@langchain/openai');
-const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
+const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
+const { StringOutputParser } = require('@langchain/core/output_parsers');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
@@ -13,13 +14,15 @@ class QualityAssuranceAgent {
     // Primary OpenAI configuration with OpenRouter fallback
     const useOpenRouter = process.env.USE_OPENROUTER === 'true';
     
+    // Initialize common properties
+    this.testSuites = new Map();
+    this.qualityMetrics = new Map();
+    this.maxConcurrentTests = process.env.MAX_CONCURRENT_TESTS || 3;
+    
+    // Initialize reasoning framework
+    this.reasoning = new ReasoningFramework('QualityAssuranceAgent');
+    
     if (useOpenRouter) {
-      this.testSuites = new Map();
-      this.qualityMetrics = new Map();
-      this.maxConcurrentTests = process.env.MAX_CONCURRENT_TESTS || 3;
-      
-      // Initialize reasoning framework
-      this.reasoning = new ReasoningFramework('QualityAssuranceAgent');
       this.llm = new ChatOpenAI({
         modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
         temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
@@ -31,6 +34,8 @@ class QualityAssuranceAgent {
             'X-Title': 'AthenAI Quality Assurance Agent'
           }
         },
+        timeout: parseInt(process.env.OPENROUTER_TIMEOUT) || 60000,
+        maxRetries: 2,
         tags: ['qa-agent', 'athenai', 'openrouter']
       });
     } else {
@@ -168,7 +173,7 @@ Current assessment: {qaType} review of provided content
 {agent_scratchpad}`);
 
         // Create agent
-        const agent = await createOpenAIFunctionsAgent({
+        const agent = await createOpenAIToolsAgent({
           llm: this.llm,
           tools,
           prompt
@@ -207,65 +212,64 @@ Current assessment: {qaType} review of provided content
         
         // Store results and insights in knowledge substrate
         await this.storeKnowledgeInsights(result, evaluation, sessionId, orchestrationId);
-      }
-
-      // Process and structure the results
-      const qaResult = {
-        session_id: sessionId,
-        orchestration_id: orchestrationId,
-        original_content: content,
-        qa_type: qaType,
-        standards,
-        result: result.output,
-        intermediate_steps: result.intermediateSteps,
-        qa_time_ms: Date.now() - startTime,
-        confidence_score: evaluation.confidence_score,
-        strategy_plan: strategyPlan,
-        self_evaluation: evaluation,
-        reasoning_logs: this.reasoning.getReasoningLogs(),
-        status: 'completed'
-      };
-
-      // Store results in knowledge graph (skip in test environment)
-      if (!isTestEnvironment) {
-        await databaseService.createKnowledgeNode(
-          sessionId,
-          orchestrationId,
-          'QualityAssurance',
-          {
-            qa_type: qaType,
-            status: 'completed',
-            created_at: new Date().toISOString()
-          }
-        );
-
-        // Cache the QA context
-        await databaseService.cacheSet(
-          `qa:${orchestrationId}`,
-          qaResult,
-          3600 // 1 hour TTL
-        );
-
-        // Complete progress tracking
-        progressBroadcaster.completeProgress(sessionId, {
-          agentType: 'QualityAssurance',
-          executionTime: qaResult.qa_time_ms,
-          confidence: qaResult.confidence_score,
-          qaType,
+        
+        // Process and structure the results
+        const qaResult = {
+          session_id: sessionId,
+          orchestration_id: orchestrationId,
+          original_content: content,
+          qa_type: qaType,
+          standards: JSON.stringify(standards),
+          result: result.output,
+          intermediate_steps: JSON.stringify(result.intermediateSteps),
+          qa_time_ms: Date.now() - startTime,
+          confidence_score: evaluation.confidence_score,
+          strategy_plan: JSON.stringify(strategyPlan),
+          self_evaluation: JSON.stringify(evaluation),
+          reasoning_logs: JSON.stringify(this.reasoning.getReasoningLogs()),
           status: 'completed'
-        });
+        };
 
-        logger.info('Quality assurance completed', {
-          sessionId,
-          orchestrationId,
-          qaType,
-          executionTime: qaResult.qa_time_ms
-        });
+        // Store results in knowledge graph (skip in test environment)
+        if (!isTestEnvironment) {
+          await databaseService.createKnowledgeNode(
+            sessionId,
+            orchestrationId,
+            'QualityAssurance',
+            {
+              qa_type: qaType,
+              status: 'completed',
+              created_at: new Date().toISOString()
+            }
+          );
 
-        return qaResult;
+          // Cache the QA context
+          await databaseService.cacheSet(
+            `qa:${orchestrationId}`,
+            qaResult,
+            3600 // 1 hour TTL
+          );
 
-      } else {
-        return qaResult;
+          // Complete progress tracking
+          progressBroadcaster.completeProgress(sessionId, {
+            agentType: 'QualityAssurance',
+            executionTime: qaResult.qa_time_ms,
+            confidence: qaResult.confidence_score,
+            qaType,
+            status: 'completed'
+          });
+
+          logger.info('Quality assurance completed', {
+            sessionId,
+            orchestrationId,
+            qaType,
+            executionTime: qaResult.qa_time_ms
+          });
+
+          return qaResult;
+        } else {
+          return qaResult;
+        }
       }
 
     } catch (error) {
@@ -288,7 +292,122 @@ Current assessment: {qaType} review of provided content
     }
   }
 
-  initializeQATools() {
+  async retrieveKnowledgeContext(content, qaType, sessionId) {
+    try {
+      // Query knowledge substrate for relevant context
+      const knowledgeQuery = {
+        content_type: 'qa_context',
+        qa_type: qaType,
+        content_hash: this.generateContentHash(content),
+        session_id: sessionId
+      };
+
+      // Retrieve similar QA assessments and patterns
+      const similarAssessments = await databaseService.queryKnowledgeGraph(
+        `MATCH (n:qa_assessment) WHERE n.qa_type = $qaType RETURN n LIMIT 5`,
+        { qaType }
+      );
+
+      // Retrieve quality patterns and best practices
+      const domain = this.inferContentDomain(content);
+      const qualityPatterns = await databaseService.queryKnowledgeGraph(
+        `MATCH (n:quality_pattern) WHERE n.domain = $domain RETURN n LIMIT 3`,
+        { domain }
+      );
+
+      return {
+        similar_assessments: similarAssessments || [],
+        quality_patterns: qualityPatterns || [],
+        domain_context: this.inferContentDomain(content),
+        retrieved_at: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.warn('Failed to retrieve knowledge context', { error: error.message });
+      return {
+        similar_assessments: [],
+        quality_patterns: [],
+        domain_context: 'general',
+        retrieved_at: new Date().toISOString()
+      };
+    }
+  }
+
+  async storeKnowledgeInsights(result, evaluation, sessionId, orchestrationId) {
+    try {
+      // Store QA insights in knowledge substrate
+      const insights = {
+        session_id: sessionId,
+        orchestration_id: orchestrationId,
+        qa_insights: this.extractQAInsights(result.output),
+        quality_metrics: JSON.stringify(evaluation.quality_metrics || {}),
+        improvement_patterns: this.extractImprovementPatterns(result.output),
+        confidence_score: evaluation.confidence_score,
+        created_at: new Date().toISOString()
+      };
+
+      await databaseService.createKnowledgeNode(
+        sessionId,
+        orchestrationId,
+        'QAInsights',
+        insights
+      );
+
+      logger.info('QA insights stored in knowledge substrate', { sessionId, orchestrationId });
+    } catch (error) {
+      logger.warn('Failed to store QA insights', { error: error.message });
+    }
+  }
+
+  generateContentHash(content) {
+    // Simple hash for content similarity matching
+    const str = typeof content === 'string' ? content : JSON.stringify(content);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16);
+  }
+
+  inferContentDomain(content) {
+    const str = typeof content === 'string' ? content.toLowerCase() : JSON.stringify(content).toLowerCase();
+    
+    if (str.includes('github') || str.includes('repository') || str.includes('code')) return 'software';
+    if (str.includes('security') || str.includes('vulnerability')) return 'security';
+    if (str.includes('performance') || str.includes('optimization')) return 'performance';
+    if (str.includes('data') || str.includes('analysis')) return 'data';
+    if (str.includes('api') || str.includes('endpoint')) return 'api';
+    
+    return 'general';
+  }
+
+  extractQAInsights(output) {
+    // Extract key insights from QA output
+    const insights = [];
+    
+    if (output.includes('accuracy')) insights.push('accuracy_assessment');
+    if (output.includes('completeness')) insights.push('completeness_check');
+    if (output.includes('security')) insights.push('security_review');
+    if (output.includes('performance')) insights.push('performance_analysis');
+    if (output.includes('recommendation')) insights.push('improvement_recommendations');
+    
+    return insights;
+  }
+
+  extractImprovementPatterns(output) {
+    // Extract improvement patterns for future reference
+    const patterns = [];
+    
+    if (output.includes('missing')) patterns.push('completeness_gap');
+    if (output.includes('unclear') || output.includes('confusing')) patterns.push('clarity_issue');
+    if (output.includes('inconsistent')) patterns.push('consistency_problem');
+    if (output.includes('outdated')) patterns.push('currency_issue');
+    
+    return patterns;
+  }
+
+  initializeQATools(sessionId = null) {
     return [
       // Think tool for step-by-step QA reasoning
       new DynamicTool({
@@ -296,6 +415,11 @@ Current assessment: {qaType} review of provided content
         description: 'Think through complex quality assurance challenges step by step, evaluate different QA approaches, and reason about the optimal validation strategy',
         func: async (input) => {
           try {
+            // Broadcast thinking progress if sessionId is available
+            if (sessionId) {
+              progressBroadcaster.updateThinking(sessionId, 'qa_analysis', 'Analyzing quality assurance challenge and planning approach...');
+            }
+
             const thinkPrompt = PromptTemplate.fromTemplate(`
 You are working through a complex quality assurance challenge. Break down your QA reasoning step by step.
 
@@ -316,6 +440,10 @@ Provide your step-by-step QA reasoning:
 
             const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
             const thinking = await chain.invoke({ problem: input });
+            
+            if (sessionId) {
+              progressBroadcaster.updateThinking(sessionId, 'qa_strategy', thinking.substring(0, 200) + '...');
+            }
             
             return `QA THINKING PROCESS:\n${thinking}`;
           } catch (error) {
