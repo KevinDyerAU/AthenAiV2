@@ -290,7 +290,11 @@ Be thorough but concise.
 `);
             
             const chain = synthesisPrompt.pipe(this.llm).pipe(new StringOutputParser());
-            const result = await chain.invoke({ topic: input, context: input });
+            const result = await chain.invoke({ 
+              topic: input, 
+              context: input,
+              tools: this.tools ? this.tools.map(t => t.name).join(', ') : 'knowledge_synthesis, fact_verification, research_planning'
+            });
             return result;
           } catch (error) {
             logger.error('Knowledge synthesis failed:', error);
