@@ -73,38 +73,60 @@ check_neo4j() {
 
 # Function to initialize PostgreSQL schema
 init_postgres() {
-    echo -e "${BLUE}🐘 Initializing PostgreSQL schema...${NC}"
+    echo -e "${BLUE}🐘 Initializing PostgreSQL knowledge substrate...${NC}"
     
-    if [ ! -f "db/postgres/schema.sql" ]; then
-        echo -e "${RED}❌ PostgreSQL schema file not found at db/postgres/schema.sql${NC}"
+    local schema_files=("init-knowledge-substrate.sql" "db/postgres/schema.sql")
+    local found_schema=false
+    
+    for file in "${schema_files[@]}"; do
+        if [ -f "$file" ]; then
+            echo -e "${GREEN}✅ PostgreSQL schema file found: $file${NC}"
+            echo -e "${YELLOW}📝 Please run the schema manually in your Supabase SQL editor:${NC}"
+            echo "   1. Open your Supabase dashboard"
+            echo "   2. Go to SQL Editor"
+            echo "   3. Copy and paste the contents of $file"
+            echo "   4. Run the query"
+            found_schema=true
+            break
+        fi
+    done
+    
+    if [ "$found_schema" = false ]; then
+        echo -e "${RED}❌ No PostgreSQL schema files found. Expected:${NC}"
+        echo "   - init-knowledge-substrate.sql (recommended)"
+        echo "   - db/postgres/schema.sql (fallback)"
         return 1
     fi
-    
-    echo -e "${GREEN}✅ PostgreSQL schema file found.${NC}"
-    echo -e "${YELLOW}📝 Note: Please run the schema manually in your Supabase SQL editor:${NC}"
-    echo "   1. Open your Supabase dashboard"
-    echo "   2. Go to SQL Editor"
-    echo "   3. Copy and paste the contents of db/postgres/schema.sql"
-    echo "   4. Run the query"
     
     return 0
 }
 
 # Function to initialize Neo4j schema
 init_neo4j() {
-    echo -e "${BLUE}🕸️  Initializing Neo4j schema...${NC}"
+    echo -e "${BLUE}🕸️  Initializing Neo4j knowledge substrate...${NC}"
     
-    if [ ! -f "db/neo4j/schema.cypher" ]; then
-        echo -e "${RED}❌ Neo4j schema file not found at db/neo4j/schema.cypher${NC}"
+    local schema_files=("init-neo4j-knowledge.cypher" "db/neo4j/schema.cypher")
+    local found_schema=false
+    
+    for file in "${schema_files[@]}"; do
+        if [ -f "$file" ]; then
+            echo -e "${GREEN}✅ Neo4j schema file found: $file${NC}"
+            echo -e "${YELLOW}📝 Please run the schema manually in Neo4j Browser:${NC}"
+            echo "   1. Open Neo4j Browser at your instance URL"
+            echo "   2. Login with your credentials"
+            echo "   3. Copy and paste the contents of $file"
+            echo "   4. Run the query"
+            found_schema=true
+            break
+        fi
+    done
+    
+    if [ "$found_schema" = false ]; then
+        echo -e "${RED}❌ No Neo4j schema files found. Expected:${NC}"
+        echo "   - init-neo4j-knowledge.cypher (recommended)"
+        echo "   - db/neo4j/schema.cypher (fallback)"
         return 1
     fi
-    
-    echo -e "${GREEN}✅ Neo4j schema file found.${NC}"
-    echo -e "${YELLOW}📝 Note: Please run the schema manually in Neo4j Browser:${NC}"
-    echo "   1. Open Neo4j Browser at your instance URL"
-    echo "   2. Login with your credentials"
-    echo "   3. Copy and paste the contents of db/neo4j/schema.cypher"
-    echo "   4. Run the query"
     
     return 0
 }
@@ -170,11 +192,15 @@ main() {
     echo ""
     echo -e "${BLUE}📋 Next steps:${NC}"
     echo "  1. Update your .env file with actual database credentials"
-    echo "  2. Run the SQL/Cypher schemas in your respective database consoles"
+    echo "  2. Run the knowledge substrate schemas in your database consoles:"
+    echo "     - Supabase: init-knowledge-substrate.sql"
+    echo "     - Neo4j: init-neo4j-knowledge.cypher"
     echo "  3. Start the application with: npm run dev"
     echo "  4. Visit http://localhost:3000 to test the application"
+    echo "  5. Check http://localhost:3000/chat.html for AI chat interface"
     echo ""
     echo -e "${YELLOW}💡 Tip: Use 'npm test' to verify your setup${NC}"
+    echo -e "${YELLOW}📚 See KNOWLEDGE_SUBSTRATE_README.md for detailed setup guide${NC}"
 }
 
 # Run main function

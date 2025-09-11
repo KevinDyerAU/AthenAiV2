@@ -286,46 +286,33 @@ Current assessment: {qaType} review of provided content
         session_id: sessionId,
         orchestration_id: orchestrationId,
         error: error.message,
-        status: 'failed',
-        execution_time_ms: Date.now() - startTime
+        status: 'failed'
       };
     }
   }
 
   async retrieveKnowledgeContext(content, qaType, sessionId) {
     try {
-      // Query knowledge substrate for relevant context
-      const knowledgeQuery = {
-        content_type: 'qa_context',
-        qa_type: qaType,
-        content_hash: this.generateContentHash(content),
-        session_id: sessionId
-      };
-
-      // Retrieve similar QA assessments and patterns
-      const similarAssessments = await databaseService.queryKnowledgeGraph(
-        `MATCH (n:qa_assessment) WHERE n.qa_type = $qaType RETURN n LIMIT 5`,
-        { qaType }
-      );
-
-      // Retrieve quality patterns and best practices
+      const contentHash = this.generateContentHash(content);
       const domain = this.inferContentDomain(content);
-      const qualityPatterns = await databaseService.queryKnowledgeGraph(
-        `MATCH (n:quality_pattern) WHERE n.domain = $domain RETURN n LIMIT 3`,
-        { domain }
-      );
 
+      // Retrieve similar QA insights from Supabase
+      const similarQAInsights = await databaseService.getQAInsightsByContentHash(contentHash, 3);
+      
+      // Retrieve knowledge entities by domain
+      const domainEntities = await databaseService.getKnowledgeEntitiesByDomain(domain, 5);
+      
       return {
-        similar_assessments: similarAssessments || [],
-        quality_patterns: qualityPatterns || [],
-        domain_context: this.inferContentDomain(content),
+        similar_assessments: similarQAInsights || [],
+        domain_entities: domainEntities || [],
+        domain_context: domain,
         retrieved_at: new Date().toISOString()
       };
     } catch (error) {
-      logger.warn('Failed to retrieve knowledge context', { error: error.message });
+      logger.warn('Failed to retrieve QA knowledge context', { error: error.message });
       return {
         similar_assessments: [],
-        quality_patterns: [],
+        domain_entities: [],
         domain_context: 'general',
         retrieved_at: new Date().toISOString()
       };
@@ -334,25 +321,57 @@ Current assessment: {qaType} review of provided content
 
   async storeKnowledgeInsights(result, evaluation, sessionId, orchestrationId) {
     try {
-      // Store QA insights in knowledge substrate
-      const insights = {
+      const contentHash = this.generateContentHash(result.output);
+      const domain = this.inferContentDomain(result.output);
+      const improvementPatterns = this.extractImprovementPatterns(result.output);
+
+      // Store QA insights in Supabase
+      const qaData = {
+        content_hash: contentHash,
+        qa_type: result.qa_type || 'general',
+        quality_metrics: evaluation.quality_metrics || {},
+        improvement_patterns: improvementPatterns,
         session_id: sessionId,
         orchestration_id: orchestrationId,
-        qa_insights: this.extractQAInsights(result.output),
-        quality_metrics: JSON.stringify(evaluation.quality_metrics || {}),
-        improvement_patterns: this.extractImprovementPatterns(result.output),
-        confidence_score: evaluation.confidence_score,
-        created_at: new Date().toISOString()
+        metadata: {
+          agent_type: 'QualityAssuranceAgent',
+          confidence_score: evaluation.confidence_score,
+          domain: domain,
+          output_length: result.output?.length || 0
+        }
       };
 
-      await databaseService.createKnowledgeNode(
-        sessionId,
-        orchestrationId,
-        'QAInsights',
-        insights
-      );
+      await databaseService.storeQAInsights(qaData);
 
-      logger.info('QA insights stored in knowledge substrate', { sessionId, orchestrationId });
+      // Also create a knowledge entity for significant QA findings
+      if (evaluation.confidence_score > 0.7 && result.output?.length > 100) {
+        const entityData = {
+          external_id: `qa_${contentHash}_${Date.now()}`,
+          content: result.output.substring(0, 1000), // First 1000 chars
+          entity_type: 'qa_assessment',
+          domain: domain,
+          metadata: {
+            qa_type: result.qa_type,
+            quality_metrics: evaluation.quality_metrics,
+            improvement_patterns: improvementPatterns,
+            session_id: sessionId,
+            orchestration_id: orchestrationId
+          },
+          confidence_score: evaluation.confidence_score,
+          source_type: 'qa_agent'
+        };
+
+        await databaseService.createKnowledgeEntity(entityData);
+      }
+
+      logger.info('QA insights stored in knowledge substrate', { 
+        sessionId, 
+        orchestrationId, 
+        contentHash, 
+        domain,
+        confidence: evaluation.confidence_score,
+        patternsCount: improvementPatterns.length
+      });
     } catch (error) {
       logger.warn('Failed to store QA insights', { error: error.message });
     }

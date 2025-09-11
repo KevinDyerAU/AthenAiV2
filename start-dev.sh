@@ -137,38 +137,56 @@ check_neo4j() {
 
 # Initialize PostgreSQL schema
 init_postgres() {
-    info "🐘 Initializing PostgreSQL schema..."
+    info "🐘 Initializing PostgreSQL knowledge substrate..."
     
-    if [[ ! -f "db/postgres/schema.sql" ]]; then
-        err "❌ PostgreSQL schema file not found at db/postgres/schema.sql"
+    local schema_files=("init-knowledge-substrate.sql" "db/postgres/schema.sql")
+    local found_schema=false
+    
+    for file in "${schema_files[@]}"; do
+        if [[ -f "$file" ]]; then
+            success "✅ PostgreSQL schema file found: $file"
+            warn "📝 Please run the schema manually in your Supabase SQL editor:"
+            info "   1. Open your Supabase dashboard"
+            info "   2. Go to SQL Editor"
+            info "   3. Copy and paste the contents of $file"
+            info "   4. Run the query"
+            found_schema=true
+            break
+        fi
+    done
+    
+    if [[ "$found_schema" == false ]]; then
+        err "❌ No PostgreSQL schema files found. Expected: init-knowledge-substrate.sql or db/postgres/schema.sql"
         return 1
     fi
-    
-    success "✅ PostgreSQL schema file found."
-    warn "📝 Note: Please run the schema manually in your Supabase SQL editor:"
-    info "   1. Open your Supabase dashboard"
-    info "   2. Go to SQL Editor"
-    info "   3. Copy and paste the contents of db/postgres/schema.sql"
-    info "   4. Run the query"
     
     return 0
 }
 
 # Initialize Neo4j schema
 init_neo4j() {
-    info "🕸️  Initializing Neo4j schema..."
+    info "🕸️  Initializing Neo4j knowledge substrate..."
     
-    if [[ ! -f "db/neo4j/schema.cypher" ]]; then
-        err "❌ Neo4j schema file not found at db/neo4j/schema.cypher"
+    local schema_files=("init-neo4j-knowledge.cypher" "db/neo4j/schema.cypher")
+    local found_schema=false
+    
+    for file in "${schema_files[@]}"; do
+        if [[ -f "$file" ]]; then
+            success "✅ Neo4j schema file found: $file"
+            warn "📝 Please run the schema manually in Neo4j Browser:"
+            info "   1. Open Neo4j Browser at your instance URL"
+            info "   2. Login with your credentials"
+            info "   3. Copy and paste the contents of $file"
+            info "   4. Run the query"
+            found_schema=true
+            break
+        fi
+    done
+    
+    if [[ "$found_schema" == false ]]; then
+        err "❌ No Neo4j schema files found. Expected: init-neo4j-knowledge.cypher or db/neo4j/schema.cypher"
         return 1
     fi
-    
-    success "✅ Neo4j schema file found."
-    warn "📝 Note: Please run the schema manually in Neo4j Browser:"
-    info "   1. Open Neo4j Browser at your instance URL"
-    info "   2. Login with your credentials"
-    info "   3. Copy and paste the contents of db/neo4j/schema.cypher"
-    info "   4. Run the query"
     
     return 0
 }
@@ -312,10 +330,14 @@ main() {
         success "🎉 Development setup complete!"
         info "📋 Next steps:"
         info "  1. Update your .env file with actual database credentials"
-        info "  2. Run the SQL/Cypher schemas in your respective database consoles"
+        info "  2. Run the knowledge substrate schemas in your database consoles:"
+        info "     - Supabase: init-knowledge-substrate.sql"
+        info "     - Neo4j: init-neo4j-knowledge.cypher"
         info "  3. Start the application with: ./start-dev.sh --start"
         info "  4. Visit http://localhost:3000 to test the application"
+        info "  5. Check http://localhost:3000/chat.html for AI chat interface"
         warn "💡 Tip: Use 'npm test' to verify your setup"
+        warn "📚 See KNOWLEDGE_SUBSTRATE_README.md for detailed setup guide"
     else
         # Basic mode - just setup
         install_dependencies

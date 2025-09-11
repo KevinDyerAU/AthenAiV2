@@ -190,38 +190,62 @@ function Test-Neo4jConfig {
 
 # Initialize PostgreSQL schema
 function Initialize-PostgresSchema {
-    Write-Info "🐘 Initializing PostgreSQL schema..."
+    Write-Info "🐘 Initializing PostgreSQL knowledge substrate..."
     
-    if (-not (Test-Path "db\postgres\schema.sql")) {
-        Write-Error "❌ PostgreSQL schema file not found at db\postgres\schema.sql"
-        return $false
+    $schemaFiles = @(
+        "init-knowledge-substrate.sql",
+        "db\postgres\schema.sql"
+    )
+    
+    $foundSchema = $false
+    foreach ($file in $schemaFiles) {
+        if (Test-Path $file) {
+            Write-Success "✅ PostgreSQL schema file found: $file"
+            Write-Warning "📝 Please run the schema manually in your Supabase SQL editor:"
+            Write-Info "   1. Open your Supabase dashboard"
+            Write-Info "   2. Go to SQL Editor"
+            Write-Info "   3. Copy and paste the contents of $file"
+            Write-Info "   4. Run the query"
+            $foundSchema = $true
+            break
+        }
     }
     
-    Write-Success "✅ PostgreSQL schema file found."
-    Write-Warning "📝 Note: Please run the schema manually in your Supabase SQL editor:"
-    Write-Info "   1. Open your Supabase dashboard"
-    Write-Info "   2. Go to SQL Editor"
-    Write-Info "   3. Copy and paste the contents of db\postgres\schema.sql"
-    Write-Info "   4. Run the query"
+    if (-not $foundSchema) {
+        Write-Error "❌ No PostgreSQL schema files found. Expected: init-knowledge-substrate.sql or db\postgres\schema.sql"
+        return $false
+    }
     
     return $true
 }
 
 # Initialize Neo4j schema
 function Initialize-Neo4jSchema {
-    Write-Info "🕸️  Initializing Neo4j schema..."
+    Write-Info "🕸️  Initializing Neo4j knowledge substrate..."
     
-    if (-not (Test-Path "db\neo4j\schema.cypher")) {
-        Write-Error "❌ Neo4j schema file not found at db\neo4j\schema.cypher"
-        return $false
+    $schemaFiles = @(
+        "init-neo4j-knowledge.cypher",
+        "db\neo4j\schema.cypher"
+    )
+    
+    $foundSchema = $false
+    foreach ($file in $schemaFiles) {
+        if (Test-Path $file) {
+            Write-Success "✅ Neo4j schema file found: $file"
+            Write-Warning "📝 Please run the schema manually in Neo4j Browser:"
+            Write-Info "   1. Open Neo4j Browser at your instance URL"
+            Write-Info "   2. Login with your credentials"
+            Write-Info "   3. Copy and paste the contents of $file"
+            Write-Info "   4. Run the query"
+            $foundSchema = $true
+            break
+        }
     }
     
-    Write-Success "✅ Neo4j schema file found."
-    Write-Warning "📝 Note: Please run the schema manually in Neo4j Browser:"
-    Write-Info "   1. Open Neo4j Browser at your instance URL"
-    Write-Info "   2. Login with your credentials"
-    Write-Info "   3. Copy and paste the contents of db\neo4j\schema.cypher"
-    Write-Info "   4. Run the query"
+    if (-not $foundSchema) {
+        Write-Error "❌ No Neo4j schema files found. Expected: init-neo4j-knowledge.cypher or db\neo4j\schema.cypher"
+        return $false
+    }
     
     return $true
 }
@@ -384,10 +408,14 @@ function Main {
         Write-Success "🎉 Development setup complete!"
         Write-Info "📋 Next steps:"
         Write-Info "  1. Update your .env file with actual database credentials"
-        Write-Info "  2. Run the SQL/Cypher schemas in your respective database consoles"
+        Write-Info "  2. Run the knowledge substrate schemas in your database consoles:"
+        Write-Info "     - Supabase: init-knowledge-substrate.sql"
+        Write-Info "     - Neo4j: init-neo4j-knowledge.cypher"
         Write-Info "  3. Start the application with: .\start-dev.ps1 -Start"
         Write-Info "  4. Visit http://localhost:3000 to test the application"
+        Write-Info "  5. Check http://localhost:3000/chat.html for AI chat interface"
         Write-Warning "💡 Tip: Use 'npm test' to verify your setup"
+        Write-Warning "📚 See KNOWLEDGE_SUBSTRATE_README.md for detailed setup guide"
     } else {
         # Basic mode - just setup
         Install-Dependencies

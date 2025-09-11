@@ -13,7 +13,19 @@
     "test:coverage": "jest --coverage",
     "test:unit": "jest tests/unit/",
     "test:integration": "jest tests/integration/",
-    "test:e2e": "jest tests/e2e/"
+    "test:e2e": "jest tests/e2e/",
+    "setup": "node -e \"console.log('Use setup:win or setup:unix for your platform')\"",
+    "setup:win": "powershell -ExecutionPolicy Bypass -File ./setup-knowledge-substrate.ps1",
+    "setup:unix": "./setup-knowledge-substrate.sh",
+    "init-db": "node -e \"console.log('Use init-db:win or init-db:unix for your platform')\"",
+    "init-db:win": "powershell -ExecutionPolicy Bypass -File ./init-db.ps1",
+    "init-db:unix": "./init-db.sh",
+    "start-dev": "node -e \"console.log('Use start-dev:win or start-dev:unix for your platform')\"",
+    "start-dev:win": "powershell -ExecutionPolicy Bypass -File ./start-dev.ps1 -Dev",
+    "start-dev:unix": "./start-dev.sh",
+    "check-setup": "node -e \"console.log('Use check-setup:win or check-setup:unix for your platform')\"",
+    "check-setup:win": "powershell -ExecutionPolicy Bypass -File ./setup-knowledge-substrate.ps1 -CheckOnly",
+    "check-setup:unix": "./setup-knowledge-substrate.sh --check-only"
   },
   "dependencies": {
     "@langchain/community": "^0.0.57",

@@ -153,6 +153,259 @@ class DatabaseService {
     }
   }
 
+  // Knowledge Substrate Operations
+  async createKnowledgeEntity(entityData) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping knowledge entity creation');
+      return null;
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('knowledge_entities')
+        .insert({
+          external_id: entityData.external_id,
+          content: entityData.content,
+          entity_type: entityData.entity_type || 'general',
+          domain: entityData.domain || 'general',
+          query_hash: entityData.query_hash,
+          created_by: entityData.created_by,
+          metadata: entityData.metadata || {},
+          confidence_score: entityData.confidence_score || 0.0,
+          source_type: entityData.source_type || 'agent_generated'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('Failed to create knowledge entity:', error);
+      throw error;
+    }
+  }
+
+  async getKnowledgeEntitiesByDomain(domain, limit = 10) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, returning empty knowledge entities');
+      return [];
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('knowledge_entities')
+        .select('*')
+        .eq('domain', domain)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logger.error('Failed to get knowledge entities by domain:', error);
+      return [];
+    }
+  }
+
+  async getKnowledgeEntitiesByQueryHash(queryHash, limit = 5) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, returning empty knowledge entities');
+      return [];
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('knowledge_entities')
+        .select('*')
+        .eq('query_hash', queryHash)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logger.error('Failed to get knowledge entities by query hash:', error);
+      return [];
+    }
+  }
+
+  async storeResearchInsights(insightsData) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping research insights storage');
+      return null;
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('research_insights')
+        .insert({
+          query: insightsData.query,
+          query_hash: insightsData.query_hash,
+          domain: insightsData.domain || 'general',
+          patterns: insightsData.patterns || [],
+          search_results: insightsData.search_results || {},
+          session_id: insightsData.session_id,
+          orchestration_id: insightsData.orchestration_id,
+          metadata: insightsData.metadata || {}
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('Failed to store research insights:', error);
+      throw error;
+    }
+  }
+
+  async getResearchInsightsByQueryHash(queryHash, limit = 3) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, returning empty research insights');
+      return [];
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('research_insights')
+        .select('*')
+        .eq('query_hash', queryHash)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logger.error('Failed to get research insights by query hash:', error);
+      return [];
+    }
+  }
+
+  async storeWebSearchCache(cacheData) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping web search cache storage');
+      return null;
+    }
+
+    try {
+      // First check if cache entry already exists
+      const { data: existing } = await this.supabase
+        .from('web_search_cache')
+        .select('id, hit_count')
+        .eq('query_hash', cacheData.query_hash)
+        .single();
+
+      if (existing) {
+        // Update existing entry
+        const { data, error } = await this.supabase
+          .from('web_search_cache')
+          .update({
+            hit_count: existing.hit_count + 1,
+            cached_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+          })
+          .eq('id', existing.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
+      } else {
+        // Create new entry
+        const { data, error } = await this.supabase
+          .from('web_search_cache')
+          .insert({
+            query_hash: cacheData.query_hash,
+            query_text: cacheData.query_text,
+            domain: cacheData.domain || 'general',
+            results: cacheData.results,
+            metadata: cacheData.metadata || {}
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
+      }
+    } catch (error) {
+      logger.error('Failed to store web search cache:', error);
+      throw error;
+    }
+  }
+
+  async getWebSearchCache(queryHash) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, returning null from web search cache');
+      return null;
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('web_search_cache')
+        .select('*')
+        .eq('query_hash', queryHash)
+        .gt('expires_at', new Date().toISOString())
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "not found"
+      return data;
+    } catch (error) {
+      logger.error('Failed to get web search cache:', error);
+      return null;
+    }
+  }
+
+  async storeQAInsights(qaData) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping QA insights storage');
+      return null;
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('qa_insights')
+        .insert({
+          content_hash: qaData.content_hash,
+          qa_type: qaData.qa_type,
+          quality_metrics: qaData.quality_metrics || {},
+          improvement_patterns: qaData.improvement_patterns || [],
+          session_id: qaData.session_id,
+          orchestration_id: qaData.orchestration_id,
+          metadata: qaData.metadata || {}
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('Failed to store QA insights:', error);
+      throw error;
+    }
+  }
+
+  async getQAInsightsByContentHash(contentHash, limit = 5) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, returning empty QA insights');
+      return [];
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('qa_insights')
+        .select('*')
+        .eq('content_hash', contentHash)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logger.error('Failed to get QA insights by content hash:', error);
+      return [];
+    }
+  }
+
   async createKnowledgeRelationship(fromNodeId, toNodeId, relationshipType, properties = {}) {
     if (!this.neo4jDriver) {
       logger.warn('Neo4j not initialized, skipping relationship creation');
