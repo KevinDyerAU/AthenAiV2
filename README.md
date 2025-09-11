@@ -62,7 +62,7 @@ AthenAI integrates with modern cloud services to provide enterprise-scale AI ope
 - **Multi-Format Support**: PDF, DOCX, TXT, HTML, XLSX, PPTX processing via unstructured.io
 - **Semantic Search**: pgvector-powered similarity search across document content
 - **Email Attachments**: Automatic processing of email attachments with metadata
-- **Asynchronous Processing**: RabbitMQ-based queue system for scalable document handling
+- **Direct Processing**: HTTP-based communication with unstructured worker for real-time processing
 - **Vector Storage**: Cost-effective pgvector integration with Supabase PostgreSQL
 - **Content Chunking**: Intelligent document segmentation with embedding generation
 
@@ -93,18 +93,106 @@ AthenAI integrates with modern cloud services to provide enterprise-scale AI ope
 ### Prerequisites
 
 - **Node.js 18+** and npm
-- **Database Services**: Supabase (PostgreSQL), Neo4j Aura, Redis Cloud (optional)
+- **Docker & Docker Compose** (recommended)
+- **Database Services**: Supabase (PostgreSQL with pgvector), Neo4j Aura (optional)
 - **AI Services**: OpenRouter API key (supports OpenAI, Anthropic, Google, Meta models)
+- **Document Processing**: Unstructured.io API key (for document processing)
+
+### 🛠️ Convenience Scripts
+
+AthenAI provides comprehensive setup and management scripts for all platforms:
+
+#### Quick Setup Commands
+```bash
+# Complete setup (recommended)
+npm run setup:win      # Windows
+npm run setup:unix     # Linux/Mac
+
+# Database initialization
+npm run init-db:win    # Windows
+npm run init-db:unix   # Linux/Mac
+
+# Document processing setup
+npm run docs:setup:win   # Windows
+npm run docs:setup:unix  # Linux/Mac
+```
+
+#### Docker Management
+```bash
+# Simplified deployment (Supabase + Document Processing)
+npm run docker:simplified        # Start services
+npm run docker:simplified:logs   # View logs
+npm run docker:simplified:down   # Stop services
+
+# Full production deployment
+npm run docker:full              # Start all services
+npm run docker:full:logs         # View logs
+npm run docker:full:down         # Stop services
+```
+
+#### Development & Testing
+```bash
+# Development
+npm run dev                      # Start with hot reload
+npm run start                    # Production start
+
+# Testing
+npm run test                     # Run all tests
+npm run docs:test:win           # Test document processing (Windows)
+npm run docs:test:unix          # Test document processing (Linux/Mac)
+
+# Code quality
+npm run lint                     # Check code style
+npm run lint:fix                # Fix linting issues
+```
+
+### 🗄️ Database Considerations
+
+#### Supabase Setup (Required)
+1. **Create Supabase Project**: Visit [supabase.com](https://supabase.com) and create a new project
+2. **Enable pgvector**: In SQL Editor, run: `CREATE EXTENSION IF NOT EXISTS vector;`
+3. **Run Schema**: Execute `init-knowledge-substrate.sql` in Supabase SQL Editor
+4. **Get Credentials**: Copy your project URL and service role key from Settings > API
+
+#### Neo4j Setup (Optional - for advanced knowledge graphs)
+1. **Create Neo4j Aura Instance**: Visit [neo4j.com/aura](https://neo4j.com/aura)
+2. **Run Schema**: Execute `init-neo4j-knowledge.cypher` in Neo4j Browser
+3. **Get Connection Details**: Copy URI, username, and password
+
+#### Database Schema Overview
+```sql
+-- Core Knowledge Tables (Supabase)
+knowledge_entities     -- Domain-classified knowledge storage
+research_insights      -- Learning from research queries
+qa_insights           -- Quality assurance learning
+web_search_cache      -- 24-hour intelligent caching
+documents             -- Document storage with embeddings
+document_chunks       -- Document chunks with vector search
+```
 
 ### Installation Options
 
-#### Option 1: Automated Setup (Recommended)
+#### Option 1: Simplified Docker Setup (Recommended)
 
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd AthenAi
 
+# Configure environment
+cp .env.simplified.example .env
+# Edit .env with your Supabase and API keys
+
+# Start with document processing (only 2 services)
+npm run docker:simplified
+
+# View logs
+npm run docker:simplified:logs
+```
+
+#### Option 2: Automated Local Setup
+
+```bash
 # Cross-platform setup
 npm run setup:win    # Windows
 npm run setup:unix   # Linux/Mac
@@ -118,7 +206,7 @@ npm run start-dev:win    # Windows
 npm run start-dev:unix   # Linux/Mac
 ```
 
-#### Option 2: Manual Setup
+#### Option 3: Manual Setup
 
 ```bash
 # Install dependencies
@@ -130,7 +218,7 @@ cp .env.simplified.example .env
 
 # Initialize knowledge substrate
 # Run init-knowledge-substrate.sql in Supabase
-# Run init-neo4j-knowledge.cypher in Neo4j Browser
+# Run init-neo4j-knowledge.cypher in Neo4j Browser (optional)
 
 # Start the server
 npm run dev
@@ -156,7 +244,7 @@ AthenAI uses a sophisticated, knowledge-driven architecture designed for enterpr
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           AthenAI Knowledge-Driven Architecture                  │
+│                     AthenAI Simplified Architecture                              │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -173,33 +261,36 @@ AthenAI uses a sophisticated, knowledge-driven architecture designed for enterpr
                                 │              │ Enhanced Agents │
                                 │              │ • Research      │
                                 │              │ • QA            │
-                                │              │ • Development   │
-                                │              │ • Communication │
-                                │              │ • Planning      │
-                                │              │ • Execution     │
-                                │              └─────────────────┘
-                                │                        │
-                                ▼                        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                          KNOWLEDGE SUBSTRATE                                     │
-├─────────────────┬─────────────────┬─────────────────┬─────────────────────────┤
-│   Supabase      │     Neo4j       │     Redis       │    OpenRouter           │
-│   PostgreSQL    │ Knowledge Graph │   Caching       │   Multi-Model AI        │
-│                 │                 │                 │                         │
-│ • Entities      │ • Relationships │ • Web Cache     │ • OpenAI               │
-│ • Insights      │ • Sessions      │ • Query Cache   │ • Anthropic            │
-│ • QA Data       │ • Patterns      │ • Results       │ • Google               │
-│ • Provenance    │ • Orchestration │ • Performance   │ • Meta                 │
-│ • Vector Search │ • Agent Links   │ • Hit Tracking  │ • Custom Models        │
-└─────────────────┴─────────────────┴─────────────────┴─────────────────────────┘
-                                │
-                                ▼
-                    ┌─────────────────────────┐
-                    │    LangChain Tools      │
-                    │ • Agent Framework       │
-                    │ • Specialized Tools     │
-                    │ • Memory Management     │
-                    │ • Chain Orchestration   │
+                                │              │ • Document      │◄─┐
+                                │              │ • Development   │  │
+                                │              │ • Communication │  │
+                                │              │ • Planning      │  │
+                                │              │ • Execution     │  │
+                                │              └─────────────────┘  │
+                                │                        │         │
+                                ▼                        ▼         │
+┌─────────────────────────────────────────────────────────────────┐│
+│                    KNOWLEDGE SUBSTRATE                          ││
+├─────────────────┬─────────────────┬─────────────────────────────┤│
+│   Supabase      │     Neo4j       │    OpenRouter               ││
+│   PostgreSQL    │ Knowledge Graph │   Multi-Model AI            ││
+│   + pgvector    │   (Optional)    │                             ││
+│                 │                 │                             ││
+│ • Entities      │ • Relationships │ • OpenAI                   ││
+│ • Insights      │ • Sessions      │ • Anthropic                ││
+│ • QA Data       │ • Patterns      │ • Google                   ││
+│ • Documents     │ • Agent Links   │ • Meta                     ││
+│ • Vector Search │                 │ • Custom Models            ││
+│ • Web Cache     │                 │                             ││
+└─────────────────┴─────────────────┴─────────────────────────────┘│
+                                │                                  │
+                                ▼                                  │
+                    ┌─────────────────────────┐                   │
+                    │ Unstructured Worker     │◄──────────────────┘
+                    │ • Document Processing   │
+                    │ • HTTP API             │
+                    │ • Supabase Integration │
+                    │ • Vector Embeddings    │
                     └─────────────────────────┘
 ```
 
