@@ -58,11 +58,20 @@ AthenAI integrates with modern cloud services to provide enterprise-scale AI ope
 - **Vector Embeddings**: Semantic similarity search with pgvector support
 - **Knowledge Graph**: Neo4j relationships between entities, sessions, and insights
 
+### 📄 Document Processing (Enterprise-Grade)
+- **Multi-Format Support**: PDF, DOCX, TXT, HTML, XLSX, PPTX processing via unstructured.io
+- **Semantic Search**: pgvector-powered similarity search across document content
+- **Email Attachments**: Automatic processing of email attachments with metadata
+- **Asynchronous Processing**: RabbitMQ-based queue system for scalable document handling
+- **Vector Storage**: Cost-effective pgvector integration with Supabase PostgreSQL
+- **Content Chunking**: Intelligent document segmentation with embedding generation
+
 ### 🤖 Advanced AI Agents
 - **Master Orchestrator**: AI-powered semantic routing and task complexity analysis
 - **Research Agent**: Knowledge-enhanced web search with learning capabilities
 - **Quality Assurance Agent**: Comprehensive validation with insight storage
 - **Development Agent**: Code generation with LangChain tools and sandboxed execution
+- **Document Agent**: Document processing, upload, search, and email attachments with pgvector
 - **Communication Agent**: Multi-channel messaging (Email, Slack, Discord, Teams)
 - **Planning Agent**: Advanced project planning with resource allocation
 - **Execution Agent**: Workflow orchestration and command execution
@@ -341,6 +350,24 @@ Query → Knowledge Retrieval → Cached Results Check → Enhanced Web Search �
 - **Performance Evaluation**: Performance implications and optimization suggestions
 - **Quality Scoring**: Quantitative metrics with configurable standards
 
+### 📄 Document Agent (pgvector-Powered)
+**Enterprise Document Processing**: Advanced document management with semantic search capabilities
+
+**Document Processing Features**:
+- **Multi-Format Support**: PDF, DOCX, TXT, HTML, XLSX, PPTX via unstructured.io
+- **Semantic Search**: pgvector-powered similarity search across document content
+- **Email Attachments**: Automatic processing of email attachments with metadata extraction
+- **Asynchronous Processing**: RabbitMQ-based queue system for scalable document handling
+- **Vector Storage**: Cost-effective pgvector integration with Supabase PostgreSQL
+- **Content Chunking**: Intelligent document segmentation with embedding generation
+
+**LangChain Tools**:
+- **Document Upload**: File processing and queue management
+- **Semantic Search**: Vector similarity search across document corpus
+- **Document Status**: Real-time processing status and metadata retrieval
+- **Content Summarization**: AI-powered document summarization
+- **Email Integration**: Email attachment processing workflows
+
 ### 🔧 Development Agent (LangChain-Powered)
 **Advanced Code Generation**: Full LangChain integration with specialized development tools
 
@@ -443,6 +470,7 @@ POST /api/chat                       # Master Orchestrator (AI routing)
 POST /api/agents/research            # Research Agent (knowledge-enhanced)
 POST /api/agents/quality-assurance   # QA Agent (knowledge-enhanced)
 POST /api/agents/development         # Development Agent (LangChain)
+POST /api/agents/document            # Document Agent (pgvector)
 POST /api/agents/communication       # Communication Agent
 POST /api/agents/planning            # Planning Agent
 POST /api/agents/execution           # Execution Agent
@@ -603,6 +631,22 @@ CODE_EXECUTION_TIMEOUT=30000
 # Optional External APIs
 SERPAPI_API_KEY=your-serpapi-key
 UNSTRUCTURED_API_KEY=your-unstructured-key
+
+# Document Processing Configuration
+WORKER_CONCURRENCY=2
+LOG_LEVEL=INFO
+UPLOAD_DIR=./data/unstructured/input
+EMBEDDING_MODEL=text-embedding-3-small
+
+# Document Processing APIs
+UNSTRUCTURED_API_KEY=your-unstructured-key
+UNSTRUCTURED_API_URL=https://api.unstructured.io
+FIRECRAWL_API_KEY=your-firecrawl-key
+
+# Message Queue (RabbitMQ)
+RABBITMQ_DEFAULT_USER=athenai_queue
+RABBITMQ_DEFAULT_PASS=your_rabbitmq_password_here
+RABBITMQ_URL=amqp://athenai_queue:your_rabbitmq_password_here@rabbitmq:5672/
 ```
 
 ### Database Schema Setup
@@ -646,10 +690,13 @@ src/
 │   ├── ResearchAgent.js          # Knowledge-enhanced research
 │   ├── QualityAssuranceAgent.js  # Knowledge-enhanced QA
 │   ├── DevelopmentAgent.js       # LangChain-powered development
+│   ├── DocumentAgent.js          # Document processing with pgvector
 │   ├── CommunicationAgent.js     # Multi-channel messaging
 │   ├── PlanningAgent.js          # Advanced planning
 │   ├── ExecutionAgent.js         # Workflow orchestration
 │   └── AgentHandlers.js          # Agent lifecycle management
+├── workers/                   # Background processing workers
+│   └── unstructured_worker.py    # Document processing worker
 ├── services/
 │   ├── database.js               # Knowledge substrate operations
 │   ├── chatroom.js               # Chat management
@@ -664,7 +711,13 @@ src/
 # Knowledge Substrate Files
 ├── init-knowledge-substrate.sql   # PostgreSQL schema
 ├── init-neo4j-knowledge.cypher   # Neo4j schema
-└── KNOWLEDGE_SUBSTRATE_README.md  # Detailed setup guide
+├── KNOWLEDGE_SUBSTRATE_README.md  # Detailed setup guide
+
+# Document Processing Files
+├── docker-compose.simplified.yml  # Simplified Docker setup with document processing
+├── Dockerfile.unstructured       # Document processing worker container
+├── requirements-unstructured.txt # Python dependencies for document processing
+└── .env.simplified.example       # Environment configuration with Supabase
 ```
 
 ### Development Scripts
@@ -698,8 +751,21 @@ npm run lint:fix              # Fix linting issues
 
 ### Docker Deployment (Recommended)
 
+#### Simplified Setup with Document Processing
 ```bash
-# Production deployment
+# Quick start with document processing (recommended for new deployments)
+docker-compose -f docker-compose.simplified.yml up --build -d
+
+# View logs
+docker-compose -f docker-compose.simplified.yml logs -f
+
+# Stop services
+docker-compose -f docker-compose.simplified.yml down
+```
+
+#### Full Production Deployment
+```bash
+# Production deployment with all services
 docker-compose up --build -d
 
 # Development with hot reload

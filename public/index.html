@@ -63,9 +63,6 @@
     .cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
     .kbd { font: inherit; background: #0d1427; border: 1px solid #243045; padding: 2px 6px; border-radius: 6px; }
     footer { color: var(--muted); border-top: 1px solid var(--border); padding: 16px 24px; font-size: 12px; text-align: center; }
-    .status-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
-    .status-online { background: var(--accent); }
-    .status-offline { background: var(--danger); }
   </style>
 </head>
 <body>
@@ -83,7 +80,7 @@
         <h3>🤖 AI Chat Interface</h3>
         <div class="desc">Real-time chat with AI agents including research, analysis, and creative capabilities.</div>
         <div class="links">
-          <a href="/chat.html" target="_blank">Launch Chat Interface</a>
+          <a href="http://localhost:3000/public/chat.html" target="_blank">Launch Chat Interface</a>
         </div>
       </div>
 
@@ -91,10 +88,9 @@
         <h3>🔌 API Endpoints</h3>
         <div class="desc">Core backend service with REST API and WebSocket support.</div>
         <div class="links">
-          <a href="/health" target="_blank"><span class="status-indicator" id="health-status"></span>/health</a>
-          <a href="/api/metrics" target="_blank">/api/metrics</a>
-          <a href="#" onclick="testAPI()">/api/chat (Test)</a>
-          <a href="#" onclick="testResearch()">/api/research (Test)</a>
+          <a href="http://localhost:3000/health" target="_blank">Health Check</a>
+          <a href="http://localhost:3000/api/metrics" target="_blank">System Metrics</a>
+          <a href="http://localhost:3000/public/index.html" target="_blank">Full Portal</a>
         </div>
       </div>
 
@@ -102,8 +98,7 @@
         <h3>💬 WebSocket API</h3>
         <div class="desc">Real-time communication endpoints for chat rooms and user management.</div>
         <div class="links">
-          <a href="/api/ws/rooms" target="_blank">/api/ws/rooms</a>
-          <a href="#" onclick="showRoomExample()">/api/ws/rooms/:id (Example)</a>
+          <a href="http://localhost:3000/api/ws/rooms" target="_blank">Active Rooms</a>
         </div>
       </div>
 
@@ -111,27 +106,7 @@
         <h3>🧠 Knowledge Graph</h3>
         <div class="desc">Neo4j-powered knowledge relationships and conversation context.</div>
         <div class="links">
-          <a href="#" onclick="showCypherExample()">Query Knowledge Graph</a>
-          <a href="#" onclick="showSessionExample()">View Session Data</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>📊 System Status</h3>
-        <div class="desc">Monitor system health and performance metrics.</div>
-        <div class="links">
-          <a href="#" onclick="checkDatabases()">Database Status</a>
-          <a href="#" onclick="showMetrics()">Performance Metrics</a>
-          <a href="/api/metrics" target="_blank">Raw Metrics JSON</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>⚙️ Configuration</h3>
-        <div class="desc">Environment setup and API key configuration.</div>
-        <div class="links">
-          <a href="#" onclick="showEnvExample()">Environment Variables</a>
-          <a href="#" onclick="showSetupGuide()">Setup Guide</a>
+          <a href="#" onclick="alert('Neo4j queries available via API')">Query Knowledge</a>
         </div>
       </div>
     </section>
@@ -160,203 +135,10 @@
         </div>
       </div>
     </section>
-
-    <section>
-      <h2 class="section-title">API Testing</h2>
-      <div class="grid">
-        <div class="card">
-          <h3>Chat API Test</h3>
-          <pre><code>curl -X POST http://localhost:3000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Research AI developments", "sessionId": "test123"}'</code></pre>
-        </div>
-        <div class="card">
-          <h3>Research API Test</h3>
-          <pre><code>curl -X POST http://localhost:3000/api/research \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Latest AI trends", "sessionId": "test123"}'</code></pre>
-        </div>
-        <div class="card">
-          <h3>WebSocket Connection</h3>
-          <pre><code>// JavaScript WebSocket client
-const socket = io('http://localhost:3000');
-socket.emit('join_room', {
-  roomId: 'general',
-  userId: 'user123',
-  username: 'TestUser'
-});</code></pre>
-        </div>
-      </div>
-    </section>
-
-    <div id="output" style="margin-top: 24px;"></div>
   </main>
 
   <footer>
-    AthenAI Simplified • Real-time AI chat platform • <span id="version">v1.0.0</span>
+    AthenAI Simplified • Real-time AI chat platform • v1.0.0
   </footer>
-
-  <script>
-    // Check health status on load
-    async function checkHealth() {
-      try {
-        const response = await fetch('/health');
-        const data = await response.json();
-        const indicator = document.getElementById('health-status');
-        if (data.status === 'healthy') {
-          indicator.className = 'status-indicator status-online';
-        } else {
-          indicator.className = 'status-indicator status-offline';
-        }
-      } catch (error) {
-        document.getElementById('health-status').className = 'status-indicator status-offline';
-      }
-    }
-
-    async function testAPI() {
-      try {
-        showOutput('Chat API', 'Loading...');
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: 'Hello AthenAI!',
-            sessionId: 'test_' + Date.now(),
-            userId: 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
-          })
-        });
-        const data = await response.json();
-        showOutput('Chat API Response', JSON.stringify(data, null, 2));
-      } catch (error) {
-        showOutput('Chat API Error', error.message);
-      }
-    }
-
-    async function testResearch() {
-      try {
-        showOutput('Research API', 'Loading...');
-        const response = await fetch('/api/research', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: 'AI research trends 2024',
-            sessionId: 'test_' + Date.now()
-          })
-        });
-        const data = await response.json();
-        showOutput('Research API Response', JSON.stringify(data, null, 2));
-      } catch (error) {
-        showOutput('Research API Error', error.message);
-      }
-    }
-
-    async function showRoomExample() {
-      try {
-        const response = await fetch('/api/ws/rooms');
-        const data = await response.json();
-        showOutput('Active Rooms', JSON.stringify(data, null, 2));
-      } catch (error) {
-        showOutput('Rooms API Error', error.message);
-      }
-    }
-
-    function showCypherExample() {
-      const example = `// Example Cypher query
-MATCH (s:Session)-[:HAS_ORCHESTRATION]->(o:Orchestration)
-RETURN s.id, o.message, o.created_at
-ORDER BY o.created_at DESC
-LIMIT 10`;
-      showOutput('Cypher Query Example', example);
-    }
-
-    function showSessionExample() {
-      const example = `// View session data
-GET /api/conversations/session_123
-
-// Response:
-{
-  "session_id": "session_123",
-  "conversations": [...],
-  "count": 5
-}`;
-      showOutput('Session API Example', example);
-    }
-
-    async function checkDatabases() {
-      try {
-        const response = await fetch('/api/metrics');
-        const data = await response.json();
-        showOutput('System Metrics', JSON.stringify(data, null, 2));
-      } catch (error) {
-        showOutput('Metrics Error', error.message);
-      }
-    }
-
-    async function showMetrics() {
-      await checkDatabases();
-    }
-
-    function showEnvExample() {
-      const example = `# Required Environment Variables
-NODE_ENV=development
-PORT=3000
-
-# Database Configuration
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=your-password
-REDIS_URL=redis://your-redis-cloud-url:port
-
-# AI Services
-OPENAI_API_KEY=your-openai-key
-LANGCHAIN_API_KEY=your-langsmith-key
-
-# Optional Search APIs
-SERPAPI_API_KEY=your-serpapi-key`;
-      showOutput('Environment Configuration', example);
-    }
-
-    function showSetupGuide() {
-      const guide = `# AthenAI Setup Guide
-
-1. Clone the repository
-2. Copy .env.simplified.example to .env
-3. Configure your API keys in .env
-4. Install dependencies: npm install
-5. Start development server: npm run dev
-6. Open chat interface: http://localhost:3000/chat.html
-
-## Required Services:
-- OpenAI API (for AI agents)
-- Supabase (PostgreSQL database)
-- Neo4j Aura (knowledge graph)
-- Redis Cloud (caching)
-
-## Optional Services:
-- SerpAPI (web search)
-- Unstructured API (document processing)
-- LangSmith (AI tracing)`;
-      showOutput('Setup Guide', guide);
-    }
-
-    function showOutput(title, content) {
-      const output = document.getElementById('output');
-      output.innerHTML = `
-        <div class="card">
-          <h3>${title}</h3>
-          <pre><code>${content}</code></pre>
-        </div>
-      `;
-      output.scrollIntoView({ behavior: 'smooth' });
-    }
-
-    // Initialize on page load
-    document.addEventListener('DOMContentLoaded', () => {
-      checkHealth();
-      setInterval(checkHealth, 30000); // Check health every 30 seconds
-    });
-  </script>
 </body>
 </html>

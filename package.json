@@ -25,7 +25,22 @@
     "start-dev:unix": "./start-dev.sh",
     "check-setup": "node -e \"console.log('Use check-setup:win or check-setup:unix for your platform')\"",
     "check-setup:win": "powershell -ExecutionPolicy Bypass -File ./setup-knowledge-substrate.ps1 -CheckOnly",
-    "check-setup:unix": "./setup-knowledge-substrate.sh --check-only"
+    "check-setup:unix": "./setup-knowledge-substrate.sh --check-only",
+    "docker:simplified": "docker-compose -f docker-compose.simplified.yml up --build -d",
+    "docker:simplified:logs": "docker-compose -f docker-compose.simplified.yml logs -f",
+    "docker:simplified:down": "docker-compose -f docker-compose.simplified.yml down",
+    "docker:simplified:restart": "docker-compose -f docker-compose.simplified.yml restart",
+    "docker:full": "docker-compose up --build -d",
+    "docker:full:logs": "docker-compose logs -f",
+    "docker:full:down": "docker-compose down",
+    "docker:dev": "docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
+    "docs:setup": "node -e \"console.log('Use docs:setup:win or docs:setup:unix for your platform')\"",
+    "docs:setup:win": "powershell -ExecutionPolicy Bypass -File ./setup-document-processing.ps1",
+    "docs:setup:unix": "./setup-document-processing.sh",
+    "docs:worker": "python src/workers/unstructured_worker.py",
+    "docs:test": "node -e \"console.log('Use docs:test:win or docs:test:unix for your platform')\"",
+    "docs:test:win": "powershell -ExecutionPolicy Bypass -File ./test-document-processing.ps1",
+    "docs:test:unix": "./test-document-processing.sh"
   },
   "dependencies": {
     "@langchain/community": "^0.0.57",

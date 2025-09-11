@@ -167,6 +167,7 @@ Available Agents:
 - execution: For task execution, workflow management, process automation
 - communication: For message formatting, external communications, notifications
 - qa: For quality assurance, validation, testing, review processes
+- document: For document processing, upload, search, analysis, and email attachments
 - general: For casual conversation, greetings, simple questions
 
 STEP-BY-STEP ANALYSIS:
@@ -175,7 +176,7 @@ STEP-BY-STEP ANALYSIS:
 3. What tools and capabilities would be most useful?
 4. Which agent's core competencies align best with these requirements?
 
-Think through your reasoning, then respond with ONLY the agent name (research, creative, analysis, development, planning, execution, communication, qa, or general).`);
+Think through your reasoning, then respond with ONLY the agent name (research, creative, analysis, development, planning, execution, communication, qa, document, or general).`);
 
       const chain = routingPrompt.pipe(this.llm).pipe(new StringOutputParser());
       
@@ -191,7 +192,7 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       
       // Clean and validate the response
       const cleanAgent = primaryAgent.toLowerCase().trim();
-      const validAgents = ['research', 'creative', 'analysis', 'development', 'planning', 'execution', 'communication', 'qa', 'general'];
+      const validAgents = ['research', 'creative', 'analysis', 'development', 'planning', 'execution', 'communication', 'qa', 'document', 'general'];
       const selectedAgent = validAgents.includes(cleanAgent) ? cleanAgent : 'general';
       
       // Determine secondary agents and execution order based on primary
