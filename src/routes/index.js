@@ -62,7 +62,16 @@ router.post('/chat', async (req, res) => {
 
     // Execute primary agent based on routing
     let agentResult = null;
-    const primaryAgent = orchestrationResult.routing?.primary;
+    let primaryAgent = orchestrationResult.routing?.primary;
+    
+    // Validate and fallback if primaryAgent is undefined
+    if (!primaryAgent || typeof primaryAgent !== 'string') {
+      console.warn('primaryAgent is undefined or invalid in routes, using fallback', { 
+        primaryAgent, 
+        orchestrationResult 
+      });
+      primaryAgent = 'general';
+    }
     
     switch (primaryAgent) {
       case 'research':
