@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
+const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
 
 class CommunicationAgent {
   constructor() {
@@ -290,6 +291,9 @@ Provide your step-by-step communication reasoning:
           }
         }
       }),
+
+      // Add standardized web browsing tools
+      ...WebBrowsingUtils.createWebBrowsingTools(),
 
       // Email Sending Tool
       new DynamicTool({

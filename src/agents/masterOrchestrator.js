@@ -212,12 +212,23 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         setTimeout(() => reject(new Error('API timeout - agent routing')), 8000);
       });
       
-      const primaryAgent = await Promise.race([
-        chain.invoke({ message: taskString }),
-        timeoutPromise
-      ]);
+      let primaryAgent;
+      try {
+        primaryAgent = await Promise.race([
+          chain.invoke({ message: taskString }),
+          timeoutPromise
+        ]);
+      } catch (error) {
+        logger.warn('Agent routing API call failed, using fallback', { error: error.message });
+        primaryAgent = 'general'; // Fallback to general agent
+      }
       
       // Clean and validate the response
+      if (!primaryAgent || typeof primaryAgent !== 'string') {
+        logger.warn('Invalid primaryAgent response, using fallback', { primaryAgent });
+        primaryAgent = 'general';
+      }
+      
       const cleanAgent = primaryAgent.toLowerCase().trim();
       const validAgents = ['research', 'creative', 'analysis', 'development', 'planning', 'execution', 'communication', 'qa', 'document', 'general'];
       const selectedAgent = validAgents.includes(cleanAgent) ? cleanAgent : 'general';

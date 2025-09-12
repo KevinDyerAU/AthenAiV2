@@ -4,6 +4,7 @@ const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
+const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
 
 class CreativeAgent {
   constructor(apiKey, langSmithConfig = {}) {
@@ -246,6 +247,10 @@ Adjustments Needed: ${toneAnalysis.adjustments.join(', ')}`;
         }
       }
     }));
+
+    // Add standardized web browsing tools
+    const webTools = WebBrowsingUtils.createWebBrowsingTools();
+    tools.push(...webTools);
 
     return tools;
   }

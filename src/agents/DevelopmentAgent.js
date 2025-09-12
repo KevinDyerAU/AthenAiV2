@@ -12,6 +12,7 @@ const axios = require('axios');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
+const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
 
 class DevelopmentAgent {
   constructor() {
@@ -272,6 +273,10 @@ Current task: {requirements}`);
         }
       }));
     }
+
+    // Add standardized web browsing tools
+    const webTools = WebBrowsingUtils.createWebBrowsingTools();
+    tools.push(...webTools);
 
     // Think tool for step-by-step development reasoning
     tools.push(new DynamicTool({

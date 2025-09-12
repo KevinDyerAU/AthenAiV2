@@ -4,6 +4,7 @@ const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
+const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
 
 class AnalysisAgent {
   constructor(apiKey, langSmithConfig = {}) {
@@ -245,6 +246,9 @@ Data: {data}
       }));
     }
 
+    // Add standardized web browsing tools
+    const webTools = WebBrowsingUtils.createWebBrowsingTools();
+    tools.push(...webTools);
 
     // Think tool for step-by-step reasoning
     tools.push(new DynamicTool({

@@ -263,8 +263,18 @@ io.on('connection', (socket) => {
         });
         logger.info('Orchestration result', { orchestrationResult });
 
-        // Execute primary agent
-        const primaryAgent = orchestrationResult.orchestration_result?.routing?.primary;
+        // Execute primary agent with proper error handling
+        let primaryAgent = orchestrationResult.orchestration_result?.routing?.primary;
+        
+        // Validate and fallback if primaryAgent is undefined
+        if (!primaryAgent || typeof primaryAgent !== 'string') {
+          logger.warn('primaryAgent is undefined or invalid, using fallback', { 
+            primaryAgent, 
+            orchestrationResult: JSON.stringify(orchestrationResult, null, 2) 
+          });
+          primaryAgent = 'general';
+        }
+        
         logger.info('Executing agent', { primaryAgent });
         
         // Start agent-specific progress tracking

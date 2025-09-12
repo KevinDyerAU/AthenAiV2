@@ -8,6 +8,8 @@ const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
 const { progressBroadcaster } = require('../services/progressBroadcaster');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 class QualityAssuranceAgent {
   constructor() {
@@ -66,10 +68,17 @@ class QualityAssuranceAgent {
       logger.info('Starting QA task', { sessionId, orchestrationId });
       
       // Start progress tracking
+      const getDisplayMessage = (data) => {
+        const msg = data.message || data.task || 'content review';
+        if (typeof msg === 'string') return msg;
+        if (typeof msg === 'object') return msg.content || msg.message || JSON.stringify(msg).substring(0, 100);
+        return String(msg);
+      };
+      
       const progressId = progressBroadcaster.startProgress(
         sessionId, 
         'QualityAssurance', 
-        `Quality assurance analysis: ${inputData.message || inputData.task || 'content review'}`
+        `Quality assurance analysis: ${getDisplayMessage(inputData)}`
       );
       
       // PHASE 1: Strategic Planning and Reasoning
@@ -151,11 +160,26 @@ STEP-BY-STEP QA PROCESS:
 
 Available tools: {tools}
 
+WEB BROWSING CAPABILITIES:
+You have access to web search and browsing tools for enhanced quality assurance:
+- web_search: Search the web to verify facts, check current information, or gather context
+- browse_url: Browse specific URLs to validate references or gather additional information
+- verify_references: Automatically verify the accessibility and relevance of cited references
+
+Use these tools when you need to:
+- Fact-check claims or statements in the content
+- Verify the accuracy of references and citations
+- Check if information is current and up-to-date
+- Gather additional context from authoritative sources
+- Validate technical specifications or standards mentioned
+
 Think through your reasoning process, then provide QA assessment with:
 - Detailed validation results (with reasoning for quality scores)
 - Comprehensive improvement recommendations (with justification)
 - Quality metrics and scores (with evaluation methodology)
 - Risk assessment and mitigation strategies (with priority analysis)
+- Web-verified fact-checking results (when applicable)
+- Reference validation outcomes (when applicable)
 - Include confidence score (0.0-1.0) and reasoning for your QA decisions
 
 QA Types:
@@ -426,6 +450,278 @@ Current assessment: {qaType} review of provided content
     return patterns;
   }
 
+  async performWebSearch(query) {
+    try {
+      // Use DuckDuckGo Instant Answer API for web search
+      const searchUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+      
+      const response = await axios.get(searchUrl, {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'AthenAI-QualityAssurance/1.0'
+        }
+      });
+
+      const results = [];
+      
+      // Extract instant answer if available
+      if (response.data.Abstract) {
+        results.push({
+          title: response.data.Heading || 'Instant Answer',
+          content: response.data.Abstract,
+          url: response.data.AbstractURL || '',
+          source: response.data.AbstractSource || 'DuckDuckGo',
+          type: 'instant_answer'
+        });
+      }
+
+      // Extract related topics
+      if (response.data.RelatedTopics && response.data.RelatedTopics.length > 0) {
+        response.data.RelatedTopics.slice(0, 3).forEach(topic => {
+          if (topic.Text && topic.FirstURL) {
+            results.push({
+              title: topic.Text.split(' - ')[0] || 'Related Topic',
+              content: topic.Text,
+              url: topic.FirstURL,
+              source: 'DuckDuckGo',
+              type: 'related_topic'
+            });
+          }
+        });
+      }
+
+      // If no results from DuckDuckGo, try a simple web scraping approach
+      if (results.length === 0) {
+        try {
+          const searchEngineUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+          const searchResponse = await axios.get(searchEngineUrl, {
+            timeout: 15000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+          });
+
+          const $ = cheerio.load(searchResponse.data);
+          
+          $('.result').slice(0, 5).each((i, element) => {
+            const title = $(element).find('.result__title a').text().trim();
+            const url = $(element).find('.result__title a').attr('href');
+            const snippet = $(element).find('.result__snippet').text().trim();
+            
+            if (title && url) {
+              results.push({
+                title,
+                content: snippet,
+                url: url.startsWith('http') ? url : `https://${url}`,
+                source: 'Web Search',
+                type: 'search_result'
+              });
+            }
+          });
+        } catch (scrapeError) {
+          logger.warn('Web scraping fallback failed', { error: scrapeError.message });
+        }
+      }
+
+      return results.length > 0 ? results : [{
+        title: 'Search Completed',
+        content: `Search performed for: ${query}. No specific results found, but search was executed successfully.`,
+        url: '',
+        source: 'AthenAI',
+        type: 'search_status'
+      }];
+
+    } catch (error) {
+      logger.error('Web search failed', { query, error: error.message });
+      return [{
+        title: 'Search Error',
+        content: `Failed to search for: ${query}. Error: ${error.message}`,
+        url: '',
+        source: 'AthenAI',
+        type: 'error'
+      }];
+    }
+  }
+
+  async browseUrl(url) {
+    try {
+      // Validate URL format
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      const response = await axios.get(url, {
+        timeout: 15000,
+        maxRedirects: 5,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+      });
+
+      const $ = cheerio.load(response.data);
+      
+      // Remove script and style elements
+      $('script, style, nav, footer, aside, .advertisement, .ads').remove();
+      
+      // Extract main content
+      const title = $('title').text().trim() || $('h1').first().text().trim() || 'No Title';
+      
+      // Try to find main content area
+      let mainContent = '';
+      const contentSelectors = [
+        'main', 
+        'article', 
+        '.content', 
+        '.main-content', 
+        '.post-content', 
+        '.entry-content',
+        '#content',
+        '.container'
+      ];
+      
+      for (const selector of contentSelectors) {
+        const content = $(selector).first();
+        if (content.length > 0) {
+          mainContent = content.text().trim();
+          break;
+        }
+      }
+      
+      // Fallback to body content if no main content found
+      if (!mainContent) {
+        mainContent = $('body').text().trim();
+      }
+      
+      // Clean up the content
+      mainContent = mainContent
+        .replace(/\s+/g, ' ')
+        .replace(/\n\s*\n/g, '\n')
+        .trim()
+        .substring(0, 5000); // Limit content length
+      
+      // Extract meta information
+      const description = $('meta[name="description"]').attr('content') || '';
+      const keywords = $('meta[name="keywords"]').attr('content') || '';
+      
+      return {
+        title,
+        description,
+        keywords,
+        content: mainContent,
+        url,
+        contentLength: mainContent.length,
+        extractedAt: new Date().toISOString()
+      };
+
+    } catch (error) {
+      logger.error('URL browsing failed', { url, error: error.message });
+      return {
+        title: 'Browse Error',
+        description: '',
+        keywords: '',
+        content: `Failed to browse URL: ${url}. Error: ${error.message}`,
+        url,
+        contentLength: 0,
+        extractedAt: new Date().toISOString(),
+        error: error.message
+      };
+    }
+  }
+
+  async verifyReferences(references, content) {
+    try {
+      const verificationResults = [];
+      
+      for (const reference of references.slice(0, 5)) { // Limit to 5 references to avoid timeout
+        try {
+          let referenceUrl = reference;
+          
+          // Extract URL if reference is in citation format
+          const urlMatch = reference.match(/https?:\/\/[^\s\)]+/);
+          if (urlMatch) {
+            referenceUrl = urlMatch[0];
+          }
+          
+          if (referenceUrl.startsWith('http')) {
+            const urlContent = await this.browseUrl(referenceUrl);
+            
+            // Simple relevance check
+            const contentWords = content.toLowerCase().split(/\s+/).slice(0, 50);
+            const referenceWords = urlContent.content.toLowerCase().split(/\s+/);
+            
+            let relevanceScore = 0;
+            contentWords.forEach(word => {
+              if (word.length > 3 && referenceWords.includes(word)) {
+                relevanceScore++;
+              }
+            });
+            
+            const relevancePercentage = Math.min((relevanceScore / contentWords.length) * 100, 100);
+            
+            verificationResults.push({
+              reference,
+              url: referenceUrl,
+              accessible: !urlContent.error,
+              title: urlContent.title,
+              relevanceScore: relevancePercentage,
+              status: urlContent.error ? 'error' : 'verified',
+              error: urlContent.error || null,
+              contentPreview: urlContent.content.substring(0, 200)
+            });
+          } else {
+            verificationResults.push({
+              reference,
+              url: null,
+              accessible: false,
+              title: 'Non-URL Reference',
+              relevanceScore: 0,
+              status: 'non_url',
+              error: 'Reference is not a URL',
+              contentPreview: ''
+            });
+          }
+        } catch (error) {
+          verificationResults.push({
+            reference,
+            url: reference,
+            accessible: false,
+            title: 'Verification Error',
+            relevanceScore: 0,
+            status: 'error',
+            error: error.message,
+            contentPreview: ''
+          });
+        }
+      }
+      
+      const accessibleCount = verificationResults.filter(r => r.accessible).length;
+      const averageRelevance = verificationResults.reduce((sum, r) => sum + r.relevanceScore, 0) / verificationResults.length;
+      
+      return {
+        totalReferences: references.length,
+        verifiedReferences: verificationResults.length,
+        accessibleReferences: accessibleCount,
+        averageRelevanceScore: averageRelevance,
+        verificationResults,
+        overallStatus: accessibleCount > 0 ? 'verified' : 'failed',
+        timestamp: new Date().toISOString()
+      };
+      
+    } catch (error) {
+      logger.error('Reference verification failed', { error: error.message });
+      return {
+        totalReferences: references.length,
+        verifiedReferences: 0,
+        accessibleReferences: 0,
+        averageRelevanceScore: 0,
+        verificationResults: [],
+        overallStatus: 'error',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
   initializeQATools(sessionId = null) {
     return [
       // Think tool for step-by-step QA reasoning
@@ -585,6 +881,69 @@ Provide your step-by-step QA reasoning:
             const { issues, context, priorities } = JSON.parse(input);
             const recommendations = await this.generateRecommendations(issues, context, priorities);
             return JSON.stringify(recommendations);
+          } catch (error) {
+            return JSON.stringify({ error: error.message });
+          }
+        }
+      }),
+
+      // Web Search Tool for fact-checking and validation
+      new DynamicTool({
+        name: 'web_search',
+        description: 'Search the web for information to validate facts, check references, or gather additional context for quality assurance',
+        func: async (input) => {
+          try {
+            if (sessionId) {
+              progressBroadcaster.updateThinking(sessionId, 'web_search', `Searching web for: ${input.substring(0, 100)}...`);
+            }
+            
+            const searchResults = await this.performWebSearch(input);
+            return JSON.stringify({
+              query: input,
+              results: searchResults,
+              timestamp: new Date().toISOString()
+            });
+          } catch (error) {
+            return JSON.stringify({ error: error.message, query: input });
+          }
+        }
+      }),
+
+      // URL Content Fetcher for browsing specific pages
+      new DynamicTool({
+        name: 'browse_url',
+        description: 'Browse and extract content from a specific URL for validation, fact-checking, or reference verification',
+        func: async (input) => {
+          try {
+            if (sessionId) {
+              progressBroadcaster.updateThinking(sessionId, 'browse_url', `Browsing URL: ${input}`);
+            }
+            
+            const urlContent = await this.browseUrl(input);
+            return JSON.stringify({
+              url: input,
+              content: urlContent,
+              timestamp: new Date().toISOString()
+            });
+          } catch (error) {
+            return JSON.stringify({ error: error.message, url: input });
+          }
+        }
+      }),
+
+      // Reference Verification Tool
+      new DynamicTool({
+        name: 'verify_references',
+        description: 'Verify the accuracy and validity of references, citations, and external sources mentioned in content',
+        func: async (input) => {
+          try {
+            const { references, content } = JSON.parse(input);
+            if (sessionId) {
+              progressBroadcaster.updateThinking(sessionId, 'verify_refs', `Verifying ${references.length} references...`);
+            }
+            
+            const verification = await this.verifyReferences(references, content);
+            return JSON.stringify(verification);
           } catch (error) {
             return JSON.stringify({ error: error.message });
           }

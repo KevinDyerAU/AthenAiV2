@@ -156,10 +156,18 @@ class AgentHandlers {
 
       // Start progress tracking
       const sessionId = options.sessionId || executionId;
+      
+      const getDisplayMessage = (data) => {
+        const msg = data.message || data.task || 'agent task';
+        if (typeof msg === 'string') return msg;
+        if (typeof msg === 'object') return msg.content || msg.message || JSON.stringify(msg).substring(0, 100);
+        return String(msg);
+      };
+      
       const progressId = progressBroadcaster.startProgress(
         sessionId, 
         agentId, 
-        `Processing: ${inputData.message || inputData.task || 'agent task'}`
+        `Processing: ${getDisplayMessage(inputData)}`
       );
 
       // Phase 1: Strategic Planning
