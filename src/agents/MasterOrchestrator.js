@@ -226,22 +226,43 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       
       let primaryAgent;
       try {
-        logger.info('MasterOrchestrator: Invoking AI agent routing', { taskString: taskString.substring(0, 100) + '...' });
+        logger.info('MasterOrchestrator: Invoking AI agent routing', { 
+          taskString: taskString.substring(0, 200) + '...',
+          fullTaskString: taskString,
+          sessionId,
+          orchestrationId,
+          llmModel: this.llm.modelName || 'unknown',
+          llmConfig: {
+            temperature: this.llm.temperature,
+            apiKey: this.llm.openAIApiKey ? 'present' : 'missing'
+          }
+        });
+        
         await progressBroadcaster.broadcastProgress(sessionId, {
           phase: 'ai_routing',
           message: 'Calling AI model for agent routing...',
           progress: 40
         });
         
+        const startTime = Date.now();
         primaryAgent = await Promise.race([
           chain.invoke({ message: taskString }),
           timeoutPromise
         ]);
+        const responseTime = Date.now() - startTime;
         
-        logger.info('MasterOrchestrator: AI agent routing response received', { primaryAgent, type: typeof primaryAgent });
+        logger.info('MasterOrchestrator: AI agent routing response received', { 
+          primaryAgent, 
+          type: typeof primaryAgent,
+          responseTime,
+          rawResponse: JSON.stringify(primaryAgent),
+          taskString: taskString.substring(0, 100) + '...',
+          sessionId
+        });
+        
         await progressBroadcaster.broadcastProgress(sessionId, {
           phase: 'ai_routing_complete',
-          message: `AI selected agent: ${primaryAgent}`,
+          message: `AI selected agent: "${primaryAgent}" (${typeof primaryAgent}) in ${responseTime}ms`,
           progress: 50
         });
       } catch (error) {
@@ -259,7 +280,12 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         });
         
         primaryAgent = this.getKeywordBasedAgent(taskString);
-        logger.info('MasterOrchestrator: Keyword-based fallback selected agent', { primaryAgent });
+        logger.info('MasterOrchestrator: Keyword-based fallback selected agent', { 
+          primaryAgent,
+          taskString: taskString.substring(0, 200) + '...',
+          fullTaskString: taskString,
+          sessionId
+        });
         
         await progressBroadcaster.broadcastProgress(sessionId, {
           phase: 'fallback_complete',
@@ -273,7 +299,9 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         logger.warn('MasterOrchestrator: Invalid primaryAgent response, using fallback', { 
           primaryAgent, 
           type: typeof primaryAgent,
-          taskString: taskString.substring(0, 100) + '...'
+          value: primaryAgent,
+          taskString: taskString.substring(0, 100) + '...',
+          sessionId
         });
         
         await progressBroadcaster.broadcastProgress(sessionId, {
@@ -289,6 +317,16 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       const cleanAgent = primaryAgent.toLowerCase().trim();
       const validAgents = ['research', 'creative', 'analysis', 'development', 'planning', 'execution', 'communication', 'qa', 'document', 'general'];
       const selectedAgent = validAgents.includes(cleanAgent) ? cleanAgent : 'general';
+      
+      logger.info('MasterOrchestrator: Agent validation process', {
+        originalResponse: primaryAgent,
+        cleanedAgent: cleanAgent,
+        selectedAgent: selectedAgent,
+        isValid: validAgents.includes(cleanAgent),
+        validAgents: validAgents,
+        fallbackToGeneral: selectedAgent === 'general' && cleanAgent !== 'general',
+        sessionId
+      });
       
       await progressBroadcaster.broadcastProgress(sessionId, {
         phase: 'agent_validation',
@@ -540,55 +578,73 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
   getKeywordBasedAgent(message) {
     const lowerMessage = message.toLowerCase();
     
+    logger.info('MasterOrchestrator: Keyword-based agent selection process', {
+      originalMessage: message.substring(0, 200) + '...',
+      lowerMessage: lowerMessage.substring(0, 200) + '...',
+      fullMessage: message
+    });
+    
     // Repository/GitHub analysis patterns
     if (lowerMessage.includes('github.com') || lowerMessage.includes('repository') || 
         lowerMessage.includes('repo') || lowerMessage.includes('analyze') && lowerMessage.includes('code')) {
+      logger.info('MasterOrchestrator: Matched development pattern (GitHub/repo)', { pattern: 'development' });
       return 'development';
     }
     
     // Research patterns
     if (lowerMessage.includes('research') || lowerMessage.includes('investigate') || 
         lowerMessage.includes('find information') || lowerMessage.includes('search for')) {
+      logger.info('MasterOrchestrator: Matched research pattern', { pattern: 'research' });
       return 'research';
     }
     
     // Development patterns
     if (lowerMessage.includes('code') || lowerMessage.includes('develop') || 
         lowerMessage.includes('build') || lowerMessage.includes('implement')) {
+      logger.info('MasterOrchestrator: Matched development pattern (code/build)', { pattern: 'development' });
       return 'development';
     }
     
     // Analysis patterns
     if (lowerMessage.includes('analyze') || lowerMessage.includes('analysis') || 
         lowerMessage.includes('examine') || lowerMessage.includes('evaluate')) {
+      logger.info('MasterOrchestrator: Matched analysis pattern', { pattern: 'analysis' });
       return 'analysis';
     }
     
     // Creative patterns
     if (lowerMessage.includes('create') || lowerMessage.includes('write') || 
         lowerMessage.includes('design') || lowerMessage.includes('generate')) {
+      logger.info('MasterOrchestrator: Matched creative pattern', { pattern: 'creative' });
       return 'creative';
     }
     
     // Planning patterns
     if (lowerMessage.includes('plan') || lowerMessage.includes('strategy') || 
         lowerMessage.includes('roadmap') || lowerMessage.includes('schedule')) {
+      logger.info('MasterOrchestrator: Matched planning pattern', { pattern: 'planning' });
       return 'planning';
     }
     
     // QA patterns
     if (lowerMessage.includes('test') || lowerMessage.includes('quality') || 
         lowerMessage.includes('review') || lowerMessage.includes('check')) {
+      logger.info('MasterOrchestrator: Matched QA pattern', { pattern: 'qa' });
       return 'qa';
     }
     
     // Communication patterns
     if (lowerMessage.includes('explain') || lowerMessage.includes('communicate') || 
         lowerMessage.includes('present') || lowerMessage.includes('report')) {
+      logger.info('MasterOrchestrator: Matched communication pattern', { pattern: 'communication' });
       return 'communication';
     }
     
     // Default to research for general queries
+    logger.info('MasterOrchestrator: No specific pattern matched, defaulting to research', { 
+      pattern: 'research',
+      reason: 'default_fallback'
+    });
     return 'research';
   }
 
