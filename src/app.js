@@ -254,6 +254,7 @@ io.on('connection', (socket) => {
       // Process with AI agents
       logger.info('Calling Master Orchestrator', { message });
       let agentResult = null;
+      let primaryAgent = 'general'; // Initialize with default value
       
       try {
         const orchestrationResult = await masterOrchestrator.executeOrchestration({
@@ -264,7 +265,7 @@ io.on('connection', (socket) => {
         logger.info('Orchestration result', { orchestrationResult });
 
         // Execute primary agent with proper error handling
-        let primaryAgent = orchestrationResult.orchestration_result?.routing?.primary;
+        primaryAgent = orchestrationResult.orchestration_result?.routing?.primary;
         
         // Validate and fallback if primaryAgent is undefined
         if (!primaryAgent || typeof primaryAgent !== 'string') {

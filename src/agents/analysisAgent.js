@@ -196,6 +196,8 @@ Provide a structured analysis with:
 Show your reasoning process where it adds value to understanding.
 
 Data: {data}
+
+{agent_scratchpad}
 `);
   }
 

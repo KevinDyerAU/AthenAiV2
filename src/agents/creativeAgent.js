@@ -175,7 +175,9 @@ Think through your reasoning process, then provide structured creative output wi
 - Style and Tone Assessment (with audience fit analysis)
 - Confidence Score (0.0-1.0) and reasoning for your creative decisions
 
-Content: {content}`);
+Content: {content}
+
+{agent_scratchpad}`);
   }
 
   initializeCreativeTools() {

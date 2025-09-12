@@ -131,6 +131,8 @@ Execution types:
 - deployment: Execute deployment and infrastructure tasks
 
 Current execution: {executionType} - {executionPlan}
+
+{agent_scratchpad}
 `);
 
         // Create agent

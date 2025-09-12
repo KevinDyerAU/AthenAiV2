@@ -134,6 +134,8 @@ Provide a comprehensive plan including:
 Show your reasoning process where it adds strategic value.
 
 Current planning task: {complexity} - {planningRequest}
+
+{agent_scratchpad}
 `);
 
         // Create agent

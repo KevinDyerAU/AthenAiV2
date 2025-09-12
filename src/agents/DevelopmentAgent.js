@@ -101,7 +101,7 @@ class DevelopmentAgent {
         // Initialize development tools
         const tools = this.initializeDevelopmentTools();
 
-        // Create development prompt with explicit reasoning
+        // Create development prompt with explicit reasoning and required agent_scratchpad
         const prompt = PromptTemplate.fromTemplate(`
 You are a Development Agent with advanced reasoning capabilities specialized in code generation, project setup, and software development tasks. Before implementing any solution, think through your approach step by step.
 
@@ -136,7 +136,9 @@ Think through your reasoning process, then provide development output that is:
 - Properly tested (with testing strategy explanation)
 - Include confidence score (0.0-1.0) and reasoning for your implementation decisions
 
-Current task: {requirements}`);
+Current task: {requirements}
+
+{agent_scratchpad}`);
 
         // Create agent
         const agent = await createOpenAIToolsAgent({
@@ -155,11 +157,9 @@ Current task: {requirements}`);
 
         // Execute development task
         result = await agentExecutor.invoke({
-          developmentRequest: typeof inputData === 'object' ? JSON.stringify(inputData) : inputData,
-          developmentType: inputData.development_type,
+          requirements,
+          projectType,
           language,
-          requirements: JSON.stringify(requirements),
-          strategy: strategyPlan.selected_strategy.name,
           sessionId,
           tools: tools.map(t => t.name).join(', ')
         });
@@ -217,6 +217,14 @@ Current task: {requirements}`);
       return developmentResult;
 
     } catch (error) {
+      console.error('Development task failed - detailed error:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        sessionId,
+        orchestrationId,
+        timestamp: new Date().toISOString()
+      });
       logger.error('Development task failed', {
         sessionId,
         orchestrationId,

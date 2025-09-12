@@ -141,6 +141,8 @@ Communication types:
 - notify: Send notifications and alerts
 
 Current task: {communicationType} - {message}
+
+{agent_scratchpad}
 `);
 
         // Create agent
