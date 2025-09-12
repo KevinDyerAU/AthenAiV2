@@ -5,7 +5,6 @@ const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { StringOutputParser } = require('@langchain/core/output_parsers');
 const { logger } = require('../utils/logger');
-const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
 const { SemanticSimilarity } = require('../utils/semanticSimilarity');
 const progressBroadcaster = require('../services/progressBroadcaster');
