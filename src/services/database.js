@@ -308,6 +308,93 @@ class DatabaseService {
     }
   }
 
+  // New method for semantic similarity-based research retrieval
+  async getResearchInsightsForSimilarity(domain = null, limit = 10) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, returning empty research insights');
+      return [];
+    }
+
+    try {
+      let query = this.supabase
+        .from('research_insights')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      // Filter by domain if provided
+      if (domain && domain !== 'general') {
+        query = query.eq('domain', domain);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logger.error('Failed to get research insights for similarity:', error);
+      return [];
+    }
+  }
+
+  // New method for semantic similarity-based analysis retrieval
+  async getAnalysisInsightsForSimilarity(domain = null, limit = 10) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, returning empty analysis insights');
+      return [];
+    }
+
+    try {
+      let query = this.supabase
+        .from('analysis_insights')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      // Filter by domain if provided
+      if (domain && domain !== 'general') {
+        query = query.eq('domain', domain);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logger.error('Failed to get analysis insights for similarity:', error);
+      return [];
+    }
+  }
+
+  // New method for semantic similarity-based QA retrieval
+  async getQAInsightsForSimilarity(domain = null, limit = 10) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, returning empty QA insights');
+      return [];
+    }
+
+    try {
+      let query = this.supabase
+        .from('qa_insights')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      // Filter by domain if provided
+      if (domain && domain !== 'general') {
+        query = query.eq('domain', domain);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logger.error('Failed to get QA insights for similarity:', error);
+      return [];
+    }
+  }
+
   async storeWebSearchCache(cacheData) {
     if (!this.supabase) {
       logger.warn('Supabase not initialized, skipping web search cache storage');

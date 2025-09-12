@@ -10,7 +10,7 @@ const { logger } = require('../utils/logger');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
 const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
 const { SemanticSimilarity } = require('../utils/semanticSimilarity');
-const progressBroadcaster = require('../services/progressBroadcaster');
+const { progressBroadcaster } = require('../services/progressBroadcaster');
 const databaseService = require('../services/database');
 
 class ResearchAgent {
@@ -66,8 +66,23 @@ class ResearchAgent {
       const queryHash = this.generateQueryHash(query);
       const domain = this.inferQueryDomain(query);
 
-      // Retrieve similar research insights from Supabase
-      const similarResearch = await databaseService.getResearchInsightsByQueryHash(queryHash, 3);
+      // First try exact hash match for fastest retrieval
+      let similarResearch = await databaseService.getResearchInsightsByQueryHash(queryHash, 3);
+      
+      // If no exact matches, get broader set for semantic similarity matching
+      if (!similarResearch || similarResearch.length === 0) {
+        similarResearch = await databaseService.getResearchInsightsForSimilarity(domain, 20);
+        logger.info('No exact hash matches found, retrieved research insights for semantic similarity', {
+          domain,
+          count: similarResearch.length,
+          query: query.substring(0, 100) + '...'
+        });
+      } else {
+        logger.info('Found exact hash matches for research query', {
+          count: similarResearch.length,
+          queryHash
+        });
+      }
       
       // Retrieve knowledge entities by domain
       const domainEntities = await databaseService.getKnowledgeEntitiesByDomain(domain, 5);
@@ -160,9 +175,7 @@ class ResearchAgent {
         }
       }
       
-      await progressBroadcaster.broadcastProgress(sessionId, {
-        phase: 'fresh_research',
-        message: 'No cached results found, performing fresh research',
+      progressBroadcaster.updateProgress(sessionId, 'fresh_research', 'No cached results found, performing fresh research', {
         progress: 20
       });
       
@@ -252,9 +265,7 @@ I recommend trying again in a moment, or you can rephrase your request for bette
       // Store research insights for future caching
       await this.storeResearchInsights(inputData.message, result.output, sessionId);
       
-      await progressBroadcaster.broadcastProgress(sessionId, {
-        phase: 'research_stored',
-        message: 'Research results stored in knowledge substrate for future use',
+      progressBroadcaster.updateProgress(sessionId, 'research_stored', 'Research results stored in knowledge substrate for future use', {
         progress: 95
       });
 

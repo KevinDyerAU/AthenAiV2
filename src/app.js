@@ -332,14 +332,27 @@ io.on('connection', (socket) => {
         });
         logger.info('Orchestration result', { orchestrationResult });
 
-        // Execute primary agent with proper error handling
+        // Execute primary agent with proper error handling and detailed debugging
+        logger.info('App.js: Extracting primaryAgent from orchestration result', {
+          orchestrationResult: JSON.stringify(orchestrationResult, null, 2),
+          hasOrchestrationResult: !!orchestrationResult.orchestration_result,
+          hasRouting: !!orchestrationResult.orchestration_result?.routing,
+          routingPrimary: orchestrationResult.orchestration_result?.routing?.primary,
+          roomId
+        });
+
         primaryAgent = orchestrationResult.orchestration_result?.routing?.primary;
         
         // Validate and fallback if primaryAgent is undefined
         if (!primaryAgent || typeof primaryAgent !== 'string') {
-          logger.warn('primaryAgent is undefined or invalid, using fallback', { 
+          logger.error('App.js: primaryAgent is undefined or invalid, using fallback', { 
             primaryAgent, 
-            orchestrationResult: JSON.stringify(orchestrationResult, null, 2) 
+            type: typeof primaryAgent,
+            orchestrationResultKeys: Object.keys(orchestrationResult || {}),
+            orchestrationResultStructure: orchestrationResult.orchestration_result ? Object.keys(orchestrationResult.orchestration_result) : 'undefined',
+            routingStructure: orchestrationResult.orchestration_result?.routing ? Object.keys(orchestrationResult.orchestration_result.routing) : 'undefined',
+            fullOrchestrationResult: JSON.stringify(orchestrationResult, null, 2),
+            roomId
           });
           primaryAgent = 'general';
         }

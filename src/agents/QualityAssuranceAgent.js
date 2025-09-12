@@ -367,8 +367,23 @@ Current assessment: {qaType} review of provided content
       const contentHash = this.generateContentHash(content);
       const domain = this.inferContentDomain(content);
 
-      // Retrieve similar QA insights from Supabase
-      const similarQAInsights = await databaseService.getQAInsightsByContentHash(contentHash, 3);
+      // First try exact hash match for fastest retrieval
+      let similarQAInsights = await databaseService.getQAInsightsByContentHash(contentHash, 3);
+      
+      // If no exact matches, get broader set for semantic similarity matching
+      if (!similarQAInsights || similarQAInsights.length === 0) {
+        similarQAInsights = await databaseService.getQAInsightsForSimilarity(domain, 20);
+        logger.info('No exact hash matches found, retrieved QA insights for semantic similarity', {
+          domain,
+          count: similarQAInsights.length,
+          content: content.substring(0, 100) + '...'
+        });
+      } else {
+        logger.info('Found exact hash matches for QA content', {
+          count: similarQAInsights.length,
+          contentHash
+        });
+      }
       
       // Retrieve knowledge entities by domain
       const domainEntities = await databaseService.getKnowledgeEntitiesByDomain(domain, 5);

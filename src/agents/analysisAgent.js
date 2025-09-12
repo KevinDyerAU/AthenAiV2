@@ -55,31 +55,41 @@ class AnalysisAgent {
   // Knowledge substrate integration
   async retrieveKnowledgeContext(query, sessionId) {
     try {
-      await progressBroadcaster.broadcastProgress(sessionId, {
-        phase: 'knowledge_retrieval',
-        message: 'Retrieving relevant knowledge context...',
-        progress: 10
-      });
-
+      await progressBroadcaster.updateProgress(sessionId, 'knowledge_context', 'Retrieving knowledge context and cached analysis');
+      
       // Infer domain from query content
       const domain = this.inferAnalysisDomain(query);
       
-      // Get cached analysis results
+      // Get cached analysis results - first try exact hash match
       const queryHash = this.generateQueryHash(query);
-      const cachedResults = await databaseService.getAnalysisInsightsByQueryHash(queryHash);
+      let similarAnalysis = await databaseService.getAnalysisInsightsByQueryHash(queryHash);
+      
+      // If no exact matches, get broader set for semantic similarity matching
+      if (!similarAnalysis || similarAnalysis.length === 0) {
+        similarAnalysis = await databaseService.getAnalysisInsightsForSimilarity(domain, 20);
+        logger.info('No exact hash matches found, retrieved analysis insights for semantic similarity', {
+          domain,
+          count: similarAnalysis.length,
+          query: query.substring(0, 100) + '...'
+        });
+      } else {
+        logger.info('Found exact hash matches for analysis query', {
+          count: similarAnalysis.length,
+          queryHash
+        });
+      }
       
       // Get domain-specific knowledge entities
       const knowledgeEntities = await databaseService.getKnowledgeEntitiesByDomain(domain);
       
-      await progressBroadcaster.broadcastProgress(sessionId, {
-        phase: 'knowledge_retrieval',
-        message: `Found ${cachedResults.length} cached results and ${knowledgeEntities.length} knowledge entities`,
+      await progressBroadcaster.updateProgress(sessionId, 'knowledge_retrieval', 
+        `Found ${similarAnalysis.length} cached results and ${knowledgeEntities.length} knowledge entities`, {
         progress: 20
       });
 
       return {
         domain,
-        cachedResults,
+        similarAnalysis,
         knowledgeEntities,
         queryHash
       };
@@ -242,12 +252,12 @@ class AnalysisAgent {
       const knowledgeContext = await this.retrieveKnowledgeContext(dataToAnalyze, sessionId);
 
       // Check if we have semantically similar cached analysis
-      if (knowledgeContext.cachedResults && knowledgeContext.cachedResults.length > 0) {
+      if (knowledgeContext.similarAnalysis && knowledgeContext.similarAnalysis.length > 0) {
         const bestMatch = SemanticSimilarity.findBestMatch(
           dataToAnalyze, 
-          knowledgeContext.cachedResults, 
+          knowledgeContext.similarAnalysis, 
           'original_query', 
-          0.75 // Standard threshold for analysis caching
+          0.75 // Threshold for analysis caching
         );
         
         if (bestMatch && bestMatch.insights && bestMatch.analysis_type === analysisType) {
