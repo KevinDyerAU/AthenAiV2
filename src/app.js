@@ -120,6 +120,69 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+// Helper function to format agent responses for better readability
+function formatAgentResponse(agentResult, originalMessage, agentType) {
+  let formattedText = '';
+  let metadata = {
+    agent: agentType,
+    confidence: agentResult.confidence || 0.8,
+    timestamp: new Date().toISOString()
+  };
+
+  // Handle different agent response formats
+  if (agentResult.summary && typeof agentResult.summary === 'string') {
+    formattedText = agentResult.summary;
+  } else if (agentResult.results && agentResult.results.summary) {
+    // Research agent format
+    const query = agentResult.query || originalMessage;
+    formattedText = `## Research Results: "${query}"\n\n`;
+    formattedText += `**Summary:** ${agentResult.results.summary}\n\n`;
+    
+    if (agentResult.results.analysis && agentResult.results.analysis !== 'Analysis completed') {
+      formattedText += `**Key Findings:**\n${agentResult.results.analysis}\n\n`;
+    }
+    
+    if (agentResult.results.recommendations && agentResult.results.recommendations.length > 0 && agentResult.results.recommendations[0] !== 'Recommendation 1') {
+      formattedText += `**Recommendations:**\n`;
+      agentResult.results.recommendations.forEach((rec, i) => {
+        formattedText += `${i + 1}. ${rec}\n`;
+      });
+      formattedText += '\n';
+    }
+    
+    if (agentResult.results.sources && agentResult.results.sources.length > 0) {
+      formattedText += `**Sources:**\n`;
+      agentResult.results.sources.forEach((source, i) => {
+        formattedText += `${i + 1}. ${source}\n`;
+      });
+    }
+    
+    metadata.hasAnalysis = !!agentResult.results.analysis;
+    metadata.hasRecommendations = !!(agentResult.results.recommendations && agentResult.results.recommendations.length > 0);
+    metadata.sourceCount = agentResult.results.sources ? agentResult.results.sources.length : 0;
+    
+  } else if (agentResult.response) {
+    formattedText = agentResult.response;
+  } else if (agentResult.content) {
+    formattedText = agentResult.content;
+  } else {
+    // Fallback for unstructured responses
+    formattedText = `## ${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent Response\n\n`;
+    formattedText += `I've processed your request: "${originalMessage}"\n\n`;
+    formattedText += `How can I help you further?`;
+  }
+
+  // Add agent type indicator if not already present
+  if (!formattedText.includes('##') && agentType !== 'general') {
+    formattedText = `**${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent:** ${formattedText}`;
+  }
+
+  return {
+    text: formattedText,
+    metadata
+  };
+}
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
@@ -204,6 +267,9 @@ io.on('connection', (socket) => {
         const primaryAgent = orchestrationResult.orchestration_result?.routing?.primary;
         logger.info('Executing agent', { primaryAgent });
         
+        // Start agent-specific progress tracking
+        progressBroadcaster.startProgress(roomId, primaryAgent, `Processing with ${primaryAgent} agent`);
+        
         if (primaryAgent === 'research') {
           logger.info('Calling research agent');
           agentResult = await researchAgent.executeResearch(
@@ -271,43 +337,32 @@ io.on('connection', (socket) => {
       if (agentResult) {
         logger.info('Processing agent result for broadcast', { agentResult });
         
-        // Extract and format response text from agent result
-        let responseText = '';
-        
-        if (agentResult.summary && typeof agentResult.summary === 'string') {
-          responseText = agentResult.summary;
-        } else if (agentResult.results && agentResult.results.summary) {
-          // Format research agent response
-          responseText = `I've completed research on "${agentResult.query}". ${agentResult.results.summary}`;
-          if (agentResult.results.analysis && agentResult.results.analysis !== 'Analysis completed') {
-            responseText += `\n\nKey findings: ${agentResult.results.analysis}`;
-          }
-          if (agentResult.results.recommendations && agentResult.results.recommendations.length > 0 && agentResult.results.recommendations[0] !== 'Recommendation 1') {
-            responseText += `\n\nRecommendations: ${agentResult.results.recommendations.join(', ')}`;
-          }
-        } else if (agentResult.response) {
-          responseText = agentResult.response;
-        } else if (agentResult.content) {
-          responseText = agentResult.content;
-        } else {
-          // Fallback for unstructured responses
-          responseText = `I processed your request about "${message}". How can I help you further?`;
-        }
+        // Format response for better readability
+        const formattedResponse = formatAgentResponse(agentResult, message, primaryAgent);
         
         const responseData = await chatroomService.addAgentResponse(
           roomId,
           messageData.id,
-          responseText,
-          agentResult.agent_type || 'general'
+          formattedResponse.text,
+          agentResult.agent_type || primaryAgent || 'general'
         );
 
         logger.info('Broadcasting agent response', { responseData });
         
-        // Broadcast agent response using the same event as user messages
+        // Complete progress tracking
+        progressBroadcaster.completeProgress(roomId, {
+          agent: primaryAgent,
+          responseLength: formattedResponse.text.length,
+          confidence: agentResult.confidence || 0.8
+        });
+        
+        // Broadcast formatted agent response
         io.to(roomId).emit('new_message', {
           ...responseData,
           username: 'AthenAI',
-          messageType: 'agent'
+          messageType: 'agent',
+          formatted: true,
+          metadata: formattedResponse.metadata
         });
       }
       

@@ -184,6 +184,58 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Formatted content styles */
+        .formatted-content {
+            line-height: 1.6;
+        }
+
+        .formatted-content h2.response-title {
+            color: #4fc3f7;
+            font-size: 1.3em;
+            margin: 16px 0 12px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #444;
+        }
+
+        .formatted-content h3.response-header {
+            color: #e0e0e0;
+            font-size: 1.1em;
+            margin: 14px 0 8px 0;
+            font-weight: 600;
+        }
+
+        .formatted-content p {
+            margin: 8px 0;
+            color: #ffffff;
+        }
+
+        .formatted-content strong {
+            color: #4fc3f7;
+            font-weight: 600;
+        }
+
+        .formatted-content code {
+            background: #1a1a1a;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #ff9800;
+            border: 1px solid #444;
+        }
+
+        .formatted-content br {
+            line-height: 1.8;
+        }
+
+        /* Enhanced agent message styling */
+        .message.agent .formatted-content {
+            background: rgba(79, 195, 247, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 3px solid #4fc3f7;
+        }
+
         .history-container {
             background: #2d2d2d;
             border-bottom: 1px solid #444;
@@ -445,7 +497,9 @@
                 };
                 
                 if (data.messageType === 'agent') {
-                    headerDiv.textContent = `AthenAI (${data.agentType || 'assistant'}) • ${formatTimestamp(data.timestamp)}`;
+                    const agentType = data.metadata?.agent || data.agentType || 'assistant';
+                    const confidence = data.metadata?.confidence ? ` (${Math.round(data.metadata.confidence * 100)}%)` : '';
+                    headerDiv.textContent = `AthenAI ${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent${confidence} • ${formatTimestamp(data.timestamp)}`;
                 } else if (data.messageType === 'system') {
                     headerDiv.textContent = `System • ${formatTimestamp(data.timestamp)}`;
                 } else {
@@ -453,13 +507,42 @@
                 }
                 
                 const contentDiv = document.createElement('div');
-                contentDiv.textContent = data.message;
+                
+                // Handle formatted agent responses
+                if (data.formatted && data.messageType === 'agent') {
+                    contentDiv.innerHTML = this.formatMarkdown(data.message);
+                    contentDiv.className = 'formatted-content';
+                } else {
+                    contentDiv.textContent = data.message;
+                }
                 
                 messageDiv.appendChild(headerDiv);
                 messageDiv.appendChild(contentDiv);
                 
                 this.messagesContainer.appendChild(messageDiv);
                 this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+
+            formatMarkdown(text) {
+                if (!text) return '';
+                
+                return text
+                    // Headers
+                    .replace(/^## (.+)$/gm, '<h3 class="response-header">$1</h3>')
+                    .replace(/^# (.+)$/gm, '<h2 class="response-title">$1</h2>')
+                    // Bold text
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    // Code blocks (simple)
+                    .replace(/`(.+?)`/g, '<code>$1</code>')
+                    // Line breaks
+                    .replace(/\n\n/g, '</p><p>')
+                    .replace(/\n/g, '<br>')
+                    // Wrap in paragraphs
+                    .replace(/^(.+)/, '<p>$1')
+                    .replace(/(.+)$/, '$1</p>')
+                    // Clean up empty paragraphs
+                    .replace(/<p><\/p>/g, '')
+                    .replace(/<p><br><\/p>/g, '');
             }
 
             displayProgressMessage(data) {
