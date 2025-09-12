@@ -39,16 +39,43 @@ class DatabaseService {
 
       // Initialize Redis
       if (process.env.REDIS_URL) {
-        this.redisClient = redis.createClient({
-          url: process.env.REDIS_URL
-        });
-        
-        this.redisClient.on('error', (err) => {
-          logger.error('Redis Client Error', err);
-        });
-        
-        await this.redisClient.connect();
-        logger.info('Redis initialized');
+        try {
+          const redisConfig = {
+            url: process.env.REDIS_URL
+          };
+
+          // Add authentication if provided
+          if (process.env.REDIS_PASSWORD) {
+            redisConfig.password = process.env.REDIS_PASSWORD;
+          }
+
+          // Add username if provided (Redis 6+)
+          if (process.env.REDIS_USERNAME) {
+            redisConfig.username = process.env.REDIS_USERNAME;
+          }
+
+          this.redisClient = redis.createClient(redisConfig);
+          
+          this.redisClient.on('error', (err) => {
+            logger.error('Redis Client Error', err);
+            // Don't throw here, just log and continue without Redis
+            this.redisClient = null;
+          });
+          
+          this.redisClient.on('connect', () => {
+            logger.info('Redis connected successfully');
+          });
+
+          this.redisClient.on('ready', () => {
+            logger.info('Redis ready for operations');
+          });
+          
+          await this.redisClient.connect();
+          logger.info('Redis initialized');
+        } catch (error) {
+          logger.warn('Redis initialization failed, continuing without cache:', error.message);
+          this.redisClient = null;
+        }
       }
 
       this.initialized = true;
@@ -458,7 +485,13 @@ class DatabaseService {
       logger.warn('Redis not initialized, skipping cache set');
       return;
     }
-    await this.redisClient.setEx(key, ttl, JSON.stringify(value));
+    
+    try {
+      await this.redisClient.setEx(key, ttl, JSON.stringify(value));
+    } catch (error) {
+      logger.error('Redis cache set failed:', error.message);
+      // Don't throw, just log and continue
+    }
   }
 
   async cacheGet(key) {
@@ -466,8 +499,14 @@ class DatabaseService {
       logger.warn('Redis not initialized, returning null from cache');
       return null;
     }
-    const value = await this.redisClient.get(key);
-    return value ? JSON.parse(value) : null;
+    
+    try {
+      const value = await this.redisClient.get(key);
+      return value ? JSON.parse(value) : null;
+    } catch (error) {
+      logger.error('Redis cache get failed:', error.message);
+      return null;
+    }
   }
 
   async cacheDelete(key) {
@@ -475,7 +514,13 @@ class DatabaseService {
       logger.warn('Redis not initialized, skipping cache delete');
       return;
     }
-    await this.redisClient.del(key);
+    
+    try {
+      await this.redisClient.del(key);
+    } catch (error) {
+      logger.error('Redis cache delete failed:', error.message);
+      // Don't throw, just log and continue
+    }
   }
 
   async cacheDel(key) {
