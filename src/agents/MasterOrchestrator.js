@@ -2,6 +2,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { StringOutputParser } = require('@langchain/core/output_parsers');
 const { logger } = require('../utils/logger');
+const { progressBroadcaster } = require('../services/progressBroadcaster');
 
 class MasterOrchestrator {
   constructor() {
@@ -211,12 +212,23 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         setTimeout(() => reject(new Error('API timeout - agent routing')), 8000);
       });
       
-      const primaryAgent = await Promise.race([
-        chain.invoke({ message: taskString }),
-        timeoutPromise
-      ]);
+      let primaryAgent;
+      try {
+        primaryAgent = await Promise.race([
+          chain.invoke({ message: taskString }),
+          timeoutPromise
+        ]);
+      } catch (error) {
+        logger.warn('Agent routing API call failed, using fallback', { error: error.message });
+        primaryAgent = 'general'; // Fallback to general agent
+      }
       
       // Clean and validate the response
+      if (!primaryAgent || typeof primaryAgent !== 'string') {
+        logger.warn('Invalid primaryAgent response, using fallback', { primaryAgent });
+        primaryAgent = 'general';
+      }
+      
       const cleanAgent = primaryAgent.toLowerCase().trim();
       const validAgents = ['research', 'creative', 'analysis', 'development', 'planning', 'execution', 'communication', 'qa', 'document', 'general'];
       const selectedAgent = validAgents.includes(cleanAgent) ? cleanAgent : 'general';
@@ -344,13 +356,36 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
   }
 
   async executeOrchestration(inputData) {
+    const sessionId = inputData.sessionId || this.generateSessionId();
+    const taskMessage = inputData.message || inputData.task || inputData;
+    
     try {
-      const sessionId = await this.generateSessionId();
-      const complexity = await this.analyzeTaskComplexity(inputData.task || inputData);
-      const routing = await this.determineAgentRouting(inputData.task || inputData);
-      const plan = await this.createExecutionPlan(inputData.task || inputData, complexity, routing);
-
-      return {
+      // Start progress tracking
+      progressBroadcaster.startProgress(sessionId, 'MasterOrchestrator', 'Analyzing task and routing to appropriate agent');
+      
+      // Step 1: Analyze task complexity
+      progressBroadcaster.updateProgress(sessionId, 'complexity_analysis', 'Analyzing task complexity and requirements');
+      progressBroadcaster.updateThinking(sessionId, 'analyzing', 'Breaking down the user request to understand complexity and requirements...');
+      
+      const complexity = await this.analyzeTaskComplexity(taskMessage);
+      
+      progressBroadcaster.updateThinking(sessionId, 'complexity_result', `Task complexity: ${complexity.level} - ${complexity.reasoning}`);
+      
+      // Step 2: Determine agent routing
+      progressBroadcaster.updateProgress(sessionId, 'agent_routing', 'Determining the best agent for this task');
+      progressBroadcaster.updateThinking(sessionId, 'routing', 'Analyzing which specialized agent would be most effective for this request...');
+      
+      const routing = await this.determineAgentRouting(taskMessage);
+      
+      progressBroadcaster.updateThinking(sessionId, 'routing_result', `Selected agent: ${routing.primary} - ${routing.reasoning}`);
+      
+      // Step 3: Create execution plan
+      progressBroadcaster.updateProgress(sessionId, 'execution_planning', 'Creating execution plan');
+      const plan = this.createExecutionPlan(taskMessage, complexity, routing);
+      
+      progressBroadcaster.updateProgress(sessionId, 'orchestration_complete', 'Task analysis complete, routing to agent');
+      
+      const result = {
         session_id: sessionId,
         orchestration_result: {
           complexity,
@@ -360,8 +395,18 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         status: 'completed',
         timestamp: new Date().toISOString()
       };
+      
+      progressBroadcaster.completeProgress(sessionId, {
+        selectedAgent: routing.primary,
+        complexity: complexity.level,
+        estimatedTime: complexity.estimated_time
+      });
+      
+      return result;
+      
     } catch (error) {
       logger.error('Orchestration execution failed', { error: error.message });
+      progressBroadcaster.errorProgress(sessionId, error);
       throw error;
     }
   }
