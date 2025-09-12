@@ -224,7 +224,7 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         setTimeout(() => reject(new Error('API timeout - agent routing')), 8000);
       });
       
-      let primaryAgent;
+      let primaryAgent = 'general'; // Initialize with default value
       try {
         logger.info('MasterOrchestrator: Invoking AI agent routing', { 
           taskString: taskString.substring(0, 200) + '...',
@@ -245,17 +245,23 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         });
         
         const startTime = Date.now();
-        primaryAgent = await Promise.race([
+        const aiResponse = await Promise.race([
           chain.invoke({ message: taskString }),
           timeoutPromise
         ]);
         const responseTime = Date.now() - startTime;
         
+        // Safely assign primaryAgent only if we got a valid response
+        if (aiResponse && typeof aiResponse === 'string' && aiResponse.trim()) {
+          primaryAgent = aiResponse.trim();
+        }
+        
         logger.info('MasterOrchestrator: AI agent routing response received', { 
+          aiResponse,
           primaryAgent, 
           type: typeof primaryAgent,
           responseTime,
-          rawResponse: JSON.stringify(primaryAgent),
+          rawResponse: JSON.stringify(aiResponse),
           taskString: taskString.substring(0, 100) + '...',
           sessionId
         });
