@@ -46,6 +46,15 @@ class MasterOrchestrator {
       // Ensure task is a string
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
       
+      // Check if API key is available
+      const useOpenRouter = process.env.USE_OPENROUTER === 'true';
+      const apiKey = useOpenRouter ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY;
+      
+      if (!apiKey) {
+        logger.warn('No API key available, using fallback heuristics for complexity analysis');
+        throw new Error('No API key configured');
+      }
+      
       // AI-powered complexity analysis with explicit reasoning
       const complexityPrompt = PromptTemplate.fromTemplate(`
 You are an expert task complexity analyzer. Before providing your assessment, think through your analysis step by step.
@@ -81,8 +90,16 @@ Respond in this exact JSON format:
 
       const chain = complexityPrompt.pipe(this.llm).pipe(new StringOutputParser());
       
-      // Execute with built-in timeout and retry logic
-      const response = await chain.invoke({ message: taskString });
+      // Add timeout wrapper to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('API timeout - complexity analysis')), 8000);
+      });
+      
+      // Execute with timeout protection
+      const response = await Promise.race([
+        chain.invoke({ message: taskString }),
+        timeoutPromise
+      ]);
       
       // Check for rate limiting
       if (response && response.includes && response.includes('429')) {
@@ -145,6 +162,15 @@ Respond in this exact JSON format:
       // Ensure task is a string
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
       
+      // Check if API key is available
+      const useOpenRouter = process.env.USE_OPENROUTER === 'true';
+      const apiKey = useOpenRouter ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY;
+      
+      if (!apiKey) {
+        logger.warn('No API key available, using fallback keyword matching for agent routing');
+        throw new Error('No API key configured');
+      }
+      
       // AI-powered agent routing with explicit reasoning
       const routingPrompt = PromptTemplate.fromTemplate(`
 You are an expert agent routing specialist. Before selecting an agent, think through your decision step by step.
@@ -182,7 +208,7 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       
       // Add timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('OpenRouter API timeout')), 10000); // 10 second timeout
+        setTimeout(() => reject(new Error('API timeout - agent routing')), 8000);
       });
       
       const primaryAgent = await Promise.race([

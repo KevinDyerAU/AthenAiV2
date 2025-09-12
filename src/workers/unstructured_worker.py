@@ -6,6 +6,10 @@ import json
 import os
 import time
 import logging
+import uuid
+import psutil
+import pika
+import psycopg2
 from datetime import datetime
 from typing import Dict, Any, List
 from supabase import create_client, Client
@@ -25,8 +29,6 @@ from prometheus_client import (
     generate_latest,
     multiprocess,
 )
-from unstructured.partition.auto import partition
-import openai
 from openai import OpenAI
 
 # Configuration
@@ -40,6 +42,17 @@ EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')
 WORKER_CONCURRENCY = int(os.getenv('WORKER_CONCURRENCY', '2'))
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 APP_PORT = int(os.getenv("HEALTH_CHECK_PORT", "8080"))
+
+# RabbitMQ Configuration
+RABBITMQ_URL = os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/')
+QUEUE_NAME = os.getenv('QUEUE_NAME', 'document_processing')
+
+# PostgreSQL Configuration
+POSTGRES_HOST = os.getenv('POSTGRES_HOST', 'localhost')
+POSTGRES_PORT = int(os.getenv('POSTGRES_PORT', '5432'))
+POSTGRES_DB = os.getenv('POSTGRES_DB', 'enhanced_ai_os')
+POSTGRES_USER = os.getenv('POSTGRES_USER', 'ai_agent_user')
+POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', '')
 
 # Initialize OpenAI client
 if OPENROUTER_API_KEY:
@@ -70,8 +83,24 @@ docs_total = Counter('documents_total', 'Total documents by status and type', ['
 embeddings_created = Counter("embeddings_created_total", "Total embeddings created", registry=registry)
 queue_size_gauge = Gauge("queue_size", "Current queue size (messages)", registry=registry)
 
-# Initialize Supabase client
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+# Initialize Supabase client (with fallback)
+supabase: Client = None
+if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    except Exception as e:
+        print(f"Warning: Failed to initialize Supabase client: {e}")
+
+
+def get_postgres_connection():
+    """Get PostgreSQL connection"""
+    return psycopg2.connect(
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        database=POSTGRES_DB,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD
+    )
 
 
 
@@ -254,10 +283,15 @@ def health():
         mem_gauge.set(mem)
         health_gauge.set(1)
         
-        # Test database connection
-        with get_postgres_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
+        # Test database connection (optional)
+        postgres_connected = False
+        try:
+            with get_postgres_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+            postgres_connected = True
+        except Exception as db_e:
+            print(f"Database connection failed: {db_e}")
         
         return jsonify({
             "status": "ok",
@@ -267,7 +301,9 @@ def health():
             "mem_percent": mem,
             "queue": QUEUE_NAME,
             "embedding_model": EMBEDDING_MODEL,
-            "postgres_connected": True
+            "postgres_connected": postgres_connected,
+            "supabase_configured": supabase is not None,
+            "openai_configured": bool(OPENAI_API_KEY or OPENROUTER_API_KEY)
         }), 200
     except Exception as e:
         health_gauge.set(0)
