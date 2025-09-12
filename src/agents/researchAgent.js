@@ -8,9 +8,10 @@ const { ChatAgent } = require('langchain/agents');
 const axios = require('axios');
 const { logger } = require('../utils/logger');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
-const { databaseService } = require('../services/database');
-const { progressBroadcaster } = require('../services/progressBroadcaster');
 const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
+const { SemanticSimilarity } = require('../utils/semanticSimilarity');
+const progressBroadcaster = require('../services/progressBroadcaster');
+const databaseService = require('../services/database');
 
 class ResearchAgent {
   constructor() {
@@ -123,35 +124,37 @@ class ResearchAgent {
       // Retrieve knowledge context
       const knowledgeContext = await this.retrieveKnowledgeContext(inputData.message, sessionId);
       
-      // Check if we have recent cached research for this exact query
+      // Check if we have semantically similar cached research
       if (knowledgeContext.similarResearch && knowledgeContext.similarResearch.length > 0) {
-        const exactMatch = knowledgeContext.similarResearch.find(research => 
-          research.query_hash === knowledgeContext.queryHash
+        const bestMatch = SemanticSimilarity.findBestMatch(
+          inputData.message, 
+          knowledgeContext.similarResearch, 
+          'original_query', 
+          0.8 // Higher threshold for research caching
         );
         
-        if (exactMatch && exactMatch.insights) {
-          logger.info('Using cached research results', { 
-            queryHash: knowledgeContext.queryHash,
-            cacheAge: Date.now() - new Date(exactMatch.created_at).getTime()
+        if (bestMatch && bestMatch.research_results) {
+          logger.info('Using semantically similar cached research results', { 
+            originalQuery: inputData.message,
+            cachedQuery: bestMatch.original_query,
+            similarity: bestMatch._similarity.similarity,
+            cacheAge: Date.now() - new Date(bestMatch.created_at).getTime()
           });
           
-          await progressBroadcaster.broadcastProgress(sessionId, {
-            phase: 'cache_hit',
-            message: 'Found cached research results, using existing analysis',
-            progress: 90
-          });
+          progressBroadcaster.updateProgress(sessionId, 'cache_hit', 
+            `Found similar research (${Math.round(bestMatch._similarity.similarity * 100)}% match), using cached data`);
           
           return {
-            response: exactMatch.insights,
-            confidence: exactMatch.confidence_score || 0.9,
-            sources: ['Cached from knowledge substrate'],
-            reasoning: 'Retrieved from cached research results',
+            success: true,
+            research_findings: bestMatch.research_results,
+            sources: bestMatch.sources || [],
+            confidence: bestMatch.confidence_score || 0.9,
+            timestamp: new Date().toISOString(),
             metadata: {
-              agent: 'ResearchAgent',
-              domain: knowledgeContext.domain,
               cached: true,
-              cache_timestamp: exactMatch.created_at,
-              query_hash: knowledgeContext.queryHash
+              cache_timestamp: bestMatch.created_at,
+              similarity_score: bestMatch._similarity.similarity,
+              original_cached_query: bestMatch.original_query
             }
           };
         }

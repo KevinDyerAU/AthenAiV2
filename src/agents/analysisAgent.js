@@ -7,7 +7,9 @@ const { StringOutputParser } = require('@langchain/core/output_parsers');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
-const { progressBroadcaster } = require('../services/progressBroadcaster');
+const { SemanticSimilarity } = require('../utils/semanticSimilarity');
+const progressBroadcaster = require('../services/progressBroadcaster');
+const databaseService = require('../services/database');
 const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
 
 class AnalysisAgent {
@@ -240,9 +242,54 @@ class AnalysisAgent {
       // Retrieve knowledge context first
       const knowledgeContext = await this.retrieveKnowledgeContext(dataToAnalyze, sessionId);
 
+      // Check if we have semantically similar cached analysis
+      if (knowledgeContext.cachedResults && knowledgeContext.cachedResults.length > 0) {
+        const bestMatch = SemanticSimilarity.findBestMatch(
+          dataToAnalyze, 
+          knowledgeContext.cachedResults, 
+          'original_query', 
+          0.75 // Standard threshold for analysis caching
+        );
+        
+        if (bestMatch && bestMatch.insights && bestMatch.analysis_type === analysisType) {
+          logger.info('Using semantically similar cached analysis results', { 
+            originalQuery: dataToAnalyze,
+            cachedQuery: bestMatch.original_query,
+            similarity: bestMatch._similarity.similarity,
+            analysisType,
+            cacheAge: Date.now() - new Date(bestMatch.created_at).getTime()
+          });
+          
+          await progressBroadcaster.broadcastProgress(sessionId, {
+            phase: 'cache_hit',
+            message: `Found similar analysis (${Math.round(bestMatch._similarity.similarity * 100)}% match), using cached insights`,
+            progress: 90
+          });
+          
+          return {
+            success: true,
+            analysis_type: analysisType,
+            executive_summary: bestMatch.insights.executive_summary || 'Analysis completed from cache',
+            key_findings: bestMatch.insights.key_findings || [],
+            statistical_analysis: bestMatch.insights.statistical_analysis || {},
+            patterns: bestMatch.insights.patterns || [],
+            trends: bestMatch.insights.trends || [],
+            recommendations: bestMatch.insights.recommendations || [],
+            confidence: bestMatch.confidence_score || 0.9,
+            timestamp: new Date().toISOString(),
+            metadata: {
+              cached: true,
+              cache_timestamp: bestMatch.created_at,
+              similarity_score: bestMatch._similarity.similarity,
+              original_cached_query: bestMatch.original_query
+            }
+          };
+        }
+      }
+
       await progressBroadcaster.broadcastProgress(sessionId, {
         phase: 'data_preparation',
-        message: 'Preparing data for analysis...',
+        message: 'No cached results found, performing fresh analysis...',
         progress: 25
       });
 

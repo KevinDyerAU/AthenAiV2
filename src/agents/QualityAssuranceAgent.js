@@ -1,14 +1,12 @@
 // Quality Assurance Agent - Output Validation and Quality Control
 const { ChatOpenAI } = require('@langchain/openai');
 const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
-const { DynamicTool } = require('@langchain/core/tools');
-const { PromptTemplate } = require('@langchain/core/prompts');
-const { StringOutputParser } = require('@langchain/core/output_parsers');
-const { logger } = require('../utils/logger');
-const { databaseService } = require('../services/database');
-const { ReasoningFramework } = require('../utils/reasoningFramework');
-const { progressBroadcaster } = require('../services/progressBroadcaster');
 const axios = require('axios');
+
+const { logger } = require('../utils/logger');
+const { SemanticSimilarity } = require('../utils/semanticSimilarity');
+const progressBroadcaster = require('../services/progressBroadcaster');
+const databaseService = require('../services/database');
 const cheerio = require('cheerio');
 
 class QualityAssuranceAgent {
@@ -113,6 +111,45 @@ class QualityAssuranceAgent {
       
       // Retrieve relevant knowledge from the substrate
       const knowledgeContext = await this.retrieveKnowledgeContext(content, qaType, sessionId);
+
+      // Check if we have semantically similar cached QA results
+      if (knowledgeContext.similar_assessments && knowledgeContext.similar_assessments.length > 0) {
+        const bestMatch = SemanticSimilarity.findBestMatch(
+          content, 
+          knowledgeContext.similar_assessments, 
+          'original_content', 
+          0.8 // Higher threshold for QA caching
+        );
+        
+        if (bestMatch && bestMatch.quality_metrics && bestMatch.qa_type === qaType) {
+          logger.info('Using semantically similar cached QA results', { 
+            originalContent: content.substring(0, 100) + '...',
+            cachedContent: bestMatch.original_content?.substring(0, 100) + '...',
+            similarity: bestMatch._similarity.similarity,
+            qaType,
+            cacheAge: Date.now() - new Date(bestMatch.created_at).getTime()
+          });
+          
+          progressBroadcaster.updateProgress(sessionId, 'cache_hit', 
+            `Found similar QA assessment (${Math.round(bestMatch._similarity.similarity * 100)}% match), using cached results`);
+          
+          return {
+            output: bestMatch.output || `Quality assessment completed for ${qaType}`,
+            qa_type: qaType,
+            quality_metrics: bestMatch.quality_metrics,
+            confidence_score: bestMatch.confidence_score || 0.9,
+            metadata: {
+              agent: 'QualityAssuranceAgent',
+              cached: true,
+              cache_timestamp: bestMatch.created_at,
+              similarity_score: bestMatch._similarity.similarity,
+              original_cached_content: bestMatch.original_content?.substring(0, 200)
+            }
+          };
+        }
+      }
+      
+      progressBroadcaster.updateProgress(sessionId, 'fresh_qa', 'No cached results found, performing fresh QA analysis');
 
       let result;
       if (isTestEnvironment) {
