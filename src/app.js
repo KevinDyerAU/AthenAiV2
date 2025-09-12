@@ -277,8 +277,11 @@ io.on('connection', (socket) => {
         
         logger.info('Executing agent', { primaryAgent });
         
+        // Additional safety check before template literal
+        const safeAgentName = primaryAgent || 'general';
+        
         // Start agent-specific progress tracking
-        progressBroadcaster.startProgress(roomId, primaryAgent, `Processing with ${primaryAgent} agent`);
+        progressBroadcaster.startProgress(roomId, safeAgentName, `Processing with ${safeAgentName} agent`);
         
         if (primaryAgent === 'research') {
           logger.info('Calling research agent');
@@ -291,37 +294,37 @@ io.on('connection', (socket) => {
         } else if (primaryAgent === 'analysis') {
           logger.info('Calling analysis agent');
           agentResult = await analysisAgent.executeAnalysis({
-            task: { message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+            task: { message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_id || safeAgentName }
           });
         } else if (primaryAgent === 'creative') {
           logger.info('Calling creative agent');
           agentResult = await creativeAgent.executeCreative({
-            task: { content: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+            task: { content: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_id || safeAgentName }
           });
         } else if (primaryAgent === 'development') {
           logger.info('Calling development agent');
           agentResult = await developmentAgent.executeDevelopment({
-            task: { requirements: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+            task: { requirements: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_id || safeAgentName }
           });
         } else if (primaryAgent === 'planning') {
           logger.info('Calling planning agent');
           agentResult = await planningAgent.executePlanning({
-            task: { objective: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+            task: { objective: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_id || safeAgentName }
           });
         } else if (primaryAgent === 'execution') {
           logger.info('Calling execution agent');
           agentResult = await executionAgent.executeTask({
-            task: { execution_plan: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+            task: { execution_plan: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_id || safeAgentName }
           });
         } else if (primaryAgent === 'communication') {
           logger.info('Calling communication agent');
           agentResult = await communicationAgent.executeCommunication({
-            task: { message: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+            task: { message: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_id || safeAgentName }
           });
         } else if (primaryAgent === 'qa') {
           logger.info('Calling QA agent');
           agentResult = await qaAgent.executeQualityAssurance({
-            task: { content: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_result?.routing?.primary }
+            task: { content: message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_id || safeAgentName }
           });
         } else {
           // For general messages, provide a helpful response
@@ -348,20 +351,21 @@ io.on('connection', (socket) => {
         logger.info('Processing agent result for broadcast', { agentResult });
         
         // Format response for better readability
-        const formattedResponse = formatAgentResponse(agentResult, message, primaryAgent);
+        const agentType = agentResult.agent_type || primaryAgent || 'general';
+        const formattedResponse = formatAgentResponse(agentResult, message, agentType);
         
         const responseData = await chatroomService.addAgentResponse(
           roomId,
           messageData.id,
           formattedResponse.text,
-          agentResult.agent_type || primaryAgent || 'general'
+          agentType
         );
 
         logger.info('Broadcasting agent response', { responseData });
         
         // Complete progress tracking
         progressBroadcaster.completeProgress(roomId, {
-          agent: primaryAgent,
+          agent: agentType,
           responseLength: formattedResponse.text.length,
           confidence: agentResult.confidence || 0.8
         });
@@ -377,8 +381,18 @@ io.on('connection', (socket) => {
       }
       
     } catch (error) {
-      socket.emit('error', { message: error.message });
-      logger.error('Send message error:', error);
+      // Provide more detailed error information
+      const errorMessage = error.message || 'An unexpected error occurred';
+      const safeErrorMessage = errorMessage.includes('primaryAgent') 
+        ? 'Agent processing failed - please try again' 
+        : errorMessage;
+      
+      socket.emit('error', { message: safeErrorMessage });
+      logger.error('Send message error:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
     }
   });
 

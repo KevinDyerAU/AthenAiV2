@@ -73,54 +73,57 @@ router.post('/chat', async (req, res) => {
       primaryAgent = 'general';
     }
     
+    // Additional safety check for orchestration_id
+    const safeOrchestrationId = orchestrationResult.orchestration_id || primaryAgent;
+    
     switch (primaryAgent) {
       case 'research':
         agentResult = await researchAgent.executeResearch(
           message,
           orchestrationResult.session_id,
-          orchestrationResult.orchestration_id
+          safeOrchestrationId
         );
         break;
       case 'analysis':
         agentResult = await analysisAgent.executeAnalysis({
-          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: orchestrationResult.orchestration_id }
+          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
         });
         break;
       case 'creative':
         agentResult = await creativeAgent.executeCreative({
-          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: orchestrationResult.orchestration_id }
+          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
         });
         break;
       case 'development':
         agentResult = await developmentAgent.executeDevelopment({
-          task: { requirements: message, sessionId: orchestrationResult.session_id, orchestrationId: orchestrationResult.orchestration_id }
+          task: { requirements: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
         });
         break;
       case 'communication':
         agentResult = await communicationAgent.executeCommunication({
-          task: { message, sessionId: orchestrationResult.session_id, orchestrationId: orchestrationResult.orchestration_id }
+          task: { message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
         });
         break;
       case 'planning':
         agentResult = await planningAgent.executePlanning({
-          task: { objective: message, sessionId: orchestrationResult.session_id, orchestrationId: orchestrationResult.orchestration_id }
+          task: { objective: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
         });
         break;
       case 'execution':
         agentResult = await executionAgent.executeTask({
-          task: { execution_plan: message, sessionId: orchestrationResult.session_id, orchestrationId: orchestrationResult.orchestration_id }
+          task: { execution_plan: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
         });
         break;
       case 'qa':
         agentResult = await qaAgent.executeQualityAssurance({
-          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: orchestrationResult.orchestration_id }
+          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
         });
         break;
       default:
         agentResult = await researchAgent.executeResearch(
           message,
           orchestrationResult.session_id,
-          orchestrationResult.orchestration_id
+          safeOrchestrationId
         );
     }
 
