@@ -105,15 +105,32 @@ class ResearchAgent {
       const domain = this.inferQueryDomain(query);
       const patterns = this.extractResearchPatterns(results);
       
+      logger.info('ResearchAgent: Storing research insights in database', {
+        queryHash,
+        domain,
+        queryLength: query.length,
+        resultsLength: results?.length || 0,
+        sessionId,
+        patterns: patterns?.length || 0
+      });
+      
       // Store research insights
-      await databaseService.storeResearchInsights({
+      const storeResult = await databaseService.storeResearchInsights({
         query_hash: queryHash,
+        original_query: query, // Make sure this field matches what we're looking for
         query_text: query,
         domain: domain,
+        research_results: results, // Make sure this field matches what we're looking for
         insights: results,
         patterns: patterns,
         confidence_score: 0.85,
         session_id: sessionId
+      });
+
+      logger.info('ResearchAgent: Research insights stored successfully', {
+        storeResult,
+        queryHash,
+        sessionId
       });
 
       // Create knowledge entities for significant findings
@@ -139,6 +156,14 @@ class ResearchAgent {
       // Retrieve knowledge context
       const knowledgeContext = await this.retrieveKnowledgeContext(inputData.message, sessionId);
       
+      logger.info('ResearchAgent: Knowledge context retrieved', {
+        message: inputData.message,
+        similarResearchCount: knowledgeContext.similarResearch?.length || 0,
+        domain: knowledgeContext.domain,
+        queryHash: knowledgeContext.queryHash,
+        sessionId
+      });
+      
       // Check if we have semantically similar cached research
       if (knowledgeContext.similarResearch && knowledgeContext.similarResearch.length > 0) {
         const bestMatch = SemanticSimilarity.findBestMatch(
@@ -148,6 +173,16 @@ class ResearchAgent {
           0.8 // Higher threshold for research caching
         );
         
+        logger.info('ResearchAgent: Semantic similarity check result', {
+          bestMatch: !!bestMatch,
+          hasResearchResults: bestMatch?.research_results ? true : false,
+          similarity: bestMatch?._similarity?.similarity,
+          threshold: 0.8,
+          originalQuery: inputData.message,
+          cachedQuery: bestMatch?.original_query,
+          sessionId
+        });
+
         if (bestMatch && bestMatch.research_results) {
           logger.info('Using semantically similar cached research results', { 
             originalQuery: inputData.message,
@@ -263,6 +298,12 @@ I recommend trying again in a moment, or you can rephrase your request for bette
       }
 
       // Store research insights for future caching
+      logger.info('ResearchAgent: Storing research insights', {
+        query: inputData.message,
+        resultLength: result.output?.length || 0,
+        sessionId
+      });
+      
       await this.storeResearchInsights(inputData.message, result.output, sessionId);
       
       progressBroadcaster.updateProgress(sessionId, 'research_stored', 'Research results stored in knowledge substrate for future use', {
