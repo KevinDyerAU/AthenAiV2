@@ -21,7 +21,7 @@ const router = express.Router();
 // Initialize all agents
 const masterOrchestrator = new MasterOrchestrator();
 const researchAgent = new ResearchAgent();
-const analysisAgent = new AnalysisAgent(process.env.OPENAI_API_KEY);
+const analysisAgent = new AnalysisAgent();
 const creativeAgent = new CreativeAgent(process.env.OPENAI_API_KEY);
 const developmentAgent = new DevelopmentAgent();
 const communicationAgent = new CommunicationAgent();
