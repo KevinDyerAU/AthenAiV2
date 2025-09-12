@@ -14,6 +14,7 @@ const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
 const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
+const progressBroadcaster = require('../services/progressBroadcaster');
 
 class DevelopmentAgent {
   constructor() {
@@ -56,7 +57,18 @@ class DevelopmentAgent {
     const orchestrationId = inputData.orchestrationId || 'dev_orchestration_' + Date.now();
 
     try {
-      logger.info('Starting development task', { sessionId, orchestrationId });
+      logger.info('DevelopmentAgent: Starting development task', { 
+        sessionId, 
+        orchestrationId,
+        inputData: JSON.stringify(inputData, null, 2)
+      });
+      
+      // PHASE 1: Progress Broadcasting - Initialization
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'development_initialization',
+        message: 'Initializing development agent...',
+        progress: 5
+      });
       
       const taskData = inputData.task || inputData;
       const requirements = taskData.requirements || taskData.message || taskData.content;
@@ -67,9 +79,34 @@ class DevelopmentAgent {
         throw new Error('Development requirements are required');
       }
 
+      // PHASE 2: Requirements Analysis
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'requirements_analysis',
+        message: 'Analyzing development requirements...',
+        progress: 15
+      });
+
+      logger.info('DevelopmentAgent: Processing requirements', {
+        requirements: requirements.substring(0, 200) + '...',
+        projectType,
+        language,
+        sessionId
+      });
+
       // Check for GitHub repository URLs and validate them
       const repoValidation = await this.validateRepositoryRequest(requirements);
       if (repoValidation.isInvalid) {
+        logger.warn('DevelopmentAgent: Repository validation failed', {
+          message: repoValidation.message,
+          sessionId
+        });
+        
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'validation_failed',
+          message: repoValidation.message,
+          progress: 100
+        });
+        
         return {
           summary: repoValidation.message,
           agent_type: 'development',
@@ -80,11 +117,22 @@ class DevelopmentAgent {
         };
       }
       
-      // PHASE 1: Strategic Planning and Reasoning
+      // PHASE 3: Strategic Planning and Reasoning
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'strategic_planning',
+        message: 'Planning development strategy...',
+        progress: 25
+      });
+
       const strategyPlan = await this.reasoning.planStrategy(inputData, {
         time_constraint: inputData.urgency || 'normal',
         quality_priority: 'high',
         creativity_needed: inputData.development_type === 'architecture'
+      });
+
+      logger.info('DevelopmentAgent: Strategy plan created', {
+        strategyPlan: JSON.stringify(strategyPlan, null, 2),
+        sessionId
       });
 
       // Check if we're in test environment (NODE_ENV=test or jest is running)
@@ -94,13 +142,36 @@ class DevelopmentAgent {
 
       let result;
       if (isTestEnvironment) {
+        logger.info('DevelopmentAgent: Running in test environment', { sessionId });
+        
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'test_execution',
+          message: 'Running in test mode, generating mock response...',
+          progress: 90
+        });
+        
         result = {
           output: `Development task completed for ${projectType} project in ${language}. Generated code based on requirements: ${requirements}`,
           intermediateSteps: []
         };
       } else {
+        // PHASE 4: Tool Initialization
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'tool_initialization',
+          message: 'Initializing development tools...',
+          progress: 35
+        });
+
+        logger.info('DevelopmentAgent: Initializing development tools', { sessionId });
+
         // Initialize development tools
         const tools = this.initializeDevelopmentTools();
+        
+        logger.info('DevelopmentAgent: Tools initialized', { 
+          toolCount: tools.length,
+          toolNames: tools.map(t => t.name),
+          sessionId 
+        });
 
         // Create development prompt with explicit reasoning and required agent_scratchpad
         const prompt = PromptTemplate.fromTemplate(`
@@ -141,12 +212,33 @@ Current task: {requirements}
 
 {agent_scratchpad}`);
 
-        // Create agent
-        const agent = await createOpenAIToolsAgent({
-          llm: this.llm,
-          tools,
-          prompt
+        // PHASE 5: Agent Creation
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'agent_creation',
+          message: 'Creating development agent...',
+          progress: 45
         });
+
+        logger.info('DevelopmentAgent: Creating OpenAI tools agent', { sessionId });
+
+        // Create agent
+        let agent;
+        try {
+          agent = await createOpenAIToolsAgent({
+            llm: this.llm,
+            tools,
+            prompt
+          });
+          
+          logger.info('DevelopmentAgent: Agent created successfully', { sessionId });
+        } catch (error) {
+          logger.error('DevelopmentAgent: Failed to create agent', {
+            error: error.message,
+            stack: error.stack,
+            sessionId
+          });
+          throw new Error(`Agent creation failed: ${error.message}`);
+        }
 
         const agentExecutor = new AgentExecutor({
           agent,
@@ -156,8 +248,24 @@ Current task: {requirements}
           returnIntermediateSteps: true
         });
 
+        logger.info('DevelopmentAgent: AgentExecutor created', { sessionId });
+
+        // PHASE 6: Development Task Execution
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'development_execution',
+          message: 'Executing development task...',
+          progress: 60
+        });
+
         // Execute development task
         try {
+          logger.info('DevelopmentAgent: Starting agent execution', {
+            requirements: requirements.substring(0, 100) + '...',
+            projectType,
+            language,
+            sessionId
+          });
+
           result = await agentExecutor.invoke({
             requirements,
             projectType,
@@ -166,17 +274,50 @@ Current task: {requirements}
             tools: tools.map(t => t.name).join(', ')
           });
           
+          logger.info('DevelopmentAgent: Agent execution completed successfully', {
+            outputLength: result.output?.length || 0,
+            intermediateStepsCount: result.intermediateSteps?.length || 0,
+            sessionId
+          });
+          
         } catch (error) {
-          logger.error('Agent execution error:', error);
+          logger.error('DevelopmentAgent: Agent execution error', {
+            error: error.message,
+            stack: error.stack,
+            name: error.name,
+            sessionId,
+            timestamp: new Date().toISOString()
+          });
+          
+          await progressBroadcaster.broadcastProgress(sessionId, {
+            phase: 'execution_error',
+            message: `Development execution failed: ${error.message}`,
+            progress: 100
+          });
+          
           result = {
-            output: `Development task encountered an error: ${error.message}`,
-            intermediateSteps: []
+            output: `Development task encountered an error: ${error.message}. Please check the logs for more details.`,
+            intermediateSteps: [],
+            error: error.message
           };
         }
       }
 
-      // PHASE 3: Self-Evaluation
+      // PHASE 7: Self-Evaluation
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'self_evaluation',
+        message: 'Evaluating development results...',
+        progress: 80
+      });
+
+      logger.info('DevelopmentAgent: Starting self-evaluation', { sessionId });
+
       const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
+      
+      logger.info('DevelopmentAgent: Self-evaluation completed', {
+        confidenceScore: evaluation.confidence_score,
+        sessionId
+      });
 
       // Process and structure the results
       const developmentResult = {
@@ -195,50 +336,75 @@ Current task: {requirements}
         status: 'completed'
       };
 
+      // PHASE 8: Knowledge Storage and Completion
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'knowledge_storage',
+        message: 'Storing development insights...',
+        progress: 90
+      });
+
       // Store results in knowledge graph (skip in test environment)
       if (!isTestEnvironment) {
-        await databaseService.createKnowledgeNode(
-          sessionId,
-          orchestrationId,
-          'DevelopmentTask',
-          {
-            requirements,
-            project_type: projectType,
-            language,
-            status: 'completed',
-            created_at: new Date().toISOString()
-          }
-        );
+        try {
+          await databaseService.createKnowledgeNode(
+            sessionId,
+            orchestrationId,
+            'DevelopmentTask',
+            {
+              requirements,
+              project_type: projectType,
+              language,
+              status: 'completed',
+              created_at: new Date().toISOString()
+            }
+          );
 
-        // Cache the development context
-        await databaseService.cacheSet(
-          `development:${orchestrationId}`,
-          developmentResult,
-          3600 // 1 hour TTL
-        );
+          // Cache the development context
+          await databaseService.cacheSet(
+            `development:${orchestrationId}`,
+            developmentResult,
+            3600 // 1 hour TTL
+          );
+          
+          logger.info('DevelopmentAgent: Knowledge stored successfully', { sessionId });
+        } catch (error) {
+          logger.warn('DevelopmentAgent: Failed to store knowledge', {
+            error: error.message,
+            sessionId
+          });
+        }
       }
 
-      logger.info('Development task completed', {
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'completion',
+        message: 'Development task completed successfully',
+        progress: 100
+      });
+
+      logger.info('DevelopmentAgent: Development task completed successfully', {
         sessionId,
         orchestrationId,
-        executionTime: developmentResult.execution_time_ms
+        executionTime: developmentResult.development_time_ms,
+        confidenceScore: evaluation.confidence_score
       });
 
       return developmentResult;
 
     } catch (error) {
-      console.error('Development task failed - detailed error:', {
+      logger.error('DevelopmentAgent: Development task failed - detailed error', {
         message: error.message,
         stack: error.stack,
         name: error.name,
         sessionId,
         orchestrationId,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        inputData: JSON.stringify(inputData, null, 2)
       });
-      logger.error('Development task failed', {
-        sessionId,
-        orchestrationId,
-        error: error.message
+      
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'error',
+        message: `Development task failed: ${error.message}`,
+        progress: 100
       });
 
       const taskData = inputData.task || inputData;
