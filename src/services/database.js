@@ -266,11 +266,13 @@ class DatabaseService {
       const { data, error } = await this.supabase
         .from('research_insights')
         .insert({
-          query: insightsData.query,
+          query: insightsData.query_text || insightsData.query,
+          original_query: insightsData.original_query || insightsData.query_text || insightsData.query,
           query_hash: insightsData.query_hash,
           domain: insightsData.domain || 'general',
           patterns: insightsData.patterns || [],
           search_results: insightsData.search_results || {},
+          research_results: insightsData.research_results || insightsData.insights || insightsData.search_results,
           session_id: insightsData.session_id,
           orchestration_id: insightsData.orchestration_id,
           metadata: insightsData.metadata || {}
