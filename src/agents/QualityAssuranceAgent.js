@@ -4,6 +4,7 @@ const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
 const axios = require('axios');
 
 const { logger } = require('../utils/logger');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
 const { SemanticSimilarity } = require('../utils/semanticSimilarity');
 const progressBroadcaster = require('../services/progressBroadcaster');
 const databaseService = require('../services/database');
