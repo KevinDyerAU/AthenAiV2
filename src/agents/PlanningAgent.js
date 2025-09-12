@@ -3,6 +3,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
+const { StringOutputParser } = require('@langchain/core/output_parsers');
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
@@ -154,19 +155,28 @@ Current planning task: {complexity} - {planningRequest}
         });
 
         // PHASE 2: Execute the planning task with strategy
-        result = await agentExecutor.invoke({
-          planningRequest: typeof inputData === 'object' ? JSON.stringify(inputData) : inputData,
-          complexity: inputData.complexity,
-          timeframe: inputData.timeframe,
-          resources: JSON.stringify(resources),
-          strategy: strategyPlan.selected_strategy.name,
-          sessionId,
-          tools: tools.map(t => t.name).join(', ')
-        });
-        
-        // PHASE 3: Self-Evaluation
-        const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
+        try {
+          result = await agentExecutor.invoke({
+            planningRequest: typeof inputData === 'object' ? JSON.stringify(inputData) : inputData,
+            complexity: inputData.complexity,
+            timeframe: inputData.timeframe,
+            resources: JSON.stringify(resources),
+            strategy: strategyPlan.selected_strategy.name,
+            sessionId,
+            tools: tools.map(t => t.name).join(', ')
+          });
+          
+        } catch (error) {
+          logger.error('Agent execution error:', error);
+          result = {
+            output: `Planning task encountered an error: ${error.message}`,
+            intermediateSteps: []
+          };
+        }
       }
+
+      // PHASE 3: Self-Evaluation
+      const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
 
       // Process and structure the results
       const planningResult = {

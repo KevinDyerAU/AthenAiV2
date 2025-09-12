@@ -78,10 +78,18 @@ class ExecutionAgent {
                                process.env.JEST_WORKER_ID !== undefined;
 
       let result;
+      let evaluation;
+
       if (isTestEnvironment) {
         result = {
           output: `Executed ${executionType} task: ${executionPlan}`,
           intermediateSteps: []
+        };
+        // Create default evaluation for test environment
+        evaluation = {
+          confidence_score: 0.8,
+          quality_assessment: 'Test execution completed',
+          improvement_suggestions: []
         };
       } else {
         // Initialize execution tools
@@ -151,18 +159,35 @@ Current execution: {executionType} - {executionPlan}
         });
 
         // PHASE 2: Execute the task with strategy
-        result = await agentExecutor.invoke({
-          executionPlan: typeof executionPlan === 'object' ? JSON.stringify(executionPlan) : executionPlan,
-          executionType,
-          environment,
-          parameters: JSON.stringify(parameters),
-          strategy: strategyPlan.selected_strategy.name,
-          sessionId,
-          tools: tools.map(t => t.name).join(', ')
-        });
+        try {
+          result = await agentExecutor.invoke({
+            executionPlan: typeof executionPlan === 'object' ? JSON.stringify(executionPlan) : executionPlan,
+            executionType,
+            environment,
+            parameters: JSON.stringify(parameters),
+            strategy: strategyPlan.selected_strategy.name,
+            sessionId,
+            tools: tools.map(t => t.name).join(', ')
+          });
+        } catch (error) {
+          logger.error('Agent execution error:', error);
+          result = {
+            output: `Execution task encountered an error: ${error.message}`,
+            intermediateSteps: []
+          };
+        }
         
-        // PHASE 3: Self-Evaluation
-        const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
+        // PHASE 3: Self-Evaluation (always runs regardless of execution success/failure)
+        try {
+          evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
+        } catch (evalError) {
+          logger.error('Evaluation error:', evalError);
+          evaluation = {
+            confidence_score: 0.5,
+            quality_assessment: 'Evaluation failed',
+            improvement_suggestions: ['Review execution logs for errors']
+          };
+        }
       }
 
       // Process and structure the results

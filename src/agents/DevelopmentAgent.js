@@ -3,6 +3,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
+const { StringOutputParser } = require('@langchain/core/output_parsers');
 const fs = require('fs').promises;
 const path = require('path');
 const { exec } = require('child_process');
@@ -156,17 +157,26 @@ Current task: {requirements}
         });
 
         // Execute development task
-        result = await agentExecutor.invoke({
-          requirements,
-          projectType,
-          language,
-          sessionId,
-          tools: tools.map(t => t.name).join(', ')
-        });
-        
-        // PHASE 3: Self-Evaluation
-        const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
+        try {
+          result = await agentExecutor.invoke({
+            requirements,
+            projectType,
+            language,
+            sessionId,
+            tools: tools.map(t => t.name).join(', ')
+          });
+          
+        } catch (error) {
+          logger.error('Agent execution error:', error);
+          result = {
+            output: `Development task encountered an error: ${error.message}`,
+            intermediateSteps: []
+          };
+        }
       }
+
+      // PHASE 3: Self-Evaluation
+      const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
 
       // Process and structure the results
       const developmentResult = {

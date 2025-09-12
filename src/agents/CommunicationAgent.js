@@ -3,6 +3,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { AgentExecutor, createOpenAIToolsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
+const { StringOutputParser } = require('@langchain/core/output_parsers');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
 const { logger } = require('../utils/logger');
@@ -161,19 +162,28 @@ Current task: {communicationType} - {message}
         });
 
         // PHASE 2: Execute the communication task with strategy
-        result = await agentExecutor.invoke({
-          communicationRequest: typeof inputData === 'object' ? JSON.stringify(inputData) : inputData,
-          communicationType,
-          audience: inputData.audience || 'general',
-          context: JSON.stringify(context),
-          strategy: strategyPlan.selected_strategy.name,
-          sessionId,
-          tools: tools.map(t => t.name).join(', ')
-        });
-        
-        // PHASE 3: Self-Evaluation
-        const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
+        try {
+          result = await agentExecutor.invoke({
+            communicationRequest: typeof inputData === 'object' ? JSON.stringify(inputData) : inputData,
+            communicationType,
+            audience: inputData.audience || 'general',
+            context: JSON.stringify(context),
+            strategy: strategyPlan.selected_strategy.name,
+            sessionId,
+            tools: tools.map(t => t.name).join(', ')
+          });
+          
+        } catch (error) {
+          logger.error('Agent execution error:', error);
+          result = {
+            output: `Communication task encountered an error: ${error.message}`,
+            intermediateSteps: []
+          };
+        }
       }
+
+      // PHASE 3: Self-Evaluation
+      const evaluation = await this.reasoning.evaluateOutput(result.output, inputData, strategyPlan);
 
       // Process and structure the results
       const communicationResult = {

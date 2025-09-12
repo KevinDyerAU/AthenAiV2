@@ -212,18 +212,27 @@ Current assessment: {qaType} review of provided content
         });
 
         // PHASE 4: Execute the QA task with strategy
-        result = await agentExecutor.invoke({
-          content: typeof content === 'object' ? JSON.stringify(content) : content,
-          qaType,
-          standards: JSON.stringify(standards),
-          context: JSON.stringify({
-            testLevel: strategyPlan.selected_strategy.name,
-            strategy: strategyPlan.selected_strategy.name
-          }),
-          knowledgeContext: JSON.stringify(knowledgeContext),
-          sessionId,
-          tools: tools.map(t => t.name).join(', ')
-        });
+        try {
+          result = await agentExecutor.invoke({
+            content: typeof content === 'object' ? JSON.stringify(content) : content,
+            qaType,
+            standards: JSON.stringify(standards),
+            context: JSON.stringify({
+              testLevel: strategyPlan.selected_strategy.name,
+              strategy: strategyPlan.selected_strategy.name
+            }),
+            knowledgeContext: JSON.stringify(knowledgeContext),
+            sessionId,
+            tools: tools.map(t => t.name).join(', ')
+          });
+          
+        } catch (error) {
+          logger.error('Agent execution error:', error);
+          result = {
+            output: `QA task encountered an error: ${error.message}`,
+            intermediateSteps: []
+          };
+        }
         
         // PHASE 5: Self-Evaluation and Knowledge Storage
         progressBroadcaster.updateProgress(
