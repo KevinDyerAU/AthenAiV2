@@ -41,7 +41,7 @@ const PORT = process.env.PORT || 3000;
 // Initialize agents
 const masterOrchestrator = new MasterOrchestrator();
 const researchAgent = new ResearchAgent();
-const analysisAgent = new AnalysisAgent(process.env.OPENAI_API_KEY);
+const analysisAgent = new AnalysisAgent();
 const creativeAgent = new CreativeAgent(process.env.OPENAI_API_KEY);
 const developmentAgent = new DevelopmentAgent();
 const planningAgent = new PlanningAgent();
@@ -293,10 +293,30 @@ io.on('connection', (socket) => {
             { sessionId: roomId }
           );
         } else if (primaryAgent === 'analysis') {
-          logger.info('Calling analysis agent');
-          agentResult = await analysisAgent.executeAnalysis({
-            task: { message, session_id: orchestrationResult.session_id, orchestration_id: orchestrationResult.orchestration_id || safeAgentName }
+          logger.info('Calling analysis agent', {
+            message,
+            sessionId: orchestrationResult.session_id,
+            orchestrationId: orchestrationResult.orchestration_id || safeAgentName
           });
+          try {
+            agentResult = await analysisAgent.executeAnalysis({
+              task: { 
+                message, 
+                data: message,
+                session_id: orchestrationResult.session_id, 
+                orchestration_id: orchestrationResult.orchestration_id || safeAgentName 
+              }
+            });
+            logger.info('Analysis agent completed successfully', { agentResult });
+          } catch (analysisError) {
+            logger.error('Analysis agent execution failed:', {
+              error: analysisError.message,
+              stack: analysisError.stack,
+              name: analysisError.name,
+              timestamp: new Date().toISOString()
+            });
+            throw analysisError; // Re-throw to trigger fallback
+          }
         } else if (primaryAgent === 'creative') {
           logger.info('Calling creative agent');
           agentResult = await creativeAgent.executeCreative({

@@ -83,7 +83,13 @@ class AnalysisAgent {
         queryHash
       };
     } catch (error) {
-      logger.error('Error retrieving knowledge context:', error);
+      logger.error('Error retrieving knowledge context:', {
+        error: error.message,
+        stack: error.stack,
+        sessionId,
+        query: query?.substring(0, 100) + '...',
+        timestamp: new Date().toISOString()
+      });
       await progressBroadcaster.broadcastProgress(sessionId, {
         phase: 'knowledge_retrieval',
         message: 'Knowledge retrieval failed, proceeding with fresh analysis',
@@ -136,7 +142,14 @@ class AnalysisAgent {
       });
 
     } catch (error) {
-      logger.error('Error storing analysis insights:', error);
+      logger.error('Error storing analysis insights:', {
+        error: error.message,
+        stack: error.stack,
+        sessionId,
+        analysisType: analysisResults?.analysis_type,
+        queryHash,
+        timestamp: new Date().toISOString()
+      });
       await progressBroadcaster.broadcastProgress(sessionId, {
         phase: 'knowledge_storage',
         message: 'Failed to store insights, but analysis completed',
@@ -367,7 +380,17 @@ Use the following format for your analysis:
       return analysisResults;
 
     } catch (error) {
-      logger.error('Analysis execution failed:', error);
+      logger.error('Analysis execution failed:', {
+        error: error.message,
+        stack: error.stack,
+        sessionId,
+        orchestrationId,
+        analysisType,
+        dataType: typeof dataToAnalyze,
+        dataLength: Array.isArray(dataToAnalyze) ? dataToAnalyze.length : 'N/A',
+        timestamp: new Date().toISOString(),
+        phase: 'executeAnalysis'
+      });
       await progressBroadcaster.broadcastProgress(sessionId, {
         phase: 'error',
         message: `Analysis failed: ${error.message}`,
@@ -484,7 +507,14 @@ Use the following format for your analysis:
         range: max - min
       };
     } catch (error) {
-      logger.error('Statistical analysis error:', error);
+      logger.error('Statistical analysis error:', {
+        error: error.message,
+        stack: error.stack,
+        dataType: typeof data,
+        dataLength: Array.isArray(data) ? data.length : 'N/A',
+        timestamp: new Date().toISOString(),
+        method: 'performStatisticalAnalysis'
+      });
       return { error: error.message };
     }
   }
@@ -756,10 +786,25 @@ Provide scores and overall confidence (0-1).
 
   // Error handling
   createErrorResponse(error) {
+    logger.error('Creating error response:', {
+      error: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code,
+      timestamp: new Date().toISOString(),
+      method: 'createErrorResponse'
+    });
+    
     return {
       success: false,
       error: error.message,
+      error_details: {
+        name: error.name,
+        code: error.code,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       analysis_type: 'error',
+      confidence: 0,
       timestamp: new Date().toISOString(),
       recommendations: [{
         description: 'Review input data format and try again',
@@ -770,4 +815,4 @@ Provide scores and overall confidence (0-1).
   }
 }
 
-module.exports = AnalysisAgent;
+module.exports = { AnalysisAgent };
