@@ -214,19 +214,30 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       
       let primaryAgent;
       try {
+        logger.info('MasterOrchestrator: Invoking AI agent routing', { taskString: taskString.substring(0, 100) + '...' });
         primaryAgent = await Promise.race([
           chain.invoke({ message: taskString }),
           timeoutPromise
         ]);
+        logger.info('MasterOrchestrator: AI agent routing response received', { primaryAgent, type: typeof primaryAgent });
       } catch (error) {
-        logger.warn('Agent routing API call failed, using keyword-based fallback', { error: error.message });
+        logger.warn('MasterOrchestrator: Agent routing API call failed, using keyword-based fallback', { 
+          error: error.message,
+          stack: error.stack,
+          taskString: taskString.substring(0, 100) + '...'
+        });
         // Intelligent keyword-based fallback when AI routing fails
         primaryAgent = this.getKeywordBasedAgent(taskString);
+        logger.info('MasterOrchestrator: Keyword-based fallback selected agent', { primaryAgent });
       }
       
       // Clean and validate the response
       if (!primaryAgent || typeof primaryAgent !== 'string') {
-        logger.warn('Invalid primaryAgent response, using fallback', { primaryAgent });
+        logger.warn('MasterOrchestrator: Invalid primaryAgent response, using fallback', { 
+          primaryAgent, 
+          type: typeof primaryAgent,
+          taskString: taskString.substring(0, 100) + '...'
+        });
         primaryAgent = 'general';
       }
       
@@ -267,19 +278,36 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         executionOrder = ['creative', 'communication'];
       }
       
-      return {
+      const routingResult = {
         primary: selectedAgent,
         secondary,
         execution_order: executionOrder,
         parallel_execution: false,
         reasoning: `AI determined '${selectedAgent}' agent is best suited for this task`
       };
+
+      logger.info('MasterOrchestrator: Agent routing determination complete', { 
+        routingResult,
+        originalAgent: primaryAgent,
+        cleanAgent,
+        selectedAgent
+      });
+
+      return routingResult;
     } catch (error) {
-      logger.error('AI agent routing determination failed, falling back to keyword matching', { error: error.message });
+      logger.error('MasterOrchestrator: AI agent routing determination failed, falling back to keyword matching', { 
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+        task: typeof task === 'string' ? task.substring(0, 100) + '...' : JSON.stringify(task).substring(0, 100) + '...',
+        timestamp: new Date().toISOString()
+      });
       
       // Fallback to simple keyword matching if AI fails
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
       const taskLower = taskString.toLowerCase();
+      
+      logger.info('MasterOrchestrator: Using keyword-based fallback routing', { taskLower: taskLower.substring(0, 100) + '...' });
       
       let primary = 'general';
       if (taskLower.includes('research') || taskLower.includes('analyze') || taskLower.includes('find') || taskLower.includes('what') || taskLower.includes('how')) {
@@ -298,13 +326,20 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         primary = 'qa';
       }
       
-      return {
+      const fallbackResult = {
         primary,
         secondary: ['analysis'],
         execution_order: [primary, 'analysis'],
         parallel_execution: false,
         reasoning: 'Fallback keyword matching used'
       };
+
+      logger.info('MasterOrchestrator: Keyword-based fallback routing complete', { 
+        fallbackResult,
+        taskLower: taskLower.substring(0, 100) + '...'
+      });
+
+      return fallbackResult;
     }
   }
 
@@ -361,6 +396,12 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
     const taskMessage = inputData.message || inputData.task || inputData;
     
     try {
+      logger.info('MasterOrchestrator: Starting orchestration', {
+        sessionId,
+        taskMessage: taskMessage?.substring(0, 100) + '...',
+        inputData: JSON.stringify(inputData, null, 2)
+      });
+
       // Start progress tracking
       progressBroadcaster.startProgress(sessionId, 'MasterOrchestrator', 'Analyzing task and routing to appropriate agent');
       
@@ -368,7 +409,9 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       progressBroadcaster.updateProgress(sessionId, 'complexity_analysis', 'Analyzing task complexity and requirements');
       progressBroadcaster.updateThinking(sessionId, 'analyzing', 'Breaking down the user request to understand complexity and requirements...');
       
+      logger.info('MasterOrchestrator: Analyzing task complexity');
       const complexity = await this.analyzeTaskComplexity(taskMessage);
+      logger.info('MasterOrchestrator: Task complexity analysis complete', { complexity });
       
       progressBroadcaster.updateThinking(sessionId, 'complexity_result', `Task complexity: ${complexity.level} - ${complexity.reasoning}`);
       
@@ -376,13 +419,23 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       progressBroadcaster.updateProgress(sessionId, 'agent_routing', 'Determining the best agent for this task');
       progressBroadcaster.updateThinking(sessionId, 'routing', 'Analyzing which specialized agent would be most effective for this request...');
       
+      logger.info('MasterOrchestrator: Determining agent routing');
       const routing = await this.determineAgentRouting(taskMessage);
+      logger.info('MasterOrchestrator: Agent routing complete', { routing });
+      
+      // Validate routing result
+      if (!routing || !routing.primary) {
+        logger.error('MasterOrchestrator: Invalid routing result', { routing });
+        throw new Error('Agent routing failed - no primary agent determined');
+      }
       
       progressBroadcaster.updateThinking(sessionId, 'routing_result', `Selected agent: ${routing.primary} - ${routing.reasoning}`);
       
       // Step 3: Create execution plan
       progressBroadcaster.updateProgress(sessionId, 'execution_planning', 'Creating execution plan');
+      logger.info('MasterOrchestrator: Creating execution plan');
       const plan = this.createExecutionPlan(taskMessage, complexity, routing);
+      logger.info('MasterOrchestrator: Execution plan created', { planId: plan.id });
       
       progressBroadcaster.updateProgress(sessionId, 'orchestration_complete', 'Task analysis complete, routing to agent');
       
@@ -396,6 +449,12 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         status: 'completed',
         timestamp: new Date().toISOString()
       };
+
+      logger.info('MasterOrchestrator: Orchestration completed successfully', { 
+        sessionId, 
+        primaryAgent: routing.primary,
+        resultStatus: result.status 
+      });
       
       progressBroadcaster.completeProgress(sessionId, {
         selectedAgent: routing.primary,
@@ -406,7 +465,14 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       return result;
       
     } catch (error) {
-      logger.error('Orchestration execution failed', { error: error.message });
+      logger.error('MasterOrchestrator: Orchestration execution failed', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+        sessionId,
+        taskMessage: taskMessage?.substring(0, 100) + '...',
+        timestamp: new Date().toISOString()
+      });
       progressBroadcaster.errorProgress(sessionId, error);
       throw error;
     }
