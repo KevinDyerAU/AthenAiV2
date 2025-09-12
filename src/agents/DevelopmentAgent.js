@@ -57,13 +57,6 @@ class DevelopmentAgent {
     try {
       logger.info('Starting development task', { sessionId, orchestrationId });
       
-      // PHASE 1: Strategic Planning and Reasoning
-      const strategyPlan = await this.reasoning.planStrategy(inputData, {
-        time_constraint: inputData.urgency || 'normal',
-        quality_priority: 'high',
-        creativity_needed: inputData.development_type === 'architecture'
-      });
-
       const taskData = inputData.task || inputData;
       const requirements = taskData.requirements || taskData.message || taskData.content;
       const projectType = taskData.project_type || 'general';
@@ -72,6 +65,26 @@ class DevelopmentAgent {
       if (!requirements) {
         throw new Error('Development requirements are required');
       }
+
+      // Check for GitHub repository URLs and validate them
+      const repoValidation = await this.validateRepositoryRequest(requirements);
+      if (repoValidation.isInvalid) {
+        return {
+          summary: repoValidation.message,
+          agent_type: 'development',
+          confidence: 0.9,
+          execution_time_ms: Date.now() - startTime,
+          session_id: sessionId,
+          orchestration_id: orchestrationId
+        };
+      }
+      
+      // PHASE 1: Strategic Planning and Reasoning
+      const strategyPlan = await this.reasoning.planStrategy(inputData, {
+        time_constraint: inputData.urgency || 'normal',
+        quality_priority: 'high',
+        creativity_needed: inputData.development_type === 'architecture'
+      });
 
       // Check if we're in test environment (NODE_ENV=test or jest is running)
       const isTestEnvironment = process.env.NODE_ENV === 'test' || 
@@ -719,6 +732,88 @@ Include:
     };
 
     return templates[filename] || '';
+  }
+
+  async validateRepositoryRequest(requirements) {
+    const githubUrlRegex = /https?:\/\/github\.com\/([^\/\s]+)\/([^\/\s]+)/g;
+    const matches = [...requirements.matchAll(githubUrlRegex)];
+    
+    if (matches.length === 0) {
+      return { isInvalid: false };
+    }
+
+    for (const match of matches) {
+      const [fullUrl, owner, repo] = match;
+      const cleanRepo = repo.replace(/[^\w-]/g, ''); // Remove any trailing characters
+      
+      try {
+        // Check if repository exists using GitHub API
+        const response = await axios.get(`https://api.github.com/repos/${owner}/${cleanRepo}`, {
+          timeout: 5000,
+          headers: {
+            'User-Agent': 'AthenAI-DevelopmentAgent/1.0'
+          }
+        });
+        
+        if (response.status === 200) {
+          logger.info('Repository validation successful', { owner, repo: cleanRepo });
+          return { isInvalid: false };
+        }
+      } catch (error) {
+        if (error.response?.status === 404) {
+          return {
+            isInvalid: true,
+            message: `## Repository Not Found
+
+I couldn't find the repository **${owner}/${cleanRepo}** on GitHub.
+
+**Please check:**
+- The repository URL is correct
+- The repository exists and is public
+- You have the correct owner and repository names
+
+**Valid repository URL format:**
+\`https://github.com/owner/repository-name\`
+
+**Examples of valid repositories:**
+- \`https://github.com/microsoft/vscode\`
+- \`https://github.com/facebook/react\`
+- \`https://github.com/nodejs/node\`
+
+Please provide a valid GitHub repository URL and I'll be happy to analyze it for you!`
+          };
+        } else if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+          return {
+            isInvalid: true,
+            message: `## Network Error
+
+I'm having trouble connecting to GitHub to validate the repository. This could be due to:
+- Network connectivity issues
+- GitHub API rate limiting
+- Temporary service unavailability
+
+Please try again in a moment, or provide a different repository URL.`
+          };
+        } else {
+          logger.warn('Repository validation error', { error: error.message, owner, repo: cleanRepo });
+          return {
+            isInvalid: true,
+            message: `## Repository Validation Error
+
+I encountered an issue while trying to validate the repository **${owner}/${cleanRepo}**.
+
+Please ensure:
+- The repository URL is correct and accessible
+- The repository is public (private repositories require authentication)
+- Try providing the repository URL in this format: \`https://github.com/owner/repository-name\`
+
+If the issue persists, please try with a different repository.`
+          };
+        }
+      }
+    }
+    
+    return { isInvalid: false };
   }
 }
 

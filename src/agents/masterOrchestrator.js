@@ -219,8 +219,9 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
           timeoutPromise
         ]);
       } catch (error) {
-        logger.warn('Agent routing API call failed, using fallback', { error: error.message });
-        primaryAgent = 'general'; // Fallback to general agent
+        logger.warn('Agent routing API call failed, using keyword-based fallback', { error: error.message });
+        // Intelligent keyword-based fallback when AI routing fails
+        primaryAgent = this.getKeywordBasedAgent(taskString);
       }
       
       // Clean and validate the response
@@ -417,6 +418,61 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       timestamp: new Date().toISOString(),
       capabilities: this.capabilities
     };
+  }
+
+  getKeywordBasedAgent(message) {
+    const lowerMessage = message.toLowerCase();
+    
+    // Repository/GitHub analysis patterns
+    if (lowerMessage.includes('github.com') || lowerMessage.includes('repository') || 
+        lowerMessage.includes('repo') || lowerMessage.includes('analyze') && lowerMessage.includes('code')) {
+      return 'development';
+    }
+    
+    // Research patterns
+    if (lowerMessage.includes('research') || lowerMessage.includes('investigate') || 
+        lowerMessage.includes('find information') || lowerMessage.includes('search for')) {
+      return 'research';
+    }
+    
+    // Development patterns
+    if (lowerMessage.includes('code') || lowerMessage.includes('develop') || 
+        lowerMessage.includes('build') || lowerMessage.includes('implement')) {
+      return 'development';
+    }
+    
+    // Analysis patterns
+    if (lowerMessage.includes('analyze') || lowerMessage.includes('analysis') || 
+        lowerMessage.includes('examine') || lowerMessage.includes('evaluate')) {
+      return 'analysis';
+    }
+    
+    // Creative patterns
+    if (lowerMessage.includes('create') || lowerMessage.includes('write') || 
+        lowerMessage.includes('design') || lowerMessage.includes('generate')) {
+      return 'creative';
+    }
+    
+    // Planning patterns
+    if (lowerMessage.includes('plan') || lowerMessage.includes('strategy') || 
+        lowerMessage.includes('roadmap') || lowerMessage.includes('schedule')) {
+      return 'planning';
+    }
+    
+    // QA patterns
+    if (lowerMessage.includes('test') || lowerMessage.includes('quality') || 
+        lowerMessage.includes('review') || lowerMessage.includes('check')) {
+      return 'qa';
+    }
+    
+    // Communication patterns
+    if (lowerMessage.includes('explain') || lowerMessage.includes('communicate') || 
+        lowerMessage.includes('present') || lowerMessage.includes('report')) {
+      return 'communication';
+    }
+    
+    // Default to research for general queries
+    return 'research';
   }
 
   async shutdown() {
