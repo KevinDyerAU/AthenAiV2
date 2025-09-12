@@ -123,6 +123,46 @@ class ResearchAgent {
       // Retrieve knowledge context
       const knowledgeContext = await this.retrieveKnowledgeContext(inputData.message, sessionId);
       
+      // Check if we have recent cached research for this exact query
+      if (knowledgeContext.similarResearch && knowledgeContext.similarResearch.length > 0) {
+        const exactMatch = knowledgeContext.similarResearch.find(research => 
+          research.query_hash === knowledgeContext.queryHash
+        );
+        
+        if (exactMatch && exactMatch.insights) {
+          logger.info('Using cached research results', { 
+            queryHash: knowledgeContext.queryHash,
+            cacheAge: Date.now() - new Date(exactMatch.created_at).getTime()
+          });
+          
+          await progressBroadcaster.broadcastProgress(sessionId, {
+            phase: 'cache_hit',
+            message: 'Found cached research results, using existing analysis',
+            progress: 90
+          });
+          
+          return {
+            response: exactMatch.insights,
+            confidence: exactMatch.confidence_score || 0.9,
+            sources: ['Cached from knowledge substrate'],
+            reasoning: 'Retrieved from cached research results',
+            metadata: {
+              agent: 'ResearchAgent',
+              domain: knowledgeContext.domain,
+              cached: true,
+              cache_timestamp: exactMatch.created_at,
+              query_hash: knowledgeContext.queryHash
+            }
+          };
+        }
+      }
+      
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'fresh_research',
+        message: 'No cached results found, performing fresh research',
+        progress: 20
+      });
+      
       // Initialize agent executor with session context
       if (!this.agentExecutor) {
         this.tools = this.initializeTools(sessionId, progressBroadcaster);
@@ -206,8 +246,14 @@ I recommend trying again in a moment, or you can rephrase your request for bette
         };
       }
 
-      // Store research insights
+      // Store research insights for future caching
       await this.storeResearchInsights(inputData.message, result.output, sessionId);
+      
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'research_stored',
+        message: 'Research results stored in knowledge substrate for future use',
+        progress: 95
+      });
 
       return {
         response: result.output,

@@ -129,20 +129,60 @@ function formatAgentResponse(agentResult, originalMessage, agentType) {
     timestamp: new Date().toISOString()
   };
 
-  // Handle different agent response formats
-  if (agentResult.summary && typeof agentResult.summary === 'string') {
-    formattedText = agentResult.summary;
-  } else if (agentResult.results && agentResult.results.summary) {
-    // Research agent format
+  // Log the full agent result for debugging
+  logger.info('Formatting agent response:', {
+    agentType,
+    agentResultKeys: Object.keys(agentResult),
+    agentResultPreview: JSON.stringify(agentResult, null, 2).substring(0, 500) + '...'
+  });
+
+  // Handle different agent response formats with comprehensive data preservation
+  if (agentResult.results && typeof agentResult.results === 'object') {
+    // Research/Analysis agent format with rich results
     const query = agentResult.query || originalMessage;
-    formattedText = `## Research Results: "${query}"\n\n`;
-    formattedText += `**Summary:** ${agentResult.results.summary}\n\n`;
+    formattedText = `## ${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent Results: "${query}"\n\n`;
     
-    if (agentResult.results.analysis && agentResult.results.analysis !== 'Analysis completed') {
-      formattedText += `**Key Findings:**\n${agentResult.results.analysis}\n\n`;
+    // Summary
+    if (agentResult.results.summary) {
+      formattedText += `**Summary:**\n${agentResult.results.summary}\n\n`;
     }
     
-    if (agentResult.results.recommendations && agentResult.results.recommendations.length > 0 && agentResult.results.recommendations[0] !== 'Recommendation 1') {
+    // Analysis/Key Findings
+    if (agentResult.results.analysis && agentResult.results.analysis !== 'Analysis completed') {
+      formattedText += `**Analysis & Key Findings:**\n${agentResult.results.analysis}\n\n`;
+    }
+    
+    // Technical Details
+    if (agentResult.results.technical_details) {
+      formattedText += `**Technical Details:**\n${agentResult.results.technical_details}\n\n`;
+    }
+    
+    // Architecture/Structure
+    if (agentResult.results.architecture) {
+      formattedText += `**Architecture:**\n${agentResult.results.architecture}\n\n`;
+    }
+    
+    // Features
+    if (agentResult.results.features && Array.isArray(agentResult.results.features)) {
+      formattedText += `**Key Features:**\n`;
+      agentResult.results.features.forEach((feature, i) => {
+        formattedText += `• ${feature}\n`;
+      });
+      formattedText += '\n';
+    }
+    
+    // Technologies
+    if (agentResult.results.technologies && Array.isArray(agentResult.results.technologies)) {
+      formattedText += `**Technologies Used:**\n`;
+      agentResult.results.technologies.forEach((tech, i) => {
+        formattedText += `• ${tech}\n`;
+      });
+      formattedText += '\n';
+    }
+    
+    // Recommendations
+    if (agentResult.results.recommendations && Array.isArray(agentResult.results.recommendations) && 
+        agentResult.results.recommendations.length > 0 && agentResult.results.recommendations[0] !== 'Recommendation 1') {
       formattedText += `**Recommendations:**\n`;
       agentResult.results.recommendations.forEach((rec, i) => {
         formattedText += `${i + 1}. ${rec}\n`;
@@ -150,31 +190,59 @@ function formatAgentResponse(agentResult, originalMessage, agentType) {
       formattedText += '\n';
     }
     
-    if (agentResult.results.sources && agentResult.results.sources.length > 0) {
+    // Sources
+    if (agentResult.results.sources && Array.isArray(agentResult.results.sources) && agentResult.results.sources.length > 0) {
       formattedText += `**Sources:**\n`;
       agentResult.results.sources.forEach((source, i) => {
         formattedText += `${i + 1}. ${source}\n`;
       });
+      formattedText += '\n';
     }
+    
+    // Additional data fields
+    Object.keys(agentResult.results).forEach(key => {
+      if (!['summary', 'analysis', 'technical_details', 'architecture', 'features', 'technologies', 'recommendations', 'sources'].includes(key)) {
+        const value = agentResult.results[key];
+        if (value && typeof value === 'string' && value.length > 10) {
+          formattedText += `**${key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:**\n${value}\n\n`;
+        } else if (Array.isArray(value) && value.length > 0) {
+          formattedText += `**${key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:**\n`;
+          value.forEach((item, i) => {
+            formattedText += `• ${item}\n`;
+          });
+          formattedText += '\n';
+        }
+      }
+    });
     
     metadata.hasAnalysis = !!agentResult.results.analysis;
     metadata.hasRecommendations = !!(agentResult.results.recommendations && agentResult.results.recommendations.length > 0);
     metadata.sourceCount = agentResult.results.sources ? agentResult.results.sources.length : 0;
+    metadata.featureCount = agentResult.results.features ? agentResult.results.features.length : 0;
     
+  } else if (agentResult.summary && typeof agentResult.summary === 'string') {
+    // Simple summary format
+    formattedText = `**${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent:** ${agentResult.summary}`;
   } else if (agentResult.response) {
     formattedText = agentResult.response;
   } else if (agentResult.content) {
     formattedText = agentResult.content;
   } else {
-    // Fallback for unstructured responses
-    formattedText = `## ${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent Response\n\n`;
-    formattedText += `I've processed your request: "${originalMessage}"\n\n`;
-    formattedText += `How can I help you further?`;
-  }
-
-  // Add agent type indicator if not already present
-  if (!formattedText.includes('##') && agentType !== 'general') {
-    formattedText = `**${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent:** ${formattedText}`;
+    // Fallback - try to extract any meaningful content
+    const meaningfulKeys = Object.keys(agentResult).filter(key => 
+      typeof agentResult[key] === 'string' && agentResult[key].length > 10
+    );
+    
+    if (meaningfulKeys.length > 0) {
+      formattedText = `## ${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent Response\n\n`;
+      meaningfulKeys.forEach(key => {
+        formattedText += `**${key.charAt(0).toUpperCase() + key.slice(1)}:** ${agentResult[key]}\n\n`;
+      });
+    } else {
+      formattedText = `## ${agentType.charAt(0).toUpperCase() + agentType.slice(1)} Agent Response\n\n`;
+      formattedText += `I've processed your request: "${originalMessage}"\n\n`;
+      formattedText += `How can I help you further?`;
+    }
   }
 
   return {

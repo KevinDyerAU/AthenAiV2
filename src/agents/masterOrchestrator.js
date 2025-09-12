@@ -158,10 +158,16 @@ Respond in this exact JSON format:
     }
   }
 
-  async determineAgentRouting(task) {
+  async determineAgentRouting(task, sessionId = 'default') {
     try {
       // Ensure task is a string
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
+      
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'routing_start',
+        message: 'Starting agent routing determination...',
+        progress: 35
+      });
       
       // Check if API key is available
       const useOpenRouter = process.env.USE_OPENROUTER === 'true';
@@ -169,6 +175,12 @@ Respond in this exact JSON format:
       
       if (!apiKey) {
         logger.warn('No API key available, using fallback keyword matching for agent routing');
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'no_api_key',
+          message: 'No API key configured, using keyword-based routing',
+          progress: 40,
+          error: 'No API key configured'
+        });
         throw new Error('No API key configured');
       }
       
@@ -215,11 +227,23 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       let primaryAgent;
       try {
         logger.info('MasterOrchestrator: Invoking AI agent routing', { taskString: taskString.substring(0, 100) + '...' });
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'ai_routing',
+          message: 'Calling AI model for agent routing...',
+          progress: 40
+        });
+        
         primaryAgent = await Promise.race([
           chain.invoke({ message: taskString }),
           timeoutPromise
         ]);
+        
         logger.info('MasterOrchestrator: AI agent routing response received', { primaryAgent, type: typeof primaryAgent });
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'ai_routing_complete',
+          message: `AI selected agent: ${primaryAgent}`,
+          progress: 50
+        });
       } catch (error) {
         logger.warn('MasterOrchestrator: Agent routing API call failed, using keyword-based fallback', { 
           error: error.message,
@@ -227,8 +251,21 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
           taskString: taskString.substring(0, 100) + '...'
         });
         // Intelligent keyword-based fallback when AI routing fails
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'fallback_routing',
+          message: `AI routing failed: ${error.message}. Using keyword-based fallback...`,
+          progress: 45,
+          error: error.message
+        });
+        
         primaryAgent = this.getKeywordBasedAgent(taskString);
         logger.info('MasterOrchestrator: Keyword-based fallback selected agent', { primaryAgent });
+        
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'fallback_complete',
+          message: `Fallback selected agent: ${primaryAgent}`,
+          progress: 50
+        });
       }
       
       // Clean and validate the response
@@ -238,12 +275,26 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
           type: typeof primaryAgent,
           taskString: taskString.substring(0, 100) + '...'
         });
+        
+        await progressBroadcaster.broadcastProgress(sessionId, {
+          phase: 'validation_error',
+          message: `Invalid agent response (${typeof primaryAgent}): ${primaryAgent}. Using general agent.`,
+          progress: 55,
+          error: `primaryAgent validation failed - type: ${typeof primaryAgent}, value: ${primaryAgent}`
+        });
+        
         primaryAgent = 'general';
       }
       
       const cleanAgent = primaryAgent.toLowerCase().trim();
       const validAgents = ['research', 'creative', 'analysis', 'development', 'planning', 'execution', 'communication', 'qa', 'document', 'general'];
       const selectedAgent = validAgents.includes(cleanAgent) ? cleanAgent : 'general';
+      
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'agent_validation',
+        message: `Agent validation: ${primaryAgent} → ${cleanAgent} → ${selectedAgent}`,
+        progress: 60
+      });
       
       // Determine secondary agents and execution order based on primary
       let secondary = [];
@@ -420,7 +471,7 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       progressBroadcaster.updateThinking(sessionId, 'routing', 'Analyzing which specialized agent would be most effective for this request...');
       
       logger.info('MasterOrchestrator: Determining agent routing');
-      const routing = await this.determineAgentRouting(taskMessage);
+      const routing = await this.determineAgentRouting(taskMessage, sessionId);
       logger.info('MasterOrchestrator: Agent routing complete', { routing });
       
       // Validate routing result
