@@ -19,14 +19,18 @@ class ResearchAgent {
     
     if (useOpenRouter) {
       this.llm = new ChatOpenAI({
-        modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+        modelName: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.1-8b-instruct:free',
         temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENROUTER_API_KEY,
+        maxTokens: parseInt(process.env.OPENROUTER_MAX_TOKENS) || 2000,
+        timeout: parseInt(process.env.OPENROUTER_TIMEOUT) || 30000,
+        maxRetries: 2,
         configuration: {
           baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
           defaultHeaders: {
             'HTTP-Referer': 'https://athenai.local',
-            'X-Title': 'AthenAI Research Agent'
+            'X-Title': 'AthenAI Research Agent',
+            'Content-Type': 'application/json'
           }
         },
         tags: ['research-agent', 'athenai', 'openrouter']
@@ -165,13 +169,42 @@ Provide thorough, well-researched responses with proper citations and confidence
         });
       }
 
-      // Execute research with knowledge context
-      const result = await this.agentExecutor.call({
-        input: inputData.message,
-        previousResearch: JSON.stringify(knowledgeContext.similarResearch),
-        domainEntities: JSON.stringify(knowledgeContext.domainEntities),
-        domain: knowledgeContext.domain
-      });
+      // Execute research with knowledge context and error handling
+      let result;
+      try {
+        result = await this.agentExecutor.call({
+          input: inputData.message,
+          previousResearch: JSON.stringify(knowledgeContext.similarResearch),
+          domainEntities: JSON.stringify(knowledgeContext.domainEntities),
+          domain: knowledgeContext.domain
+        });
+      } catch (llmError) {
+        logger.error('LLM execution failed, providing fallback response', { error: llmError.message });
+        
+        // Provide a fallback response when LLM fails
+        const fallbackResponse = `I encountered an issue with the AI service while processing your research request about "${inputData.message}". 
+
+This appears to be related to: ${inputData.message.includes('github.com') ? 'GitHub repository analysis' : 'research inquiry'}.
+
+Based on the available context:
+- Domain: ${knowledgeContext.domain}
+- Previous research available: ${knowledgeContext.similarResearch.length > 0 ? 'Yes' : 'No'}
+
+I recommend trying again in a moment, or you can rephrase your request for better results.`;
+
+        return {
+          response: fallbackResponse,
+          confidence: 0.4,
+          sources: [],
+          reasoning: 'Fallback response due to LLM service error',
+          metadata: {
+            agent: 'ResearchAgent',
+            domain: knowledgeContext.domain,
+            error: 'LLM_SERVICE_ERROR',
+            fallback: true
+          }
+        };
+      }
 
       // Store research insights
       await this.storeResearchInsights(inputData.message, result.output, sessionId);
@@ -387,6 +420,21 @@ Format as a clear, actionable plan.
     if (results.includes('security') || results.includes('vulnerability')) patterns.push('security_research');
     
     return patterns;
+  }
+
+  async executeResearch(message, sessionId, orchestrationId, options = {}) {
+    try {
+      return await this.processMessage({ message }, { sessionId, ...options });
+    } catch (error) {
+      logger.error('Research execution error:', error);
+      return {
+        response: `Research failed: ${error.message}`,
+        confidence: 0.3,
+        sources: [],
+        reasoning: 'Error occurred during research execution',
+        metadata: { agent: 'ResearchAgent', error: error.message }
+      };
+    }
   }
 
   async performWebSearch(query, limit = 5) {
