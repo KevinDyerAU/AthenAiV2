@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: athenai_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=ai_agent_queue_user
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  ingestion-service:
+    build:
+      context: ./services/ingestion-service
+    container_name: athenai_ingestion_service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - RABBITMQ_URI=amqp://ai_agent_queue_user:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+  email-service:
+    build:
+      context: ./services/email-service
+    container_name: athenai_email_service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - RABBITMQ_URI=amqp://ai_agent_queue_user:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    restart: unless-stopped
+    volumes:
+      - ./gmail_credentials.json:/app/gmail_credentials.json:ro
+      - ./logs:/app/logs
+
+  athenai-app:
+    build:
+      context: .
+    container_name: athenai_app
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      ingestion-service:
+        condition: service_started
+      email-service:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - RABBITMQ_URI=amqp://ai_agent_queue_user:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NODE_ENV=production
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+volumes:
+  rabbitmq_data:
+    driver: local
+
+networks:
+  default:
+    name: athenai_cloud_network
+    driver: bridge

@@ -1,0 +1,37 @@
+# Model Configuration for AthenAI ML Service
+
+# Link Prediction Model Configuration
+link_prediction:
+  model_type: "link_prediction"
+  gnn_type: "gat"  # Options: gcn, gat, sage
+  input_dim: 128
+  hidden_dim: 256
+  num_layers: 3
+  dropout: 0.2
+  heads: 4  # For GAT only
+  embedding_dim: 128
+
+# Node Classification Model Configuration
+node_classification:
+  model_type: "node_classification"
+  num_classes: 10  # Document categories
+  hidden_dim: 256
+  input_dim: 128
+  dropout: 0.3
+
+# Expertise Recommendation Model Configuration
+expertise_recommendation:
+  model_type: "expertise_recommendation"
+  gnn_type: "sage"
+  input_dim: 128
+  hidden_dim: 256
+  num_layers: 4
+  dropout: 0.25
+  confidence_threshold: 0.7
+
+# Model Registry Configuration
+model_registry:
+  storage_path: "/app/models"
+  versioning: true
+  max_versions: 5
+  auto_cleanup: true

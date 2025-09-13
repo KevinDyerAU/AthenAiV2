@@ -13,8 +13,9 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      UNSTRUCTURED_API_KEY: ${UNSTRUCTURED_API_KEY}
-      UNSTRUCTURED_API_URL: ${UNSTRUCTURED_API_URL:-https://api.unstructured.io}
+      # Local unstructured processing - no API key needed
+      # UNSTRUCTURED_API_KEY: ${UNSTRUCTURED_API_KEY}
+      # UNSTRUCTURED_API_URL: ${UNSTRUCTURED_API_URL:-https://api.unstructured.io}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -34,6 +35,77 @@ services:
       - athenai-network
 
   # =============================================================================
+  # ML SERVICE - PyTorch MLOps Pipeline
+  # =============================================================================
+  ml-service:
+    build:
+      context: ./services/ml-service
+      dockerfile: Dockerfile
+    container_name: athenai-ml-service
+    ports:
+      - "8001:8001"
+    environment:
+      - ML_SERVICE_HOST=0.0.0.0
+      - ML_SERVICE_PORT=8001
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+    env_file:
+      - .env
+    volumes:
+      - ./services/ml-service/models:/app/models
+      - ./services/ml-service/data:/app/data
+      - ./mlruns:/app/mlruns
+      - ml_logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/ml/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - athenai-network
+    depends_on:
+      - mlflow
+
+  # =============================================================================
+  # MLFLOW TRACKING SERVER
+  # =============================================================================
+  mlflow:
+    image: python:3.9-slim
+    container_name: athenai-mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=${MLFLOW_BACKEND_STORE_URI:-sqlite:///mlflow.db}
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=${MLFLOW_ARTIFACT_ROOT:-./mlruns}
+    volumes:
+      - ./mlruns:/mlflow/mlruns
+      - mlflow_db:/mlflow/db
+    command: >
+      sh -c "
+        pip install mlflow psycopg2-binary &&
+        mlflow server 
+        --backend-store-uri sqlite:///mlflow/db/mlflow.db
+        --default-artifact-root /mlflow/mlruns
+        --host 0.0.0.0
+        --port 5000
+      "
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - athenai-network
+
+  # =============================================================================
   # MAIN APPLICATION - AthenAI with Document Agent (Supabase Integration)
   # =============================================================================
   athenai:
@@ -45,6 +117,8 @@ services:
       - NODE_ENV=production
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - ML_SERVICE_HOST=ml-service
+      - ML_SERVICE_PORT=8001
     env_file:
       - .env
     volumes:
@@ -59,12 +133,17 @@ services:
       start_period: 40s
     networks:
       - athenai-network
+    depends_on:
+      - ml-service
+      - unstructured-worker
 
 # =============================================================================
 # PERSISTENT VOLUMES
 # =============================================================================
 volumes:
   unstructured_logs:
+  ml_logs:
+  mlflow_db:
 
 # =============================================================================
 # NETWORKS

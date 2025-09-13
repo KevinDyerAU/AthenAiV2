@@ -68,9 +68,9 @@
 <body>
   <header>
     <div class="container">
-      <div class="title">AthenAI — Simplified Portal</div>
-      <div class="subtitle">AI-powered research and analysis platform with real-time chat</div>
-      <div class="pill">Simplified architecture with cost optimization</div>
+      <div class="title">AthenAI — AI Research & MLOps Platform</div>
+      <div class="subtitle">AI-powered research, analysis, and machine learning platform with PyTorch integration</div>
+      <div class="pill">ML-enhanced architecture with automated MLOps pipeline</div>
     </div>
   </header>
 
@@ -91,6 +91,16 @@
           <a href="http://localhost:3000/health" target="_blank">Health Check</a>
           <a href="http://localhost:3000/api/metrics" target="_blank">System Metrics</a>
           <a href="http://localhost:3000/public/index.html" target="_blank">Full Portal</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>🧠 ML Service API</h3>
+        <div class="desc">PyTorch MLOps pipeline with real-time predictions and batch processing.</div>
+        <div class="links">
+          <a href="http://localhost:8001/ml/health" target="_blank">ML Health Check</a>
+          <a href="http://localhost:8001/docs" target="_blank">ML API Documentation</a>
+          <a href="http://localhost:8001/ml/metrics" target="_blank">ML Metrics</a>
         </div>
       </div>
 
@@ -147,9 +157,10 @@
         </div>
 
         <div class="card">
-          <h3>📄 Unstructured.io</h3>
-          <div class="desc">Document processing API for PDF, DOCX, and other file formats.</div>
+          <h3>📄 Unstructured.io (Local Docker)</h3>
+          <div class="desc">Local document processing for PDF, DOCX, and other file formats. No API key required.</div>
           <div class="links">
+            <a href="http://localhost:8080/health" target="_blank">🔗 Local Worker Health</a>
             <a href="https://docs.unstructured.io/" target="_blank">🌐 Unstructured Documentation</a>
           </div>
         </div>
@@ -159,6 +170,14 @@
           <div class="desc">Graph database for advanced knowledge relationships and patterns.</div>
           <div class="links">
             <a href="https://console-preview.neo4j.io/" target="_blank">🌐 Neo4j Console</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔬 MLflow Tracking</h3>
+          <div class="desc">Experiment tracking and model registry for ML pipeline management.</div>
+          <div class="links">
+            <a href="http://localhost:5000" target="_blank">🌐 MLflow UI</a>
           </div>
         </div>
 
@@ -227,9 +246,9 @@ LANGCHAIN_PROJECT=athenai
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_CALLBACKS_BACKGROUND=true
 
-# Document Processing
-UNSTRUCTURED_API_KEY=***************************
-UNSTRUCTURED_API_URL=https://api.unstructuredapp.io/general/v0/general
+# Document Processing (Local Docker - No API Key Needed)
+# UNSTRUCTURED_API_KEY=***************************  # Not needed for local processing
+# UNSTRUCTURED_API_URL=https://api.unstructuredapp.io/general/v0/general  # Not needed for local processing
 
 # Document Processing Worker
 UNSTRUCTURED_WORKER_URL=http://unstructured-worker:8080
@@ -243,7 +262,74 @@ EMBEDDING_MODEL=text-embedding-3-small
 # Search APIs (Optional)
 SERPAPI_API_KEY=***************************
 FIRECRAWL_API_KEY=fc-***************************
-API_SECRET_KEY=***************************</code></pre>
+API_SECRET_KEY=***************************
+
+# ML Service Configuration
+ML_SERVICE_HOST=localhost
+ML_SERVICE_PORT=8001
+ML_SERVICE_WORKERS=4
+
+# MLflow Configuration
+MLFLOW_TRACKING_URI=http://localhost:5000
+MLFLOW_EXPERIMENT_NAME=athenai_ml
+MLFLOW_ARTIFACT_ROOT=./mlruns
+MLFLOW_BACKEND_STORE_URI=sqlite:///mlflow.db
+
+# Model Configuration
+ML_MODEL_CACHE_SIZE=10
+ML_MODEL_LOAD_TIMEOUT=300
+ML_BATCH_SIZE=32
+ML_MAX_SEQUENCE_LENGTH=512
+
+# Training Configuration
+ML_TRAINING_EPOCHS=100
+ML_LEARNING_RATE=0.001
+ML_EARLY_STOPPING_PATIENCE=10
+ML_VALIDATION_SPLIT=0.2
+
+# Monitoring and Alerting
+ML_MONITORING_ENABLED=true
+ML_DRIFT_DETECTION_THRESHOLD=0.1
+ML_PERFORMANCE_THRESHOLD=0.8
+ML_ALERT_EMAIL=admin@example.com
+
+# Retraining Configuration
+ML_RETRAINING_ENABLED=true
+ML_RETRAINING_SCHEDULE="0 2 * * 0"  # Weekly at 2 AM Sunday
+ML_RETRAINING_PERFORMANCE_THRESHOLD=0.75
+ML_RETRAINING_DATA_DRIFT_THRESHOLD=0.15
+
+# Batch Processing
+ML_BATCH_JOB_TIMEOUT=3600
+ML_BATCH_MAX_CONCURRENT_JOBS=5
+ML_BATCH_RETRY_ATTEMPTS=3
+
+# Feature Store Configuration
+ML_FEATURE_STORE_ENABLED=true
+ML_FEATURE_CACHE_TTL=3600
+
+# GPU Configuration (if available)
+ML_USE_GPU=false
+ML_GPU_MEMORY_FRACTION=0.8
+
+# Feature Flags
+FEATURE_ENABLE_PLANNING=true
+FEATURE_ENABLE_EXECUTION=true
+FEATURE_ENABLE_QA=true
+FEATURE_ENABLE_COMMUNICATION=true
+CONSCIOUSNESS_SUBSTRATE_ENABLED=true
+INTER_AGENT_COMMUNICATION_ENABLED=true
+AI_CHAT_AGENT_ENABLED=true
+WORKFLOW_ORCHESTRATION_ENABLED=true
+MULTI_MODEL_AI_ENABLED=true
+VECTOR_SEARCH_ENABLED=true
+REAL_TIME_MONITORING_ENABLED=true
+ADVANCED_ANALYTICS_ENABLED=true
+ML_SERVICE_ENABLED=true
+ML_TRAINING_ENABLED=true
+ML_BATCH_PROCESSING_ENABLED=true
+ML_MONITORING_ENABLED=true
+ML_RETRAINING_ENABLED=true</code></pre>
       </div>
     </section>
 
@@ -257,11 +343,15 @@ API_SECRET_KEY=***************************</code></pre>
 npm run setup:win
 npm run init-db:win
 npm run docs:setup:win
+npm run ml:setup:win
+npm run ml:init-db:win
 
 # Unix/Linux/macOS
 npm run setup:unix
 npm run init-db:unix
-npm run docs:setup:unix</code></pre>
+npm run docs:setup:unix
+npm run ml:setup:unix
+npm run ml:init-db:unix</code></pre>
         </div>
 
         <div class="card">
@@ -286,6 +376,11 @@ npm run dev
 npm run lint
 npm run lint:fix
 
+# ML Service
+npm run ml:service
+npm run ml:test:win  # or ml:test:unix
+npm run ml:docker
+
 # Testing
 npm test
 npm run test:watch
@@ -302,9 +397,11 @@ npm run test:coverage</code></pre>
           <div class="desc">Use convenience scripts for automated setup.</div>
           <pre><code># Windows
 npm run setup:win
+npm run ml:setup:win
 
 # Unix/Linux/macOS
-npm run setup:unix</code></pre>
+npm run setup:unix
+npm run ml:setup:unix</code></pre>
         </div>
 
         <div class="card">
@@ -317,12 +414,14 @@ cp .env.simplified.example .env
 
         <div class="card">
           <h3>3) Initialize Database</h3>
-          <div class="desc">Setup Supabase with knowledge substrate.</div>
+          <div class="desc">Setup Supabase with knowledge substrate and ML schemas.</div>
           <pre><code># Automated (Recommended)
 npm run init-db:win  # or init-db:unix
+npm run ml:init-db:win  # or ml:init-db:unix
 
 # Manual
-# Run init-knowledge-substrate.sql in Supabase</code></pre>
+# Run init-knowledge-substrate.sql in Supabase
+# Run db/supabase/ml_schema.sql in Supabase</code></pre>
         </div>
 
         <div class="card">
@@ -332,14 +431,25 @@ npm run init-db:win  # or init-db:unix
 npm run docker:simplified
 
 # Local Development
-npm run dev</code></pre>
+npm run dev
+npm run ml:service  # Start ML service separately</code></pre>
+        </div>
+
+        <div class="card">
+          <h3>5) Test ML Service</h3>
+          <div class="desc">Validate ML service functionality and endpoints.</div>
+          <pre><code># Test ML Service
+npm run ml:test:win  # or ml:test:unix
+
+# Access ML API Documentation
+# http://localhost:8001/docs</code></pre>
         </div>
       </div>
     </section>
   </main>
 
   <footer>
-    AthenAI Simplified • Real-time AI chat platform • v1.0.0
+    AthenAI • AI Research & MLOps Platform • PyTorch Integration • v2.0.0
   </footer>
 </body>
 </html>

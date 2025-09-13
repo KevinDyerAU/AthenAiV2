@@ -1,14 +1,17 @@
-# AthenAI — Intelligent Knowledge-Driven AI Agent Platform
+# AthenAI — Enterprise AI Platform with Graph Neural Networks & MLOps
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js 18+](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.1+-red.svg)](https://pytorch.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-ML%20Service-green.svg)](https://fastapi.tiangolo.com/)
+[![MLflow](https://img.shields.io/badge/MLflow-Experiment%20Tracking-blue.svg)](https://mlflow.org/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.x-blue.svg)](https://socket.io/)
 [![Express.js](https://img.shields.io/badge/Express.js-4.x-lightgrey.svg)](https://expressjs.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green.svg)](https://supabase.com/)
 [![Neo4j](https://img.shields.io/badge/Neo4j-Knowledge%20Graph-blue.svg)](https://neo4j.com/)
 [![LangChain](https://img.shields.io/badge/LangChain-AI%20Framework-orange.svg)](https://langchain.com/)
 
-> **An advanced AI agent orchestration platform with intelligent knowledge substrate, real-time learning capabilities, and comprehensive agent coordination for enterprise-scale AI operations.**
+> **Enterprise AI platform combining intelligent knowledge substrate, Graph Neural Networks, and MLOps automation. Features real-time learning, automated model retraining, and comprehensive agent coordination for production-scale AI operations.**
 
 ## Table of Contents
 
@@ -18,6 +21,8 @@
 - [🏗️ Architecture](#architecture)
 - [🧠 Knowledge Substrate](#knowledge-substrate)
 - [🤖 AI Agents](#ai-agents)
+- [🔬 ML Service & Graph Neural Networks](#ml-service--graph-neural-networks)
+- [🔄 MLOps Pipeline](#mlops-pipeline)
 - [📡 API Reference](#api-reference)
 - [🔌 WebSocket Events](#websocket-events)
 - [⚙️ Configuration](#configuration)
@@ -29,21 +34,26 @@
 
 ## 🎯 Overview
 
-AthenAI is an advanced AI agent orchestration platform that combines intelligent knowledge management with sophisticated agent coordination. Built on Node.js and Express.js, it features a revolutionary **Knowledge Substrate** that enables agents to learn, remember, and build upon previous interactions across sessions.
+AthenAI is an enterprise AI platform that combines intelligent knowledge management, Graph Neural Networks, and automated MLOps. Built on Node.js, Express.js, PyTorch, and FastAPI, it features a revolutionary **Knowledge Substrate** with machine learning capabilities that enable agents to learn, predict, and build upon previous interactions across sessions.
 
 ### What Makes AthenAI Unique
 
-🧠 **Intelligent Knowledge Substrate**: A hybrid PostgreSQL + Neo4j system that stores, relates, and retrieves knowledge across all agent interactions  
-🔄 **Continuous Learning**: Agents learn from every interaction, building a growing knowledge base for improved future responses  
-🎯 **Smart Caching**: Web search results and research insights are cached and reused, dramatically improving response times  
-🤖 **Advanced Agent Coordination**: Master orchestrator intelligently routes tasks to specialized agents based on semantic analysis  
-📊 **Real-time Progress Tracking**: Detailed progress updates show knowledge retrieval, processing, and storage phases  
+🧠 **Intelligent Knowledge Substrate**: Hybrid PostgreSQL + Neo4j system with Graph Neural Networks for intelligent predictions  
+🔄 **Continuous Learning**: Agents learn from every interaction with automated model retraining and drift detection  
+🎯 **Smart Caching**: Knowledge-first prediction strategy with ML fallback for optimal performance  
+🤖 **Advanced Agent Coordination**: Master orchestrator with AI-powered routing and multi-agent collaboration  
+📊 **Real-time Progress Tracking**: Detailed progress updates with ML model monitoring and performance metrics  
+🔬 **Graph Neural Networks**: Link prediction, node classification, and expertise recommendation models  
+🔄 **Automated MLOps**: Intelligent retraining triggers, model monitoring, and production deployment  
 
 ### Enterprise-Ready Architecture
 
-AthenAI integrates with modern cloud services to provide enterprise-scale AI operations:
-- **Supabase (PostgreSQL)**: Structured knowledge storage with vector embeddings
-- **Neo4j**: Knowledge graph for complex relationship mapping
+AthenAI integrates with modern cloud services and ML infrastructure to provide enterprise-scale AI operations:
+- **Supabase (PostgreSQL)**: Structured knowledge storage with vector embeddings and ML prediction tracking
+- **Neo4j**: Knowledge graph for complex relationship mapping and GNN training data
+- **PyTorch & PyTorch Geometric**: Graph Neural Networks for link prediction and node classification
+- **FastAPI ML Service**: Real-time and batch ML inference with knowledge-first approach
+- **MLflow**: Experiment tracking, model management, and automated deployment
 - **OpenRouter**: Multi-model AI access (OpenAI, Anthropic, Google, Meta, etc.)
 - **LangChain**: Advanced AI agent framework with specialized tools
 - **Real-time WebSocket**: Instant communication and progress updates
@@ -65,6 +75,21 @@ AthenAI integrates with modern cloud services to provide enterprise-scale AI ope
 - **Direct Processing**: HTTP-based communication with unstructured worker for real-time processing
 - **Vector Storage**: Cost-effective pgvector integration with Supabase PostgreSQL
 - **Content Chunking**: Intelligent document segmentation with embedding generation
+
+### 🔬 Graph Neural Networks & ML
+- **Link Prediction**: GNN models for predicting relationships between entities
+- **Node Classification**: Multi-class classification for documents, entities, and topics
+- **Expertise Recommendation**: Specialized GNN for expert identification and ranking
+- **Knowledge-First Inference**: Intelligent prediction strategy combining knowledge substrate with ML
+- **Real-time Predictions**: FastAPI service with <100ms inference latency
+- **Batch Processing**: Scalable batch inference with job management and progress tracking
+
+### 🔄 Automated MLOps Pipeline
+- **Model Monitoring**: Data drift detection, performance tracking, and alerting
+- **Automated Retraining**: Intelligent triggers based on performance drops and data drift
+- **Experiment Tracking**: MLflow integration for model versioning and artifact management
+- **Production Deployment**: Automated model deployment with health checks and rollback
+- **Prometheus Metrics**: Comprehensive monitoring with custom metrics and dashboards
 
 ### 🤖 Advanced AI Agents
 - **Master Orchestrator**: AI-powered semantic routing and task complexity analysis
@@ -93,48 +118,80 @@ AthenAI integrates with modern cloud services to provide enterprise-scale AI ope
 ### Prerequisites
 
 - **Node.js 18+** and npm
-- **Docker & Docker Compose** (recommended)
-- **Database Services**: Supabase (PostgreSQL with pgvector), Neo4j Aura (optional)
-- **AI Services**: OpenRouter API key (supports OpenAI, Anthropic, Google, Meta models)
-- **Document Processing**: Unstructured.io API key (for document processing)
+- **Python 3.8+** and pip (for ML service)
+- **Docker** and **Docker Compose**
+- **Supabase account** (cloud-managed PostgreSQL with pgvector)
+- **Neo4j Aura account** (optional, cloud-managed graph database)
+- **OpenRouter API key** (multi-model AI access)
 
-### 🛠️ Convenience Scripts
+### Installation
 
-AthenAI provides comprehensive setup and management scripts for all platforms:
+1. **Clone and Install**
+   ```bash
+   git clone <repository-url>
+   cd AthenAI
+   npm install
+   ```
 
-#### Quick Setup Commands
-```bash
-# Complete setup (recommended)
-npm run setup:win      # Windows
-npm run setup:unix     # Linux/Mac
+2. **Environment Setup**
+   ```bash
+   # Copy environment template
+   cp .env.example .env
+   
+   # Configure your API keys and database connections
+   # See Environment Configuration section below
+   ```
 
-# Database initialization
-npm run init-db:win    # Windows
-npm run init-db:unix   # Linux/Mac
+3. **ML Service Setup**
+   ```bash
+   # Set up ML service (includes Python dependencies)
+   npm run ml:setup      # Windows: npm run ml:setup:win
+   
+   # Initialize ML database schema
+   npm run ml:init-db    # Windows: npm run ml:init-db:win
+   ```
 
-# Document processing setup
-npm run docs:setup:win   # Windows
-npm run docs:setup:unix  # Linux/Mac
-```
+4. **Database Setup**
+   ```bash
+   # Initialize knowledge substrate
+   npm run init-db        # Windows: npm run init-db:win
+   
+   # Set up document processing
+   npm run setup-docs     # Windows: npm run setup-docs:win
+   ```
 
-#### Docker Management
-```bash
-# Simplified deployment (Supabase + Document Processing)
-npm run docker:simplified        # Start services
-npm run docker:simplified:logs   # View logs
-npm run docker:simplified:down   # Stop services
+5. **Start Development**
+   ```bash
+   # Start all services (including ML service)
+   npm run dev           # Windows: npm run dev:win
+   
+   # Or start individual services
+   npm start             # Main application
+   npm run ml:service    # ML service only
+   npm run docs:start    # Document processing
+   ```
 
-# Full production deployment
-npm run docker:full              # Start all services
-npm run docker:full:logs         # View logs
-npm run docker:full:down         # Stop services
-```
+6. **Test ML Service**
+   ```bash
+   # Test ML service endpoints
+   npm run ml:test       # Windows: npm run ml:test:win
+   ```
 
+7. **Access Applications**
+   - Main Chat Interface: http://localhost:3000/chat.html
+   - API Documentation: http://localhost:3000/api/docs
+   - ML Service API: http://localhost:8001/docs
+   - Document Processing: http://localhost:8002/docs
 #### Development & Testing
 ```bash
 # Development
 npm run dev                      # Start with hot reload
 npm run start                    # Production start
+
+# ML Service
+npm run ml:service              # Start ML service
+npm run ml:test                 # Test ML service (Windows: ml:test:win)
+npm run ml:docker               # Run ML service in Docker
 
 # Testing
 npm run test                     # Run all tests
@@ -151,13 +208,17 @@ npm run lint:fix                # Fix linting issues
 #### Supabase Setup (Required)
 1. **Create Supabase Project**: Visit [supabase.com](https://supabase.com) and create a new project
 2. **Enable pgvector**: In SQL Editor, run: `CREATE EXTENSION IF NOT EXISTS vector;`
-3. **Run Schema**: Execute `init-knowledge-substrate.sql` in Supabase SQL Editor
-4. **Get Credentials**: Copy your project URL and service role key from Settings > API
+3. **Run Core Schema**: Execute `init-knowledge-substrate.sql` in Supabase SQL Editor
+4. **Run ML Schema**: Execute `db/supabase/ml_schema.sql` in Supabase SQL Editor
+5. **Run Functions**: Execute `db/supabase/functions.sql` in Supabase SQL Editor
+6. **Get Credentials**: Copy your project URL and service role key from Settings > API
 
 #### Neo4j Setup (Optional - for advanced knowledge graphs)
 1. **Create Neo4j Aura Instance**: Visit [neo4j.com/aura](https://neo4j.com/aura)
-2. **Run Schema**: Execute `init-neo4j-knowledge.cypher` in Neo4j Browser
-3. **Get Connection Details**: Copy URI, username, and password
+2. **Run Core Schema**: Execute `init-neo4j-knowledge.cypher` in Neo4j Browser
+3. **Run ML Schema**: Execute `db/neo4j/ml_schema.cypher` in Neo4j Browser
+4. **Run Advanced Schema**: Execute `db/neo4j/advanced_schema.cypher` in Neo4j Browser
+5. **Get Connection Details**: Copy URI, username, and password
 
 #### Database Schema Overview
 ```sql
@@ -168,6 +229,16 @@ qa_insights           -- Quality assurance learning
 web_search_cache      -- 24-hour intelligent caching
 documents             -- Document storage with embeddings
 document_chunks       -- Document chunks with vector search
+
+-- ML Service Tables (Supabase)
+ml_model_predictions   -- ML prediction results and confidence scores
+ml_training_runs      -- Training job tracking and metrics
+ml_batch_jobs         -- Batch processing job management
+ml_monitoring_alerts  -- System alerts and notifications
+ml_data_drift_metrics -- Data drift detection and monitoring
+ml_model_registry     -- Model versioning and metadata
+ml_feature_store      -- Feature engineering and storage
+ml_retraining_jobs    -- Automated retraining pipeline
 ```
 
 ### Installation Options
@@ -536,6 +607,101 @@ Query → Knowledge Retrieval → Cached Results Check → Enhanced Web Search �
 - **Analysis Agent**: Data analysis and pattern recognition
 - **Creative Agent**: Content creation and creative tasks
 
+## 🔬 ML Service & Graph Neural Networks
+
+AthenAI's ML Service provides enterprise-grade machine learning capabilities with Graph Neural Networks, real-time inference, and automated MLOps pipeline.
+
+### 🧠 Graph Neural Network Models
+
+#### Link Prediction Models
+- **GCN (Graph Convolutional Network)**: Foundation model for graph-based link prediction
+- **GAT (Graph Attention Network)**: Attention-based model for complex relationship modeling
+- **GraphSAGE**: Scalable inductive learning for large knowledge graphs
+- **Expertise Recommendation**: Specialized GNN for expert identification and ranking
+
+#### Node Classification Models
+- **Document Classification**: Multi-class classification for document categorization
+- **Entity Classification**: Entity type prediction and semantic labeling
+- **Topic Classification**: Hierarchical topic modeling and classification
+- **Sentiment Analysis**: Document and entity sentiment classification
+- **Multi-label Classification**: Complex multi-category prediction tasks
+
+### 🚀 Real-time ML Inference
+
+#### Knowledge-First Prediction Strategy
+```python
+# Intelligent prediction workflow
+1. Query Knowledge Substrate → Check existing relationships
+2. If sufficient confidence → Return knowledge-based result
+3. If low confidence → Fallback to ML prediction
+4. Store ML predictions → Update knowledge substrate
+```
+
+#### FastAPI ML Service Features
+- **<100ms Inference Latency**: Optimized PyTorch models with GPU acceleration
+- **Batch Processing**: Scalable batch inference with job management
+- **Model Caching**: Intelligent model loading and memory management
+- **Health Monitoring**: Real-time service health and performance metrics
+
+### 📊 Model Performance & Metrics
+
+#### Ranking Metrics (Link Prediction)
+- **NDCG@K**: Normalized Discounted Cumulative Gain
+- **MAP**: Mean Average Precision
+- **MRR**: Mean Reciprocal Rank
+- **Precision@K**: Top-K precision metrics
+
+#### Classification Metrics
+- **Accuracy**: Overall classification accuracy
+- **F1-Score**: Balanced precision and recall
+- **ROC-AUC**: Area under the ROC curve
+- **Confusion Matrix**: Detailed classification analysis
+
+## 🔄 MLOps Pipeline
+
+### 🔍 Automated Model Monitoring
+
+#### Data Drift Detection
+- **Statistical Tests**: Kolmogorov-Smirnov test for distribution changes
+- **Feature Drift**: Individual feature distribution monitoring
+- **Prediction Drift**: Output distribution analysis
+- **Performance Degradation**: Automatic quality metric tracking
+
+#### System Health Monitoring
+- **Model Performance**: Real-time accuracy and latency tracking
+- **Resource Usage**: CPU, memory, and GPU utilization
+- **Prediction Volume**: Request rate and throughput monitoring
+- **Error Rates**: Failed prediction tracking and alerting
+
+### 🔄 Intelligent Retraining Pipeline
+
+#### Automated Triggers
+- **Performance Drop**: Retraining when accuracy falls below threshold
+- **Data Drift**: Statistical significance-based retraining triggers
+- **Scheduled Retraining**: Time-based model refresh cycles
+- **Manual Triggers**: On-demand retraining with custom configurations
+
+#### Retraining Features
+- **Job Queue Management**: Priority-based retraining scheduling
+- **Resource Allocation**: Dynamic compute resource management
+- **Model Validation**: Comprehensive testing before deployment
+- **Rollback Capability**: Automatic rollback on performance regression
+
+### 📈 Experiment Tracking & Model Management
+
+#### MLflow Integration
+- **Experiment Tracking**: Comprehensive training run logging
+- **Model Registry**: Versioned model storage and management
+- **Artifact Storage**: Training artifacts and model checkpoints
+- **Model Deployment**: Automated production deployment pipeline
+
+#### Model Lifecycle
+```
+Training → Validation → Staging → Production → Monitoring → Retraining
+    ↑                                                           ↓
+    └─────────────── Automated Feedback Loop ──────────────────┘
+```
+
 ## 📡 API Reference
 
 ### REST Endpoints
@@ -565,6 +731,34 @@ POST /api/agents/document            # Document Agent (pgvector)
 POST /api/agents/communication       # Communication Agent
 POST /api/agents/planning            # Planning Agent
 POST /api/agents/execution           # Execution Agent
+```
+
+#### ML Service Endpoints
+```http
+# Health & Status
+GET /ml/health                       # ML service health check
+GET /ml/models/status               # Model loading status
+GET /ml/metrics                     # Prometheus metrics
+
+# Real-time Predictions
+POST /ml/predict/expertise          # Expertise recommendation
+POST /ml/predict/links              # Link prediction
+POST /ml/predict/classification     # Node classification
+
+# Batch Processing
+POST /ml/batch/submit               # Submit batch job
+GET /ml/batch/{job_id}/status       # Job status
+GET /ml/batch/{job_id}/results      # Job results
+
+# Model Management
+POST /ml/models/load                # Load specific model
+POST /ml/models/retrain             # Trigger retraining
+GET /ml/models/performance          # Model performance metrics
+
+# Monitoring & Alerts
+GET /ml/monitoring/drift            # Data drift status
+GET /ml/monitoring/alerts           # Active alerts
+POST /ml/monitoring/alerts/ack      # Acknowledge alerts
 ```
 
 #### Chat & WebSocket
@@ -618,6 +812,53 @@ POST /api/agents/research
     "patterns_extracted": ["documentation", "tutorials", "code_examples"]
   },
   "learning_stored": true
+}
+```
+
+#### ML Service Predictions
+```javascript
+// Expertise Recommendation
+POST /ml/predict/expertise
+{
+  "query": "machine learning expert",
+  "limit": 5,
+  "use_knowledge_context": true
+}
+
+// Response with ML predictions
+{
+  "predictions": [
+    {
+      "entity": "Dr. Sarah Chen",
+      "confidence": 0.94,
+      "expertise_areas": ["deep learning", "computer vision"],
+      "reasoning": "Published 15+ papers in ML conferences"
+    }
+  ],
+  "knowledge_enhanced": true,
+  "fallback_used": false
+}
+
+// Link Prediction
+POST /ml/predict/links
+{
+  "source_entity": "Python",
+  "target_entities": ["Machine Learning", "Data Science", "AI"],
+  "limit": 3
+}
+
+// Batch Job Submission
+POST /ml/batch/submit
+{
+  "job_type": "expertise_batch",
+  "input_data": {
+    "queries": ["AI researcher", "Python developer"],
+    "limit": 5
+  },
+  "config": {
+    "batch_size": 100,
+    "priority": "normal"
+  }
 }
 ```
 
@@ -1898,6 +2139,81 @@ npm run build
 npm start
 ```
 
+## Feature Flags
+
+AthenAI uses feature flags to enable/disable functionality and control system behavior. Configure these in your `.env` file:
+
+### Core Agent Features
+```bash
+# Agent Capabilities
+FEATURE_ENABLE_PLANNING=true          # Enable PlanningAgent
+FEATURE_ENABLE_EXECUTION=true         # Enable ExecutionAgent  
+FEATURE_ENABLE_QA=true                # Enable QualityAssuranceAgent
+FEATURE_ENABLE_COMMUNICATION=true     # Enable CommunicationAgent
+
+# AI Chat System
+AI_CHAT_AGENT_ENABLED=true            # Enable AI chat interface
+CONSCIOUSNESS_SUBSTRATE_ENABLED=true  # Enable knowledge substrate
+INTER_AGENT_COMMUNICATION_ENABLED=true # Enable agent-to-agent communication
+```
+
+### System Infrastructure Features
+```bash
+# Core Infrastructure
+WORKFLOW_ORCHESTRATION_ENABLED=true   # Enable workflow management
+MULTI_MODEL_AI_ENABLED=true          # Enable OpenRouter multi-model support
+VECTOR_SEARCH_ENABLED=true           # Enable pgvector document search
+REAL_TIME_MONITORING_ENABLED=true    # Enable system monitoring
+ADVANCED_ANALYTICS_ENABLED=true      # Enable analytics and insights
+```
+
+### ML Service Features
+```bash
+# ML Pipeline Control
+ML_SERVICE_ENABLED=true              # Enable ML service
+ML_TRAINING_ENABLED=true             # Enable model training
+ML_BATCH_PROCESSING_ENABLED=true     # Enable batch job processing
+ML_MONITORING_ENABLED=true           # Enable ML monitoring and drift detection
+ML_RETRAINING_ENABLED=true           # Enable automated retraining
+ML_DRIFT_DETECTION_ENABLED=true      # Enable data drift monitoring
+ML_FEATURE_STORE_ENABLED=true        # Enable feature store functionality
+ML_GPU_ACCELERATION_ENABLED=false    # Enable GPU acceleration (if available)
+```
+
+### Experimental Features (Disabled by Default)
+```bash
+# Future Capabilities
+DYNAMIC_AGENT_CREATION_ENABLED=false    # Dynamic agent spawning
+AUTO_SCALING_ENABLED=false              # Automatic service scaling
+PREDICTIVE_ANALYTICS_ENABLED=false      # Predictive insights
+QUANTUM_COMPUTING_INTEGRATION_ENABLED=false # Quantum computing support
+```
+
+### Feature Flag Usage
+
+**Enabling Features**: Set flag to `true` in your `.env` file
+```bash
+FEATURE_ENABLE_PLANNING=true
+```
+
+**Disabling Features**: Set flag to `false` or comment out
+```bash
+FEATURE_ENABLE_PLANNING=false
+# FEATURE_ENABLE_PLANNING=true
+```
+
+**Runtime Behavior**: 
+- Disabled agents won't be loaded or accessible via API
+- Disabled infrastructure features will skip initialization
+- ML features can be selectively enabled based on your deployment needs
+- Experimental features are disabled by default for stability
+
+**Performance Impact**: Disabling unused features reduces:
+- Memory usage
+- Startup time  
+- API surface area
+- Resource consumption
+
 ## Contributing
 
 We welcome contributions to AthenAI! Please follow these guidelines:
@@ -1920,4 +2236,3 @@ We welcome contributions to AthenAI! Please follow these guidelines:
 - Integration tests for API endpoints
 - Agent-specific tests for new agent capabilities
 - End-to-end tests for critical workflows
-

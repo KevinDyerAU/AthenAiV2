@@ -36,8 +36,9 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
-UNSTRUCTURED_API_KEY = os.getenv('UNSTRUCTURED_API_KEY')
-UNSTRUCTURED_API_URL = os.getenv('UNSTRUCTURED_API_URL', 'https://api.unstructured.io')
+# Local unstructured processing - no API key needed
+# UNSTRUCTURED_API_KEY = os.getenv('UNSTRUCTURED_API_KEY')  # Not needed for local processing
+# UNSTRUCTURED_API_URL = os.getenv('UNSTRUCTURED_API_URL', 'https://api.unstructured.io')  # Not needed for local processing
 EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-small')
 WORKER_CONCURRENCY = int(os.getenv('WORKER_CONCURRENCY', '2'))
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

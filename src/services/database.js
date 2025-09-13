@@ -500,6 +500,198 @@ class DatabaseService {
     }
   }
 
+  // Email processing operations
+  async storeEmailLog(emailData) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping email log storage');
+      return null;
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('email_logs')
+        .insert({
+          gmail_id: emailData.gmail_id,
+          from_address: emailData.from_address,
+          to_address: emailData.to_address,
+          subject: emailData.subject,
+          body_text: emailData.body_text,
+          body_html: emailData.body_html,
+          received_at: emailData.received_at,
+          processing_status: emailData.processing_status || 'pending'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('Failed to store email log:', error);
+      throw error;
+    }
+  }
+
+  async updateEmailProcessingStatus(emailId, status, agentActions = null) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping email status update');
+      return null;
+    }
+
+    try {
+      const updateData = {
+        processing_status: status,
+        processed_at: new Date().toISOString()
+      };
+
+      if (agentActions) {
+        updateData.agent_actions = agentActions;
+      }
+
+      const { data, error } = await this.supabase
+        .from('email_logs')
+        .update(updateData)
+        .eq('id', emailId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('Failed to update email processing status:', error);
+      throw error;
+    }
+  }
+
+  async storeContact(contactData) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping contact storage');
+      return null;
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('contacts')
+        .upsert({
+          email_address: contactData.email_address,
+          full_name: contactData.full_name,
+          company: contactData.company,
+          role: contactData.role,
+          interaction_count: contactData.interaction_count || 1,
+          last_interaction_at: new Date().toISOString(),
+          contact_metadata: contactData.metadata || {}
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('Failed to store contact:', error);
+      throw error;
+    }
+  }
+
+  async storeEmailAttachment(attachmentData) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping attachment storage');
+      return null;
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('email_attachments')
+        .insert({
+          email_log_id: attachmentData.email_log_id,
+          filename: attachmentData.filename,
+          content_type: attachmentData.content_type,
+          size_bytes: attachmentData.size_bytes,
+          storage_path: attachmentData.storage_path,
+          processed: attachmentData.processed || false
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('Failed to store email attachment:', error);
+      throw error;
+    }
+  }
+
+  async searchSimilarEmails(embedding, threshold = 0.8, limit = 5) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, returning empty similar emails');
+      return [];
+    }
+
+    try {
+      // Use Supabase vector similarity search
+      const { data, error } = await this.supabase.rpc('match_emails', {
+        query_embedding: embedding,
+        match_threshold: threshold,
+        match_count: limit
+      });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logger.error('Failed to search similar emails:', error);
+      return [];
+    }
+  }
+
+  async storeAgentSession(sessionData) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping agent session storage');
+      return null;
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('agent_sessions')
+        .insert({
+          session_type: sessionData.session_type,
+          initial_context: sessionData.initial_context,
+          current_state: sessionData.current_state,
+          status: sessionData.status || 'active'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('Failed to store agent session:', error);
+      throw error;
+    }
+  }
+
+  async updateAgentSession(sessionId, updates) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping agent session update');
+      return null;
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('agent_sessions')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sessionId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logger.error('Failed to update agent session:', error);
+      throw error;
+    }
+  }
+
   async getQAInsightsByContentHash(contentHash, limit = 5) {
     if (!this.supabase) {
       logger.warn('Supabase not initialized, returning empty QA insights');

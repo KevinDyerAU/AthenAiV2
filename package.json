@@ -41,7 +41,21 @@
     "docs:test": "node -e \"console.log('Use docs:test:win or docs:test:unix for your platform')\"",
     "docs:test:win": "powershell -ExecutionPolicy Bypass -File ./test-document-processing.ps1",
     "docs:test:unix": "./test-document-processing.sh",
-    "docs:worker:direct": "cd src/workers && python unstructured_worker.py"
+    "docs:worker:direct": "cd src/workers && python unstructured_worker.py",
+    "ml:setup": "node -e \"console.log('Use ml:setup:win or ml:setup:unix for your platform')\"",
+    "ml:setup:win": "powershell -ExecutionPolicy Bypass -File ./setup-ml-service.ps1",
+    "ml:setup:unix": "./setup-ml-service.sh",
+    "ml:init-db": "node -e \"console.log('Use ml:init-db:win or ml:init-db:unix for your platform')\"",
+    "ml:init-db:win": "powershell -ExecutionPolicy Bypass -File ./init-ml-db.ps1",
+    "ml:init-db:unix": "./init-ml-db.sh",
+    "ml:service": "cd services/ml-service && python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload",
+    "ml:test": "node -e \"console.log('Use ml:test:win or ml:test:unix for your platform')\"",
+    "ml:test:win": "powershell -ExecutionPolicy Bypass -File ./test-ml-service.ps1",
+    "ml:test:unix": "./test-ml-service.sh",
+    "docker:ml": "docker-compose up ml-service mlflow --build -d",
+    "docker:ml:logs": "docker-compose logs -f ml-service mlflow",
+    "docker:ml:down": "docker-compose down ml-service mlflow",
+    "docker:full:ml": "docker-compose up --build -d"
   },
   "dependencies": {
     "@langchain/community": "^0.0.57",

@@ -1,0 +1,58 @@
+# Deployment Configuration for AthenAI ML Service
+
+# API Configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  timeout: 300
+  max_request_size: 16777216  # 16MB
+  
+# Model Serving Configuration
+serving:
+  model_cache_size: 3
+  prediction_timeout: 30
+  batch_size: 32
+  max_batch_delay: 100  # milliseconds
+  
+# Database Configuration
+database:
+  neo4j:
+    max_connections: 50
+    connection_timeout: 30
+    max_transaction_retry_time: 15
+  supabase:
+    max_connections: 20
+    connection_timeout: 10
+    
+# Monitoring Configuration
+monitoring:
+  prometheus_port: 9090
+  health_check_interval: 60
+  performance_window_hours: 24
+  drift_check_interval: 3600  # 1 hour
+  alert_thresholds:
+    low_confidence: 0.6
+    high_error_rate: 0.05
+    drift_threshold: 0.2
+    
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "/app/logs/ml_service.log"
+  max_size: "100MB"
+  backup_count: 5
+  
+# Resource Configuration
+resources:
+  cpu_limit: 4
+  memory_limit: "8GB"
+  gpu_enabled: false
+  
+# Security Configuration
+security:
+  api_key_required: false
+  rate_limiting:
+    requests_per_minute: 100
+    burst_size: 20

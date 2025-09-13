@@ -1,0 +1,77 @@
+schedule:
+  daily_check_time: "02:00"  # 2 AM daily health checks
+  weekly_retrain_day: "sunday"  # Weekly retraining on Sunday
+  monthly_full_retrain_day: 1  # Monthly full retraining on 1st day
+
+triggers:
+  performance_drop_threshold: 0.05  # 5% accuracy drop triggers retraining
+  drift_score_threshold: 0.3  # Data drift score threshold
+  min_new_data_points: 1000  # Minimum new data points to trigger retraining
+  min_days_since_last_training: 1  # Minimum days between retraining
+  error_rate_threshold: 0.15  # 15% error rate threshold
+  latency_increase_threshold: 2.5  # 2.5x latency increase threshold
+
+models:
+  link_prediction:
+    retrain_frequency: "weekly"
+    priority: 1
+    performance_threshold: 0.8  # Minimum AUC score
+    drift_sensitivity: "high"
+    max_training_time_hours: 4
+    
+  expertise_recommendation:
+    retrain_frequency: "weekly"
+    priority: 2
+    performance_threshold: 0.75  # Minimum NDCG@5 score
+    drift_sensitivity: "medium"
+    max_training_time_hours: 6
+    
+  node_classification:
+    retrain_frequency: "monthly"
+    priority: 3
+    performance_threshold: 0.85  # Minimum accuracy
+    drift_sensitivity: "low"
+    max_training_time_hours: 3
+
+resources:
+  max_training_time_hours: 8
+  memory_limit_gb: 16
+  cpu_cores: 4
+  gpu_required: false
+  disk_space_gb: 50
+  max_concurrent_jobs: 1
+
+notifications:
+  slack_webhook: null  # Set to Slack webhook URL if available
+  email_recipients: []  # List of email addresses for notifications
+  alert_on_failure: true
+  alert_on_completion: true
+  alert_on_performance_improvement: true
+
+data_validation:
+  min_training_samples: 1000
+  max_class_imbalance_ratio: 10.0
+  min_feature_variance: 0.01
+  max_missing_data_ratio: 0.1
+  validate_before_training: true
+
+model_validation:
+  validation_split: 0.2
+  cross_validation_folds: 5
+  early_stopping_patience: 10
+  min_improvement_threshold: 0.001
+  performance_comparison_window: 5  # Compare with last 5 models
+
+deployment:
+  auto_deploy_threshold: 0.02  # Auto-deploy if 2% improvement
+  staging_validation_required: true
+  rollback_on_performance_drop: true
+  canary_deployment_ratio: 0.1  # 10% traffic for new model initially
+  monitoring_period_hours: 24  # Monitor new model for 24 hours
+
+logging:
+  log_level: "INFO"
+  log_retention_days: 30
+  detailed_metrics_logging: true
+  experiment_tracking: true
+  model_artifact_retention_days: 90

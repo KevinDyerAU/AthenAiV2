@@ -1,0 +1,50 @@
+# Training Configuration for AthenAI ML Service
+
+# Data Configuration
+data:
+  graph_name: "knowledge_graph"
+  embedding_dim: 128
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+  negative_sampling_ratio: 1.0
+  batch_size: 32
+
+# Training Configuration
+training:
+  max_epochs: 200
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  patience: 20
+  min_delta: 0.001
+  gradient_clip: 1.0
+  
+# Optimizer Configuration
+optimizer:
+  type: "adam"
+  betas: [0.9, 0.999]
+  eps: 1e-8
+
+# Scheduler Configuration
+scheduler:
+  type: "reduce_on_plateau"
+  factor: 0.5
+  patience: 10
+  min_lr: 1e-6
+
+# Evaluation Configuration
+evaluation:
+  metrics: ["auc", "average_precision", "precision", "recall", "f1"]
+  k_values: [1, 3, 5, 10]  # For top-k evaluation
+  
+# MLflow Configuration
+mlflow:
+  experiment_name: "athenai_knowledge_graph"
+  tracking_uri: "http://localhost:5000"
+  artifact_location: "/app/experiments"
+  
+# Monitoring Configuration
+monitoring:
+  log_interval: 10  # Log every N epochs
+  save_interval: 50  # Save checkpoint every N epochs
+  early_stopping: true

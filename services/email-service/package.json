@@ -1,0 +1,30 @@
+{
+  "name": "athenai-email-service",
+  "version": "1.0.0",
+  "description": "Dedicated email processing service for AthenAI with Supabase integration",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0",
+    "amqplib": "^0.10.3",
+    "googleapis": "^126.0.1",
+    "neo4j-driver": "^5.15.0",
+    "openai": "^4.20.1",
+    "winston": "^3.11.0",
+    "dotenv": "^16.3.1",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "AthenAI Team",
+  "license": "MIT"
+}

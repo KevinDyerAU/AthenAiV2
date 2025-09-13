@@ -3,6 +3,7 @@ const { PromptTemplate } = require('@langchain/core/prompts');
 const { StringOutputParser } = require('@langchain/core/output_parsers');
 const { logger } = require('../utils/logger');
 const { progressBroadcaster } = require('../services/progressBroadcaster');
+const { agentRegistry } = require('./AgentRegistry');
 
 class MasterOrchestrator {
   constructor() {
@@ -165,9 +166,61 @@ Respond in this exact JSON format:
       
       await progressBroadcaster.broadcastProgress(sessionId, {
         phase: 'routing_start',
-        message: 'Starting agent routing determination...',
+        message: 'Starting intelligent agent routing...',
         progress: 35
       });
+
+      // Use AgentRegistry for intelligent agent selection
+      logger.info('MasterOrchestrator: Using AgentRegistry for intelligent routing', {
+        taskString: taskString.substring(0, 100) + '...',
+        sessionId
+      });
+
+      const selectedAgent = agentRegistry.findBestAgentForTask(taskString, { sessionId });
+      
+      if (!selectedAgent) {
+        logger.warn('AgentRegistry returned no agent, falling back to keyword matching');
+        throw new Error('AgentRegistry selection failed');
+      }
+
+      logger.info('MasterOrchestrator: AgentRegistry selected agent', {
+        agentId: selectedAgent.id,
+        agentName: selectedAgent.name,
+        capabilities: selectedAgent.capabilities,
+        confidence: selectedAgent.confidence_threshold
+      });
+
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'registry_routing_complete',
+        message: `AgentRegistry selected: ${selectedAgent.name}`,
+        progress: 50
+      });
+
+      // Map registry agent to our routing format
+      const routingResult = this.mapRegistryAgentToRouting(selectedAgent, taskString);
+      
+      logger.info('MasterOrchestrator: Agent routing determination complete', { 
+        routingResult,
+        selectedAgent: selectedAgent.id
+      });
+
+      return routingResult;
+
+    } catch (error) {
+      logger.warn('MasterOrchestrator: AgentRegistry routing failed, using fallback', {
+        error: error.message,
+        taskString: typeof task === 'string' ? task.substring(0, 100) + '...' : JSON.stringify(task).substring(0, 100) + '...'
+      });
+
+      // Fallback to AI-powered routing if registry fails
+      return this.fallbackAIRouting(task, sessionId);
+    }
+  }
+
+  async fallbackAIRouting(task, sessionId) {
+    try {
+      // Ensure task is a string
+      const taskString = typeof task === 'string' ? task : JSON.stringify(task);
       
       // Check if API key is available
       const useOpenRouter = process.env.USE_OPENROUTER === 'true';
@@ -436,6 +489,66 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
 
       return fallbackResult;
     }
+  }
+
+  mapRegistryAgentToRouting(selectedAgent, taskString) {
+    // Map AgentRegistry agent IDs to our existing routing system
+    const agentMapping = {
+      'research_agent': 'research',
+      'analysis_agent': 'analysis', 
+      'creative_agent': 'creative',
+      'development_agent': 'development',
+      'planning_agent': 'planning',
+      'execution_agent': 'execution',
+      'communication_agent': 'communication',
+      'quality_assurance_agent': 'qa',
+      'document_agent': 'document',
+      'email_agent': 'email'
+    };
+
+    const primaryAgent = agentMapping[selectedAgent.id] || 'research';
+    
+    // Determine secondary agents based on primary agent capabilities
+    let secondary = [];
+    let executionOrder = [primaryAgent];
+
+    // Use the agent's suggested workflow from registry
+    if (selectedAgent.capabilities.includes('research_synthesis') && primaryAgent !== 'research') {
+      secondary.push('research');
+    }
+    if (selectedAgent.capabilities.includes('data_analysis') && primaryAgent !== 'analysis') {
+      secondary.push('analysis');
+    }
+    if (selectedAgent.capabilities.includes('quality_assurance') && primaryAgent !== 'qa') {
+      secondary.push('qa');
+    }
+
+    // Create execution order based on complexity and agent type
+    if (secondary.length > 0) {
+      if (primaryAgent === 'development') {
+        executionOrder = ['planning', primaryAgent, 'qa'];
+      } else if (primaryAgent === 'research') {
+        executionOrder = [primaryAgent, 'analysis'];
+      } else {
+        executionOrder = [primaryAgent, ...secondary];
+      }
+    }
+
+    return {
+      primary: primaryAgent,
+      secondary: secondary,
+      execution_order: executionOrder,
+      parallel_execution: false,
+      reasoning: `AgentRegistry selected ${selectedAgent.name} based on capabilities: ${selectedAgent.capabilities.join(', ')}`,
+      agent_profile: {
+        id: selectedAgent.id,
+        name: selectedAgent.name,
+        description: selectedAgent.description,
+        complexity_level: selectedAgent.complexity_level,
+        confidence_threshold: selectedAgent.confidence_threshold,
+        performance_metrics: selectedAgent.performance_metrics
+      }
+    };
   }
 
   generateSessionId() {
