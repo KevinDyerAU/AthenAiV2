@@ -7,6 +7,7 @@ const { createSupabaseClient } = require('../services/database');
 const { createNeo4jDriver } = require('../utils/neo4j');
 const { generateEmbedding } = require('../utils/embeddings');
 const { searchWeb } = require('../utils/webSearch');
+const mlServiceClient = require('../utils/mlServiceClient');
 
 class BaseAgent {
   constructor() {
@@ -196,6 +197,39 @@ class BaseAgent {
     // Placeholder for LLM integration - implement based on your setup
     // This could use OpenAI, OpenRouter, or other LLM services
     return 'LLM synthesis not implemented yet';
+  }
+
+  // Optional ML Service Integration Methods
+  async getMLExpertisePrediction(topic, options = {}) {
+    if (!mlServiceClient.isAvailable()) {
+      return null; // Graceful fallback - no ML predictions available
+    }
+
+    try {
+      const result = await mlServiceClient.predictExpertise(topic, options);
+      return result.success ? result.experts : null;
+    } catch (error) {
+      console.error('ML expertise prediction failed:', error);
+      return null; // Graceful fallback
+    }
+  }
+
+  async getMLLinkPrediction(source, target, relationshipType) {
+    if (!mlServiceClient.isAvailable()) {
+      return null; // Graceful fallback - no ML predictions available
+    }
+
+    try {
+      const result = await mlServiceClient.predictLink(source, target, relationshipType);
+      return result.success ? result : null;
+    } catch (error) {
+      console.error('ML link prediction failed:', error);
+      return null; // Graceful fallback
+    }
+  }
+
+  getMLServiceStatus() {
+    return mlServiceClient.getStatus();
   }
 
   async searchWeb(query, context) {

@@ -118,34 +118,36 @@ AthenAI integrates with modern cloud services and ML infrastructure to provide e
 ### Prerequisites
 
 - **Node.js 18+** and npm
-- **Python 3.8+** and pip (for ML service)
-- **Docker** and **Docker Compose**
-- **Supabase account** (cloud-managed PostgreSQL with pgvector)
-- **Neo4j Aura account** (optional, cloud-managed graph database)
-- **OpenRouter API key** (multi-model AI access)
 
-### Installation
+# 3. Start Basic Services
+./scripts/start-basic.sh     # Unix/Linux/macOS
+./scripts/start-basic.ps1    # Windows PowerShell
+```
 
-1. **Clone and Install**
-   ```bash
-   git clone <repository-url>
-   cd AthenAI
-   npm install
-   ```
+### Full Mode with ML Services (Optional)
+```bash
+# 1. Enable ML Services in .env
+# Set ENABLE_ML_SERVICE=true
 
-2. **Environment Setup**
-   ```bash
-   # Copy environment template
-   cp .env.example .env
-   
-   # Configure your API keys and database connections
-   # See Environment Configuration section below
-   ```
+# 2. Start with ML Services
+./scripts/start-with-ml.sh   # Unix/Linux/macOS  
+./scripts/start-with-ml.ps1  # Windows PowerShell
+```
+
+### Manual Docker Compose
+```bash
+# Basic mode (core services only)
+docker-compose -f docker-compose.simplified.yml up -d
+
+# With ML services
+docker-compose -f docker-compose.simplified.yml --profile ml-services up -d
+```
 
 3. **ML Service Setup**
    ```bash
    # Set up ML service (includes Python dependencies)
    npm run ml:setup      # Windows: npm run ml:setup:win
+{{ ... }}
    
    # Initialize ML database schema
    npm run ml:init-db    # Windows: npm run ml:init-db:win
