@@ -7,14 +7,17 @@ const { AgentExecutor } = require('langchain/agents');
 const { ChatAgent } = require('langchain/agents');
 const axios = require('axios');
 const { logger } = require('../utils/logger');
-const { ReasoningFramework } = require('../utils/reasoningFramework');
-const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
-const { SemanticSimilarity } = require('../utils/semanticSimilarity');
+const { createSupabaseClient } = require('../services/database');
+const { createNeo4jDriver } = require('../utils/neo4j');
+const { LangChainAgent } = require('./LangChainAgent');
 const { progressBroadcaster } = require('../services/progressBroadcaster');
+const BaseAgent = require('./BaseAgent');
 const databaseService = require('../services/database');
 
-class ResearchAgent {
+class ResearchAgent extends BaseAgent {
   constructor() {
+    super(); // Initialize BaseAgent with knowledge-first search capabilities
+    
     // Primary OpenAI configuration with OpenRouter fallback
     const useOpenRouter = process.env.USE_OPENROUTER === 'true';
     
