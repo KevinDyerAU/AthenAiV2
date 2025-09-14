@@ -2,6 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const neo4j = require('neo4j-driver');
 const winston = require('winston');
 const { generateEmbedding, calculateSimilarity } = require('../../services/ingestion-service/utils/embeddings');
+const { AIProcessing } = require('../utils/aiProcessing');
 
 // Configure logger
 const logger = winston.createLogger({
@@ -18,7 +19,12 @@ const logger = winston.createLogger({
 });
 
 class BaseKnowledgeAgent {
-  constructor(agentConfig = {}) {
+  constructor() {
+    this.supabase = null;
+    this.neo4jDriver = null;
+    this.logger = logger;
+    this.aiProcessing = new AIProcessing();
+
     // Initialize Supabase client
     this.supabase = createClient(
       process.env.SUPABASE_URL,
@@ -283,14 +289,22 @@ class BaseKnowledgeAgent {
     }
   }
 
-  extractQueryEntities(query) {
-    // Simple entity extraction - could be enhanced with NLP
-    const words = query.toLowerCase().split(/\s+/);
-    const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'what', 'how', 'when', 'where', 'why', 'who']);
-    
-    return words
-      .filter(word => word.length > 2 && !stopWords.has(word))
-      .slice(0, 5); // Limit to top 5 potential entities
+  async extractQueryEntities(query) {
+    // AI-powered entity extraction replacing simple NLP
+    try {
+      const entities = await this.aiProcessing.extractEntities(query);
+      return entities.map(e => e.entity).slice(0, 8); // Return entity names
+    } catch (error) {
+      this.logger.warn('AI entity extraction failed, falling back to simple extraction:', error);
+      
+      // Fallback to simple extraction
+      const words = query.toLowerCase().split(/\s+/);
+      const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'what', 'how', 'when', 'where', 'why', 'who']);
+      
+      return words
+        .filter(word => word.length > 2 && !stopWords.has(word))
+        .slice(0, 5);
+    }
   }
 
   calculateGraphRelevance(record, queryEntities) {
