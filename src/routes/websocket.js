@@ -1,6 +1,7 @@
 // src/routes/websocket.js
 const { chatroomService } = require('../services/chatroom');
 const { logger } = require('../utils/logger');
+const { ErrorHandler, ValidationError } = require('../utils/errorHandler');
 
 // WebSocket API routes for room management
 const express = require('express');
@@ -15,8 +16,8 @@ router.get('/rooms', (req, res) => {
       count: rooms.length
     });
   } catch (error) {
-    logger.error('Get rooms error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    const handledError = ErrorHandler.handleDatabaseError(error, 'get_rooms');
+    res.status(handledError.statusCode).json(ErrorHandler.sanitizeErrorForClient(handledError));
   }
 });
 
@@ -35,8 +36,8 @@ router.get('/rooms/:roomId', (req, res) => {
       messageCount: messages.length
     });
   } catch (error) {
-    logger.error('Get room details error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    const handledError = ErrorHandler.handleDatabaseError(error, 'get_room_details', { roomId: req.params.roomId });
+    res.status(handledError.statusCode).json(ErrorHandler.sanitizeErrorForClient(handledError));
   }
 });
 
@@ -52,8 +53,8 @@ router.get('/users/:userId/rooms', (req, res) => {
       count: rooms.length
     });
   } catch (error) {
-    logger.error('Get user rooms error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    const handledError = ErrorHandler.handleDatabaseError(error, 'get_user_rooms', { userId: req.params.userId });
+    res.status(handledError.statusCode).json(ErrorHandler.sanitizeErrorForClient(handledError));
   }
 });
 

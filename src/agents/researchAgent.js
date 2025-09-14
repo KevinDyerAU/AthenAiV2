@@ -11,6 +11,9 @@ const { createSupabaseClient } = require('../services/database');
 const { createNeo4jDriver } = require('../utils/neo4j');
 const { LangChainAgent } = require('./LangChainAgent');
 const { progressBroadcaster } = require('../services/progressBroadcaster');
+const { ErrorHandler, AgentExecutionError, AIAPIError } = require('../utils/errorHandler');
+const { ReasoningFramework } = require('../utils/reasoningFramework');
+const { SemanticSimilarity } = require('../utils/semanticSimilarity');
 const BaseAgent = require('./BaseAgent');
 const databaseService = require('../services/database');
 
@@ -542,17 +545,9 @@ Format as a clear, actionable plan.
           orchestration_id: orchestrationId
         };
       }
-      
-      return await this.processMessage({ message }, { sessionId, ...options });
     } catch (error) {
-      logger.error('Research execution error:', error);
-      return {
-        response: `Research failed: ${error.message}`,
-        confidence: 0.3,
-        sources: [],
-        reasoning: 'Error occurred during research execution',
-        metadata: { agent: 'ResearchAgent', error: error.message }
-      };
+      const agentError = ErrorHandler.handleAgentError(error, 'research', sessionId, { query: query?.substring(0, 100) });
+      return ErrorHandler.createFallbackResponse(agentError, 'Research service temporarily unavailable. Please try a different query.');
     }
   }
 
@@ -595,8 +590,8 @@ Format as a clear, actionable plan.
 
       return `No search results found for "${query}"`;
     } catch (error) {
-      logger.error('Web search error:', error);
-      return `Web search failed: ${error.message}`;
+      const apiError = ErrorHandler.handleAIAPIError(error, 'firecrawl', { query: query?.substring(0, 100) });
+      return `Web search failed: ${apiError.userMessage}`;
     }
   }
 

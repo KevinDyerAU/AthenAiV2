@@ -11,6 +11,7 @@ const { Server } = require('socket.io');
 const { logger } = require('./utils/logger');
 const { errorHandler } = require('./middleware/errorHandler');
 const { rateLimiter } = require('./middleware/rateLimiter');
+const { ErrorHandler, WebSocketError, AgentExecutionError } = require('./utils/errorHandler');
 const routes = require('./routes');
 const { databaseService } = require('./services/database');
 const { chatroomService } = require('./services/chatroom');
@@ -299,8 +300,8 @@ io.on('connection', (socket) => {
       
       logger.info('User joined room via websocket', { roomId, userId, username });
     } catch (error) {
-      socket.emit('error', { message: error.message });
-      logger.error('Join room error:', error);
+      const wsError = ErrorHandler.handleWebSocketError(error, 'join_room', socket.id, { roomId: data?.roomId, userId: data?.userId });
+      socket.emit('error', ErrorHandler.sanitizeErrorForClient(wsError));
     }
   });
 
@@ -439,12 +440,17 @@ io.on('connection', (socket) => {
         }
         logger.info('Agent result', { agentResult });
       } catch (agentError) {
-        logger.error('Agent execution failed:', agentError);
-        // Fallback to simple response if AI agents fail
+        const handledError = ErrorHandler.handleAgentError(agentError, primaryAgent, roomId, { message: message?.substring(0, 100) });
+        
+        // Send specific error to user via WebSocket
+        socket.emit('agent_error', ErrorHandler.sanitizeErrorForClient(handledError));
+        
+        // Fallback to simple response
         agentResult = {
-          summary: `I'm processing your request. How can I help you today?`,
+          summary: handledError.userMessage,
           agent_type: 'general',
-          confidence: 0.7
+          confidence: 0.7,
+          error: true
         };
       }
 
@@ -483,18 +489,22 @@ io.on('connection', (socket) => {
       }
       
     } catch (error) {
-      // Provide more detailed error information
-      const errorMessage = error.message || 'An unexpected error occurred';
-      const safeErrorMessage = errorMessage.includes('primaryAgent') 
-        ? 'Agent processing failed - please try again' 
-        : errorMessage;
-      
-      socket.emit('error', { message: safeErrorMessage });
-      logger.error('Send message error:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
+      const wsError = ErrorHandler.handleWebSocketError(error, 'send_message', socket.id, { 
+        roomId: data?.roomId, 
+        userId: data?.userId,
+        messagePreview: data?.message?.substring(0, 100)
       });
+      
+      socket.emit('error', ErrorHandler.sanitizeErrorForClient(wsError));
+      
+      // Also broadcast to room that message processing failed
+      if (data?.roomId) {
+        io.to(data.roomId).emit('message_error', {
+          error: true,
+          message: wsError.userMessage,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
   });
 
@@ -516,8 +526,8 @@ io.on('connection', (socket) => {
       
       logger.info('User left room via websocket', { roomId, userId });
     } catch (error) {
-      socket.emit('error', { message: error.message });
-      logger.error('Leave room error:', error);
+      const wsError = ErrorHandler.handleWebSocketError(error, 'leave_room', socket.id, { roomId: data?.roomId, userId: data?.userId });
+      socket.emit('error', ErrorHandler.sanitizeErrorForClient(wsError));
     }
   });
 

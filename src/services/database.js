@@ -3,6 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 const neo4j = require('neo4j-driver');
 const redis = require('redis');
 const { logger } = require('../utils/logger');
+const { ErrorHandler, DatabaseError, AIAPIError } = require('../utils/errorHandler');
 
 class DatabaseService {
   constructor() {
@@ -81,8 +82,8 @@ class DatabaseService {
       this.initialized = true;
       logger.info('All database connections initialized successfully');
     } catch (error) {
-      logger.error('Database initialization failed:', error);
-      throw error;
+      const dbError = ErrorHandler.handleDatabaseError(error, 'initialization', { service: 'database_service' });
+      throw dbError;
     }
   }
 
@@ -283,8 +284,11 @@ class DatabaseService {
       if (error) throw error;
       return data;
     } catch (error) {
-      logger.error('Failed to store research insights:', error);
-      throw error;
+      const dbError = ErrorHandler.handleDatabaseError(error, 'store_research_insights', { 
+        query: insightsData.query?.substring(0, 100), 
+        domain: insightsData.domain 
+      });
+      throw dbError;
     }
   }
 
@@ -305,7 +309,8 @@ class DatabaseService {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      logger.error('Failed to get research insights by query hash:', error);
+      const dbError = ErrorHandler.handleDatabaseError(error, 'get_research_insights', { queryHash });
+      logger.error('Failed to get research insights by query hash:', dbError);
       return [];
     }
   }
@@ -466,7 +471,8 @@ class DatabaseService {
       if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "not found"
       return data;
     } catch (error) {
-      logger.error('Failed to get web search cache:', error);
+      const dbError = ErrorHandler.handleDatabaseError(error, 'get_web_search_cache', { queryHash });
+      logger.error('Error getting web search cache:', dbError);
       return null;
     }
   }

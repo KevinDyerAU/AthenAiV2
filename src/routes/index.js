@@ -15,6 +15,7 @@ const {
 const { databaseService } = require('../services/database');
 const { logger } = require('../utils/logger');
 const { chatroomService } = require('../services/chatroom');
+const { ErrorHandler, ValidationError, AgentExecutionError } = require('../utils/errorHandler');
 const websocketRoutes = require('./websocket');
 
 const router = express.Router();
@@ -51,7 +52,8 @@ router.post('/chat', async (req, res) => {
     const { message, sessionId, userId } = req.body;
     
     if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
+      const validationError = new ValidationError('Message is required', 'message');
+      return res.status(validationError.statusCode).json(ErrorHandler.sanitizeErrorForClient(validationError));
     }
 
     // Get conversation context for dynamic agent planning
@@ -161,8 +163,8 @@ router.post('/chat', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Chat endpoint error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    const handledError = ErrorHandler.handleAgentError(error, 'chat_orchestration', sessionId, { userId, message: message?.substring(0, 100) });
+    res.status(handledError.statusCode).json(ErrorHandler.sanitizeErrorForClient(handledError));
   }
 });
 

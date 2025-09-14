@@ -1,28 +1,28 @@
 // src/middleware/errorHandler.js
 const { logger } = require('../utils/logger');
+const { ErrorHandler, AthenAIError } = require('../utils/errorHandler');
 
 const errorHandler = (err, req, res, next) => {
-  logger.error('Unhandled error:', {
-    error: err.message,
-    stack: err.stack,
-    url: req.url,
-    method: req.method,
-    ip: req.ip
-  });
-
   if (res.headersSent) {
     return next(err);
   }
 
-  const statusCode = err.statusCode || 500;
-  const message = process.env.NODE_ENV === 'production' 
-    ? 'Internal server error' 
-    : err.message;
-
-  res.status(statusCode).json({
-    error: message,
+  // Use comprehensive error handling
+  const sanitizedError = ErrorHandler.sanitizeErrorForClient(err);
+  
+  logger.error('Request error:', {
+    error: err.message,
+    stack: err.stack,
+    type: err instanceof AthenAIError ? err.type : 'UNKNOWN_ERROR',
+    url: req.url,
+    method: req.method,
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
     timestamp: new Date().toISOString()
   });
+
+  const statusCode = err.statusCode || (err instanceof AthenAIError ? err.statusCode : 500);
+  res.status(statusCode).json(sanitizedError);
 };
 
 module.exports = { errorHandler };
