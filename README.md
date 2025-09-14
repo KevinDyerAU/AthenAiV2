@@ -23,6 +23,7 @@
 - [🔬 ML & MLOps Pipeline](#ml--mlops-pipeline)
 - [⚙️ Configuration](#configuration)
 - [🚀 Setup & Deployment](#setup--deployment)
+- [🔧 Self-Healing & Monitoring](#self-healing--monitoring)
 - [📊 Monitoring & Maintenance](#monitoring--maintenance)
 - [📡 API Reference](#api-reference)
 - [✨ Features](#features)
@@ -40,6 +41,7 @@ AthenAI is an enterprise-grade AI platform that combines multi-agent orchestrati
 - **Intelligent Agent Routing**: AI-powered task analysis routes queries to specialized agents automatically
 - **AI-Powered Knowledge Substrate**: Revolutionary learning system with AI content analysis, entity extraction, and pattern recognition
 - **Advanced AI Processing**: Replaces basic NLP with sophisticated AI for domain classification and relationship discovery
+- **Intelligent Self-Healing**: AI-powered autonomous recovery with predictive analysis and knowledge-informed decisions
 - **Cost Efficiency**: Smart AI-driven caching reduces API costs by up to 70%
 - **Enterprise Security**: Row-level security, audit trails, and compliance-ready architecture
 - **Scalable Architecture**: Cloud-native design handles enterprise workloads
