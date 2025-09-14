@@ -120,10 +120,10 @@ class ResearchAgent extends BaseAgent {
       // Store research insights
       const storeResult = await databaseService.storeResearchInsights({
         query_hash: queryHash,
-        original_query: query, // Make sure this field matches what we're looking for
+        original_query: query, 
         query_text: query,
         domain: domain,
-        research_results: results, // Make sure this field matches what we're looking for
+        research_results: results, 
         insights: results,
         patterns: patterns,
         confidence_score: 0.85,
@@ -137,7 +137,7 @@ class ResearchAgent extends BaseAgent {
       });
 
       // Create knowledge entities for significant findings
-      if (results.length > 100) { // Only for substantial research
+      if (results.length > 100) { 
         await databaseService.createKnowledgeEntity({
           entity_type: 'research_finding',
           entity_name: `Research: ${query.substring(0, 50)}...`,
@@ -173,7 +173,7 @@ class ResearchAgent extends BaseAgent {
           inputData.message, 
           knowledgeContext.similarResearch, 
           'original_query', 
-          0.8 // Higher threshold for research caching
+          0.8 
         );
         
         logger.info('ResearchAgent: Semantic similarity check result', {

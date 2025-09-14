@@ -14,6 +14,7 @@ const {
 } = require('../agents');
 const { databaseService } = require('../services/database');
 const { logger } = require('../utils/logger');
+const { chatroomService } = require('../services/chatroom');
 const websocketRoutes = require('./websocket');
 
 const router = express.Router();
@@ -53,16 +54,19 @@ router.post('/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Execute orchestration
+    // Get conversation context for dynamic agent planning
+    const conversationContext = chatroomService.getConversationContext(sessionId);
+    
+    // Execute orchestration with conversation context
     const orchestrationResult = await masterOrchestrator.executeOrchestration({
       message,
       sessionId,
       userId
     });
 
-    // Execute primary agent based on routing
+    // Execute primary agent based on routing with conversation context
     let agentResult = null;
-    let primaryAgent = orchestrationResult.routing?.primary;
+    let primaryAgent = orchestrationResult.orchestration_result?.routing?.primary;
     
     // Validate and fallback if primaryAgent is undefined
     if (!primaryAgent || typeof primaryAgent !== 'string') {
@@ -81,49 +85,58 @@ router.post('/chat', async (req, res) => {
         agentResult = await researchAgent.executeResearch(
           message,
           orchestrationResult.session_id,
-          safeOrchestrationId
+          safeOrchestrationId,
+          conversationContext
         );
         break;
       case 'analysis':
         agentResult = await analysisAgent.executeAnalysis({
-          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
+          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId },
+          conversationContext
         });
         break;
       case 'creative':
         agentResult = await creativeAgent.executeCreative({
-          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
+          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId },
+          conversationContext
         });
         break;
       case 'development':
         agentResult = await developmentAgent.executeDevelopment({
-          task: { requirements: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
+          task: { requirements: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId },
+          conversationContext
         });
         break;
       case 'communication':
         agentResult = await communicationAgent.executeCommunication({
-          task: { message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
+          task: { message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId },
+          conversationContext
         });
         break;
       case 'planning':
         agentResult = await planningAgent.executePlanning({
-          task: { objective: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
+          task: { objective: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId },
+          conversationContext
         });
         break;
       case 'execution':
         agentResult = await executionAgent.executeTask({
-          task: { execution_plan: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
+          task: { execution_plan: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId },
+          conversationContext
         });
         break;
       case 'qa':
         agentResult = await qaAgent.executeQualityAssurance({
-          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId }
+          task: { content: message, sessionId: orchestrationResult.session_id, orchestrationId: safeOrchestrationId },
+          conversationContext
         });
         break;
       default:
         agentResult = await researchAgent.executeResearch(
           message,
           orchestrationResult.session_id,
-          safeOrchestrationId
+          safeOrchestrationId,
+          conversationContext
         );
     }
 

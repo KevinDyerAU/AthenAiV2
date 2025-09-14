@@ -143,16 +143,15 @@ class ChatroomService {
   }
 
   getRoom(roomId) {
+    return this.rooms.get(roomId);
+  }
+
+  getConversationContext(roomId) {
     const room = this.rooms.get(roomId);
-    if (!room) return null;
-    
-    return {
-      id: roomId,
-      users: room.users,
-      messages: room.messages || room.messageHistory,
-      created_at: room.metadata.created,
-      metadata: room.metadata
-    };
+    if (!room || !room.conversationContext) {
+      return [];
+    }
+    return room.conversationContext;
   }
 
   addMessage(roomId, message) {
@@ -175,6 +174,20 @@ class ChatroomService {
     if (!room.messages) room.messages = [];
     room.messages.push(messageData);
     
+    // Maintain conversation context for agents
+    if (!room.conversationContext) room.conversationContext = [];
+    room.conversationContext.push({
+      role: messageData.type === 'agent' ? 'assistant' : 'user',
+      content: messageData.message,
+      timestamp: messageData.timestamp,
+      messageId: messageData.id
+    });
+    
+    // Keep last 20 messages for context
+    if (room.conversationContext.length > 20) {
+      room.conversationContext = room.conversationContext.slice(-20);
+    }
+    
     if (room.messageHistory.length > 100) {
       room.messageHistory = room.messageHistory.slice(-100);
     }
@@ -185,7 +198,8 @@ class ChatroomService {
     logger.info('Message added to room', { 
       roomId, 
       userId: messageData.userId,
-      messageType: messageData.type 
+      messageType: messageData.type,
+      contextLength: room.conversationContext.length
     });
 
     try {
@@ -203,7 +217,7 @@ class ChatroomService {
       logger.warn('Database service not available', { error: error.message });
     }
 
-    return { success: true, messageId: messageData.id };
+    return { success: true, messageId: messageData.id, contextLength: room.conversationContext.length };
   }
 
   addUserToRoom(roomId, userId, username) {

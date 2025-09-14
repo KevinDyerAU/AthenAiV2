@@ -4,6 +4,7 @@ const { StringOutputParser } = require('@langchain/core/output_parsers');
 const { logger } = require('../utils/logger');
 const { progressBroadcaster } = require('../services/progressBroadcaster');
 const { agentRegistry } = require('./AgentRegistry');
+const { chatroomService } = require('../services/chatroom');
 
 class MasterOrchestrator {
   constructor() {
@@ -43,10 +44,16 @@ class MasterOrchestrator {
     this.executionPlans = new Map();
   }
 
-  async analyzeTaskComplexity(task) {
+  async analyzeTaskComplexity(task, conversationContext = []) {
     try {
       // Ensure task is a string
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
+      
+      // Build context summary for complexity analysis
+      const contextSummary = conversationContext.length > 0 
+        ? `\n\nConversation Context (last ${conversationContext.length} messages):\n` + 
+          conversationContext.map(msg => `${msg.role}: ${msg.content}`).join('\n')
+        : '';
       
       // Check if API key is available
       const useOpenRouter = process.env.USE_OPENROUTER === 'true';
@@ -73,22 +80,28 @@ User Request: {message}
 
 ANALYSIS CRITERIA:
 1. How many steps or sub-tasks are involved?
-2. What level of expertise is required?
-3. How much research or analysis is needed?
-4. Are there multiple domains of knowledge involved?
-5. How long might this reasonably take?
-
-STEP-BY-STEP REASONING:
-Think through each criterion above and explain your reasoning for the complexity level.
-
-Respond in this exact JSON format:
-{{
   "level": "low|medium|high",
-  "factors": ["list", "of", "complexity", "factors"],
-  "estimated_time": number_in_seconds,
-  "required_agents": ["list", "of", "agent", "types"],
-  "reasoning": "detailed step-by-step explanation of your complexity assessment including your reasoning process"
-}}`);
+  "factors": ["factor1", "factor2", ...],
+  "estimated_time": seconds,
+  "required_agents": ["agent1", "agent2", ...],
+  "reasoning": "explanation of complexity assessment"
+}
+
+Current Task: {task}
+{contextSummary}
+
+Consider factors like:
+- Information gathering requirements
+- Analysis depth needed
+- Creative or technical complexity
+- Multi-step processes
+- Domain expertise required
+- Time sensitivity
+- Conversation continuity and context
+- Follow-up or clarification needs
+- Previous discussion topics
+
+Respond with ONLY the JSON object.`);
 
       const chain = complexityPrompt.pipe(this.llm).pipe(new StringOutputParser());
       
@@ -99,7 +112,7 @@ Respond in this exact JSON format:
       
       // Execute with timeout protection
       const response = await Promise.race([
-        chain.invoke({ message: taskString }),
+        chain.invoke({ task: taskString, contextSummary }),
         timeoutPromise
       ]);
       
@@ -213,11 +226,11 @@ Respond in this exact JSON format:
       });
 
       // Fallback to AI-powered routing if registry fails
-      return this.fallbackAIRouting(task, sessionId);
+      return this.fallbackAIRouting(task, sessionId, conversationContext);
     }
   }
 
-  async fallbackAIRouting(task, sessionId) {
+  async fallbackAIRouting(task, sessionId, conversationContext = []) {
     try {
       // Ensure task is a string
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
@@ -237,18 +250,26 @@ Respond in this exact JSON format:
         throw new Error('No API key configured');
       }
       
-      // AI-powered agent routing with explicit reasoning
+      // Build context summary for routing
+      const contextSummary = conversationContext.length > 0 
+        ? `\n\nConversation Context (last ${conversationContext.length} messages):\n` + 
+          conversationContext.map(msg => `${msg.role}: ${msg.content}`).join('\n')
+        : '';
+
+      // AI-powered agent routing with explicit reasoning and conversation context
       const routingPrompt = PromptTemplate.fromTemplate(`
-You are an expert agent routing specialist. Before selecting an agent, think through your decision step by step.
+You are an expert agent routing specialist. Before selecting an agent, think through your decision step by step considering the conversation context.
 
 REASONING PHASE:
 1. First, analyze the core intent and requirements of the user message
-2. Identify the primary domain of expertise needed
-3. Consider what tools and capabilities would be most effective
-4. Evaluate which agent's specialization best matches the task
-5. Consider any secondary agents that might be helpful
+2. Consider the conversation context and continuity
+3. Identify the primary domain of expertise needed
+4. Consider what tools and capabilities would be most effective
+5. Evaluate which agent's specialization best matches the task
+6. Consider any secondary agents that might be helpful
 
-User Message: {message}
+Current User Message: {message}
+{contextSummary}
 
 Available Agents:
 - research: For information gathering, fact-finding, data analysis, answering questions
@@ -264,9 +285,10 @@ Available Agents:
 
 STEP-BY-STEP ANALYSIS:
 1. What is the primary intent and goal of the message?
-2. What type of expertise is needed?
-3. What tools and capabilities would be most useful?
-4. Which agent's core competencies align best with these requirements?
+2. How does this relate to the previous conversation?
+3. What type of expertise is needed?
+4. What tools and capabilities would be most useful?
+5. Which agent's core competencies align best with these requirements?
 
 Think through your reasoning, then respond with ONLY the agent name (research, creative, analysis, development, planning, execution, communication, qa, document, or general).`);
 
@@ -298,23 +320,23 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         });
         
         const startTime = Date.now();
-        const aiResponse = await Promise.race([
-          chain.invoke({ message: taskString }),
+        const response = await Promise.race([
+          chain.invoke({ message: taskString, contextSummary }),
           timeoutPromise
         ]);
         const responseTime = Date.now() - startTime;
         
         // Safely assign primaryAgent only if we got a valid response
-        if (aiResponse && typeof aiResponse === 'string' && aiResponse.trim()) {
-          primaryAgent = aiResponse.trim();
+        if (response && typeof response === 'string' && response.trim()) {
+          primaryAgent = response.trim();
         }
         
         logger.info('MasterOrchestrator: AI agent routing response received', { 
-          aiResponse,
+          response,
           primaryAgent, 
           type: typeof primaryAgent,
           responseTime,
-          rawResponse: JSON.stringify(aiResponse),
+          rawResponse: JSON.stringify(response),
           taskString: taskString.substring(0, 100) + '...',
           sessionId
         });
@@ -559,44 +581,66 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
     return `orch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  createExecutionPlan(task, complexity, routing) {
-    try {
-      const planId = `plan_${Date.now()}`;
-      const steps = [
-        {
-          step: 1,
-          agent: routing.primary || 'research',
-          action: 'analyze_and_research',
-          input: task,
-          expected_output: 'research_results'
-        },
-        {
-          step: 2,
-          agent: (routing.secondary && routing.secondary[0]) || 'analysis',
-          action: 'synthesize_results',
-          input: 'research_results',
-          expected_output: 'final_analysis'
+  async createExecutionPlan(task, complexity, routing, conversationContext = []) {
+    const contextAwareness = conversationContext.length > 0 ? {
+      has_context: true,
+      context_length: conversationContext.length,
+      recent_topics: this.extractTopicsFromContext(conversationContext),
+      conversation_continuity: this.assessContinuity(conversationContext)
+    } : {
+      has_context: false,
+      context_length: 0,
+      recent_topics: [],
+      conversation_continuity: 'new_conversation'
+    };
+
+    return {
+      task_id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      primary_agent: routing.primary,
+      secondary_agents: routing.secondary || [],
+      execution_order: routing.execution_order || [routing.primary],
+      parallel_execution: routing.parallel_execution || false,
+      estimated_time: complexity.estimated_time || 300,
+      priority: this.determinePriority(complexity.level),
+      dependencies: [],
+      checkpoints: this.createCheckpoints(routing.execution_order || [routing.primary]),
+      context_awareness: contextAwareness,
+      fallback_strategy: {
+        primary_fallback: 'research',
+        timeout_threshold: 30000,
+        retry_attempts: 2
+      },
+      metadata: {
+        complexity_factors: complexity.factors || [],
+        reasoning: complexity.reasoning || 'Standard execution plan',
+        created_at: new Date().toISOString(),
+        conversation_context: conversationContext.slice(-3) // Store last 3 messages for reference
+      }
+    };
+  }
+
+  extractTopicsFromContext(conversationContext) {
+    // Simple topic extraction from recent messages
+    const recentMessages = conversationContext.slice(-5);
+    const topics = new Set();
+    
+    recentMessages.forEach(msg => {
+      const words = msg.content.toLowerCase().split(/\s+/);
+      words.forEach(word => {
+        if (word.length > 4 && !['that', 'this', 'with', 'from', 'they', 'have', 'been', 'will', 'would', 'could', 'should'].includes(word)) {
+          topics.add(word);
         }
-      ];
+      });
+    });
+    
+    return Array.from(topics).slice(0, 10); // Return top 10 topics
+  }
 
-      const plan = {
-        id: planId,
-        task,
-        complexity,
-        routing,
-        steps,
-        estimated_duration: complexity.estimated_time || 300,
-        resource_requirements: ['llm_access', 'web_search'],
-        created_at: new Date().toISOString()
-      };
-
-      this.executionPlans.set(planId, plan);
-      
-      return plan;
-    } catch (error) {
-      logger.error('Execution plan creation failed', { error: error.message });
-      throw error;
-    }
+  assessContinuity(conversationContext) {
+    if (conversationContext.length === 0) return 'new_conversation';
+    if (conversationContext.length === 1) return 'first_response';
+    if (conversationContext.length <= 5) return 'early_conversation';
+    return 'ongoing_conversation';
   }
 
   async executeOrchestration(inputData) {
@@ -619,36 +663,45 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       
       logger.info('MasterOrchestrator: Analyzing task complexity');
       const complexity = await this.analyzeTaskComplexity(taskMessage);
-      logger.info('MasterOrchestrator: Task complexity analysis complete', { complexity });
       
-      progressBroadcaster.updateThinking(sessionId, 'complexity_result', `Task complexity: ${complexity.level} - ${complexity.reasoning}`);
+      const routing = await this.routeToAgent(taskMessage, sessionId, conversationContext);
       
-      // Step 2: Determine agent routing
-      progressBroadcaster.updateProgress(sessionId, 'agent_routing', 'Determining the best agent for this task');
-      progressBroadcaster.updateThinking(sessionId, 'routing', 'Analyzing which specialized agent would be most effective for this request...');
+      logger.info('MasterOrchestrator: Agent routing complete', { 
+        orchestrationId, 
+        routing 
+      });
+
+      // Step 3: Create execution plan with context
+      progressBroadcaster.updateProgress(sessionId, {
+        phase: 'plan_creation',
+        message: 'Creating dynamic execution plan...',
+        progress: 60
+      });
       
-      logger.info('MasterOrchestrator: Determining agent routing');
-      const routing = await this.determineAgentRouting(taskMessage, sessionId);
-      logger.info('MasterOrchestrator: Agent routing complete', { routing });
+      const plan = await this.createExecutionPlan(taskMessage, complexity, routing, conversationContext);
       
-      // Validate routing result
-      if (!routing || !routing.primary) {
-        logger.error('MasterOrchestrator: Invalid routing result', { routing });
-        throw new Error('Agent routing failed - no primary agent determined');
-      }
-      
-      progressBroadcaster.updateThinking(sessionId, 'routing_result', `Selected agent: ${routing.primary} - ${routing.reasoning}`);
-      
-      // Step 3: Create execution plan
-      progressBroadcaster.updateProgress(sessionId, 'execution_planning', 'Creating execution plan');
-      logger.info('MasterOrchestrator: Creating execution plan');
-      const plan = this.createExecutionPlan(taskMessage, complexity, routing);
-      logger.info('MasterOrchestrator: Execution plan created', { planId: plan.id });
-      
-      progressBroadcaster.updateProgress(sessionId, 'orchestration_complete', 'Task analysis complete, routing to agent');
-      
+      logger.info('MasterOrchestrator: Execution plan created', { 
+        orchestrationId, 
+        plan 
+      });
+
+      // Step 4: Store orchestration result
+      this.executionPlans.set(orchestrationId, {
+        complexity,
+        routing,
+        plan,
+        conversationContext: conversationContext.slice(-5), // Store last 5 messages for reference
+        metadata: {
+          ...metadata,
+          created_at: new Date().toISOString(),
+          session_id: sessionId,
+          user_id: userId
+        }
+      });
+
       const result = {
         session_id: sessionId,
+        orchestration_id: orchestrationId,
         orchestration_result: {
           complexity,
           routing,

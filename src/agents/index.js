@@ -1,7 +1,7 @@
 // Agent Index - Main Entry Point for All Agents
 const { MasterOrchestrator } = require('./MasterOrchestrator');
 const { ResearchAgent } = require('./ResearchAgent');
-const { AnalysisAgent } = require('./analysisAgent');
+const { AnalysisAgent } = require('./AnalysisAgent');
 const { CreativeAgent } = require('./creativeAgent');
 const { DevelopmentAgent } = require('./DevelopmentAgent');
 const { CommunicationAgent } = require('./CommunicationAgent');

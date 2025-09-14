@@ -34,11 +34,12 @@
 
 ## 🎯 Overview
 
-AthenAI is an enterprise AI platform that combines intelligent knowledge management, Graph Neural Networks, and automated MLOps. Built on Node.js, Express.js, PyTorch, and FastAPI, it features a revolutionary **Knowledge Substrate** with machine learning capabilities that enable agents to learn, predict, and build upon previous interactions across sessions.
+AthenAI is an enterprise AI platform that combines intelligent knowledge management, Graph Neural Networks, and automated MLOps. Built on Node.js, Express.js, PyTorch, and FastAPI, it features a revolutionary **Knowledge Substrate** with machine learning capabilities and **Interactive Conversation Context** that enables agents to learn, predict, and build upon previous interactions across sessions with full conversational memory.
 
 ### What Makes AthenAI Unique
 
 🧠 **Intelligent Knowledge Substrate**: Hybrid PostgreSQL + Neo4j system with Graph Neural Networks for intelligent predictions  
+💬 **Interactive Conversation Context**: Dynamic conversation memory with contextual agent responses and query refinement  
 🔄 **Continuous Learning**: Agents learn from every interaction with automated model retraining and drift detection  
 🎯 **Smart Caching**: Knowledge-first prediction strategy with ML fallback for optimal performance  
 🤖 **Advanced Agent Coordination**: Master orchestrator with AI-powered routing and multi-agent collaboration  
@@ -92,12 +93,20 @@ AthenAI integrates with modern cloud services and ML infrastructure to provide e
 - **Prometheus Metrics**: Comprehensive monitoring with custom metrics and dashboards
 
 ### 🤖 Advanced AI Agents
-- **Master Orchestrator**: AI-powered semantic routing and task complexity analysis
-- **Research Agent**: Knowledge-enhanced web search with learning capabilities
+- **Master Orchestrator**: AI-powered semantic routing with conversation context and task complexity analysis
+- **Research Agent**: Knowledge-enhanced web search with contextual query refinement and learning capabilities
 - **Quality Assurance Agent**: Comprehensive validation with insight storage
 - **Development Agent**: Code generation with LangChain tools and sandboxed execution
 - **Document Agent**: Document processing, upload, search, and email attachments with pgvector
 - **Communication Agent**: Multi-channel messaging (Email, Slack, Discord, Teams)
+
+### 💬 Interactive Chat System
+- **Conversation Context**: Maintains last 20 messages for contextual agent responses
+- **Dynamic Query Refinement**: Automatically improves queries based on conversation history
+- **Context-Aware Routing**: Agent selection considers conversation flow and previous topics
+- **Real-time Interactivity**: Every new message dynamically incorporated into agent planning
+- **Conversational Memory**: Agents remember and reference previous discussion points
+- **Intelligent Continuity**: Seamless conversation flow with topic extraction and analysis
 - **Planning Agent**: Advanced project planning with resource allocation
 - **Execution Agent**: Workflow orchestration and command execution
 
@@ -306,10 +315,11 @@ npm run dev
 
 ### First Steps
 
-1. **Test the Chat Interface**: Visit `/chat.html` and try asking questions
-2. **Monitor Knowledge Learning**: Watch real-time progress as agents learn and cache results
-3. **Explore Agent Capabilities**: Try research, QA, development, and planning tasks
-4. **Check System Health**: Monitor agent status and performance metrics
+1. **Test the Interactive Chat**: Visit `/chat.html` and experience contextual conversations
+2. **Monitor Conversation Context**: Watch how agents remember and build upon previous messages
+3. **Explore Agent Capabilities**: Try research, QA, development, and planning tasks with conversation continuity
+4. **Test Dynamic Query Refinement**: Ask follow-up questions and see how queries are automatically improved
+5. **Check System Health**: Monitor agent status and performance metrics
 
 ## 🏗️ Architecture
 
@@ -374,16 +384,16 @@ AthenAI uses a sophisticated, knowledge-driven architecture designed for enterpr
 │                        Knowledge Learning & Retrieval Flow                       │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
-User Query ──► Master Orchestrator ──► Agent Selection ──► Knowledge Retrieval
-     │              │                        │                      │
-     │              │ (AI Analysis)          │ (Semantic)           │
-     │              ▼                        ▼                      ▼
-     │    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-     │    │ Task Complexity │    │ Agent Routing   │    │ Knowledge Query │
-     │    │ • Domain        │    │ • Research      │    │ • Similar Queries│
-     │    │ • Difficulty    │    │ • QA            │    │ • Domain Context│
-     │    │ • Resources     │    │ • Development   │    │ • Cached Results│
-     │    └─────────────────┘    └─────────────────┘    └─────────────────┘
+User Query ──► Conversation Context ──► Master Orchestrator ──► Agent Selection ──► Knowledge Retrieval
+     │              │                        │                        │                      │
+     │              │ (Context Analysis)     │ (AI Analysis)          │ (Contextual)         │
+     │              ▼                        ▼                        ▼                      ▼
+     │    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+     │    │ Chat Context    │    │ Task Complexity │    │ Agent Routing   │    │ Knowledge Query │
+     │    │ • Last 20 Msgs  │    │ • Domain        │    │ • Research      │    │ • Similar Queries│
+     │    │ • Topic Extract │    │ • Difficulty    │    │ • QA            │    │ • Domain Context│
+     │    │ • Continuity    │    │ • Resources     │    │ • Development   │    │ • Cached Results│
+     │    └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
      │              │                        │                      │
      │              ▼                        ▼                      ▼
      │    Enhanced Processing ──► Agent Execution ──► Knowledge Storage
