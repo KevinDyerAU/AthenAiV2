@@ -5,13 +5,14 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
-
+const http = require('http');
+const socketIo = require('socket.io');
+const path = require('path');
 const { logger } = require('./utils/logger');
-const { errorHandler } = require('./middleware/errorHandler');
-const { rateLimiter } = require('./middleware/rateLimiter');
+const { advancedLogger, setLogContext, generateCorrelationId, startTimer, endTimer } = require('./utils/advancedLogger');
+const { monitoringCollector } = require('./utils/monitoringCollector');
 const { ErrorHandler, WebSocketError, AgentExecutionError } = require('./utils/errorHandler');
+const { rateLimiter } = require('./middleware/rateLimiter');
 const routes = require('./routes');
 const { databaseService } = require('./services/database');
 const { chatroomService } = require('./services/chatroom');
@@ -267,12 +268,22 @@ process.on('SIGINT', async () => {
 
 // WebSocket event handlers
 io.on('connection', (socket) => {
-  logger.info('Client connected', { socketId: socket.id });
+  const connectionId = generateCorrelationId();
+  setLogContext({ correlationId: connectionId });
+  
+  advancedLogger.logWsConnection(socket.id, null, { connectionId });
+  monitoringCollector.recordWebSocketConnection(true);
+  
+  logger.info('Client connected', { socketId: socket.id, connectionId });
 
   // Join room
-  socket.on('join_room', async (data) => {
+  socket.on('join_room', (data) => {
+    const timerId = startTimer('websocket_join_room');
     try {
       const { roomId, userId, username } = data;
+      
+      setLogContext({ correlationId: connectionId, sessionId: roomId, userId });
+      advancedLogger.logWsMessage('inbound', 'join_room', data, socket.id);
       
       // Join socket room
       socket.join(roomId);
@@ -298,6 +309,9 @@ io.on('connection', (socket) => {
         userCount: roomUsers.length
       });
       
+      advancedLogger.logWsMessage('outbound', 'joined_room', { roomId, users: roomUsers.length }, socket.id);
+      monitoringCollector.recordWebSocketMessage('inbound', 'join_room', endTimer(timerId).durationMs, true);
+      
       logger.info('User joined room via websocket', { roomId, userId, username });
     } catch (error) {
       const wsError = ErrorHandler.handleWebSocketError(error, 'join_room', socket.id, { roomId: data?.roomId, userId: data?.userId });
@@ -307,8 +321,13 @@ io.on('connection', (socket) => {
 
   // Send message
   socket.on('send_message', async (data) => {
+    const messageTimerId = startTimer('websocket_send_message');
     try {
       const { roomId, message, userId, username } = data;
+      
+      setLogContext({ correlationId: connectionId, sessionId: roomId, userId, agentType: 'orchestrator' });
+      advancedLogger.logWsMessage('inbound', 'send_message', { roomId, messageLength: message?.length }, socket.id);
+      
       logger.info('Processing message', { roomId, message, userId, username });
       
       // Add message to room
@@ -321,6 +340,9 @@ io.on('connection', (socket) => {
       });
       
       // Process with AI agents
+      const orchestrationTimerId = startTimer('agent_orchestration', { message: message?.substring(0, 100) });
+      advancedLogger.logAgentStart('orchestrator', message, { roomId, userId });
+      
       logger.info('Calling Master Orchestrator', { message });
       let agentResult = null;
       let primaryAgent = 'general'; // Initialize with default value
@@ -331,6 +353,8 @@ io.on('connection', (socket) => {
           sessionId: roomId,
           userId
         });
+        
+        endTimer(orchestrationTimerId, { success: true, primaryAgent: orchestrationResult.orchestration_result?.routing?.primary });
         logger.info('Orchestration result', { orchestrationResult });
 
         // Execute primary agent with proper error handling and detailed debugging
@@ -367,6 +391,10 @@ io.on('connection', (socket) => {
         progressBroadcaster.startProgress(roomId, safeAgentName, `Processing with ${safeAgentName} agent`);
         
         if (primaryAgent === 'research') {
+          const agentTimerId = startTimer('agent_execution', { agentType: 'research' });
+          advancedLogger.logAgentStart('research', message, { roomId, userId });
+          monitoringCollector.recordAgentStart('research');
+          
           logger.info('Calling research agent');
           agentResult = await researchAgent.executeResearch(
             message,
@@ -374,7 +402,16 @@ io.on('connection', (socket) => {
             orchestrationResult.session_id,
             { sessionId: roomId }
           );
+          
+          const agentPerf = endTimer(agentTimerId, { success: true });
+          advancedLogger.logAgentEnd('research', agentResult, { duration: agentPerf.durationMs });
+          monitoringCollector.recordAgentExecution('research', agentPerf.durationMs, true);
+          monitoringCollector.recordAgentEnd('research');
         } else if (primaryAgent === 'analysis') {
+          const agentTimerId = startTimer('agent_execution', { agentType: 'analysis' });
+          advancedLogger.logAgentStart('analysis', message, { roomId, userId });
+          monitoringCollector.recordAgentStart('analysis');
+          
           logger.info('Calling analysis agent', {
             message,
             sessionId: orchestrationResult.session_id,
@@ -389,8 +426,19 @@ io.on('connection', (socket) => {
                 orchestration_id: orchestrationResult.orchestration_id || safeAgentName 
               }
             });
+            
+            const agentPerf = endTimer(agentTimerId, { success: true });
+            advancedLogger.logAgentEnd('analysis', agentResult, { duration: agentPerf.durationMs });
+            monitoringCollector.recordAgentExecution('analysis', agentPerf.durationMs, true);
+            monitoringCollector.recordAgentEnd('analysis');
+            
             logger.info('Analysis agent completed successfully', { agentResult });
           } catch (analysisError) {
+            const agentPerf = endTimer(agentTimerId, { success: false });
+            advancedLogger.logAgentError('analysis', analysisError, { roomId, userId, duration: agentPerf.durationMs });
+            monitoringCollector.recordAgentExecution('analysis', agentPerf.durationMs, false);
+            monitoringCollector.recordAgentEnd('analysis');
+            
             logger.error('Analysis agent execution failed:', {
               error: analysisError.message,
               stack: analysisError.stack,

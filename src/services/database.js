@@ -3,6 +3,8 @@ const { createClient } = require('@supabase/supabase-js');
 const neo4j = require('neo4j-driver');
 const redis = require('redis');
 const { logger } = require('../utils/logger');
+const { advancedLogger, startTimer, endTimer } = require('../utils/advancedLogger');
+const { monitoringCollector } = require('../utils/monitoringCollector');
 const { ErrorHandler, DatabaseError, AIAPIError } = require('../utils/errorHandler');
 
 class DatabaseService {
@@ -94,24 +96,41 @@ class DatabaseService {
       return null;
     }
 
-    const { data, error } = await this.supabase
-      .from('conversations')
-      .insert({
-        title: `Session ${sessionId}`,
-        metadata: {
-          session_id: sessionId,
-          user_id: userId,
-          message,
-          response,
-          agent_type: agentType,
-          ...metadata
-        }
-      })
-      .select()
-      .single();
+    const timerId = startTimer('db_create_conversation', { sessionId, agentType });
+    try {
+      advancedLogger.logDbOperation('insert', 'conversations', 'INSERT conversation', { sessionId, userId, agentType });
+      
+      const { data, error } = await this.supabase
+        .from('conversations')
+        .insert({
+          title: `Session ${sessionId}`,
+          metadata: {
+            session_id: sessionId,
+            user_id: userId,
+            message,
+            response,
+            agent_type: agentType,
+            ...metadata
+          }
+        })
+        .select()
+        .single();
 
-    if (error) throw error;
-    return data;
+      if (error) throw error;
+      
+      const perf = endTimer(timerId, { success: true, recordCount: 1 });
+      monitoringCollector.recordDbQuery('insert', 'conversations', perf.durationMs, true, { sessionId, agentType });
+      
+      return data;
+    } catch (error) {
+      const perf = endTimer(timerId, { success: false });
+      const dbError = ErrorHandler.handleDatabaseError(error, 'create_conversation', { 
+        sessionId, userId, agentType 
+      });
+      monitoringCollector.recordDbQuery('insert', 'conversations', perf.durationMs, false, { sessionId, agentType });
+      advancedLogger.logDbError('create_conversation', dbError, { sessionId, userId, agentType });
+      throw dbError;
+    }
   }
 
   async getConversations(sessionId, limit = 10) {
