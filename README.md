@@ -1,4 +1,4 @@
-# AthenAI — Enterprise AI Platform with Graph Neural Networks & MLOps
+# AthenAI — Enterprise AI Platform with Knowledge Substrate & MLOps
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js 18+](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
@@ -11,302 +11,653 @@
 [![Neo4j](https://img.shields.io/badge/Neo4j-Knowledge%20Graph-blue.svg)](https://neo4j.com/)
 [![LangChain](https://img.shields.io/badge/LangChain-AI%20Framework-orange.svg)](https://langchain.com/)
 
-> **Enterprise AI platform combining intelligent knowledge substrate, Graph Neural Networks, and MLOps automation. Features real-time learning, automated model retraining, and comprehensive agent coordination for production-scale AI operations.**
+> **Enterprise AI platform combining multi-agent orchestration, knowledge substrate management, and MLOps capabilities. Features intelligent conversation handling, continuous learning, and automated model lifecycle management.**
 
 ## Table of Contents
 
 - [🎯 Overview](#overview)
-- [✨ Features](#features)
-- [🚀 Quick Start](#quick-start)
 - [🏗️ Architecture](#architecture)
+- [📊 Component Diagrams](#component-diagrams)
+- [🤖 Agent System](#agent-system)
 - [🧠 Knowledge Substrate](#knowledge-substrate)
-- [🤖 AI Agents](#ai-agents)
-- [🔬 ML Service & Graph Neural Networks](#ml-service--graph-neural-networks)
-- [🔄 MLOps Pipeline](#mlops-pipeline)
-- [📡 API Reference](#api-reference)
-- [🔌 WebSocket Events](#websocket-events)
+- [🔬 ML & MLOps Pipeline](#ml--mlops-pipeline)
 - [⚙️ Configuration](#configuration)
+- [🚀 Setup & Deployment](#setup--deployment)
+- [📊 Monitoring & Maintenance](#monitoring--maintenance)
+- [📡 API Reference](#api-reference)
+- [✨ Features](#features)
 - [🛠️ Development](#development)
-- [🚢 Deployment](#deployment)
 - [🧪 Testing](#testing)
-- [📊 Monitoring](#monitoring)
 - [🤝 Contributing](#contributing)
 
 ## 🎯 Overview
 
-AthenAI is an enterprise AI platform that combines intelligent knowledge management, Graph Neural Networks, and automated MLOps. Built on Node.js, Express.js, PyTorch, and FastAPI, it features a revolutionary **Knowledge Substrate** with machine learning capabilities and **Interactive Conversation Context** that enables agents to learn, predict, and build upon previous interactions across sessions with full conversational memory.
+AthenAI is an enterprise-grade AI platform that combines multi-agent orchestration, knowledge substrate management, and MLOps capabilities. The system provides intelligent conversation handling, continuous learning, and automated model lifecycle management.
 
-### What Makes AthenAI Unique
+### Key Features
+- **Multi-Agent Orchestration**: Intelligent routing and coordination of specialized AI agents
+- **Knowledge Substrate**: Persistent learning with PostgreSQL, Neo4j, and vector embeddings
+- **MLOps Pipeline**: Automated training, deployment, and monitoring of ML models
+- **Real-time Processing**: WebSocket-based chat with progress broadcasting
+- **Continuous Learning**: Knowledge accumulation and reuse across sessions
 
-🧠 **Intelligent Knowledge Substrate**: Hybrid PostgreSQL + Neo4j system with Graph Neural Networks for intelligent predictions  
-💬 **Interactive Conversation Context**: Dynamic conversation memory with contextual agent responses and query refinement  
-🔄 **Continuous Learning**: Agents learn from every interaction with automated model retraining and drift detection  
-🎯 **Smart Caching**: Knowledge-first prediction strategy with ML fallback for optimal performance  
-🤖 **Advanced Agent Coordination**: Master orchestrator with AI-powered routing and multi-agent collaboration  
-📊 **Real-time Progress Tracking**: Detailed progress updates with ML model monitoring and performance metrics  
-🔬 **Graph Neural Networks**: Link prediction, node classification, and expertise recommendation models  
-🔄 **Automated MLOps**: Intelligent retraining triggers, model monitoring, and production deployment  
+## 🏗️ Architecture
 
-### Enterprise-Ready Architecture
-
-AthenAI integrates with modern cloud services and ML infrastructure to provide enterprise-scale AI operations:
-- **Supabase (PostgreSQL)**: Structured knowledge storage with vector embeddings and ML prediction tracking
-- **Neo4j**: Knowledge graph for complex relationship mapping and GNN training data
-- **PyTorch & PyTorch Geometric**: Graph Neural Networks for link prediction and node classification
-- **FastAPI ML Service**: Real-time and batch ML inference with knowledge-first approach
-- **MLflow**: Experiment tracking, model management, and automated deployment
-- **OpenRouter**: Multi-model AI access (OpenAI, Anthropic, Google, Meta, etc.)
-- **LangChain**: Advanced AI agent framework with specialized tools
-- **Real-time WebSocket**: Instant communication and progress updates
-
-## ✨ Features
-
-### 🧠 Knowledge Substrate (Revolutionary)
-- **Intelligent Memory**: Agents remember and learn from every interaction
-- **Smart Caching**: Web search results cached for 24 hours with hit tracking
-- **Domain Classification**: Automatic categorization (AI, software, security, performance, data, general)
-- **Pattern Extraction**: Identifies and stores research patterns and QA insights
-- **Vector Embeddings**: Semantic similarity search with pgvector support
-- **Knowledge Graph**: Neo4j relationships between entities, sessions, and insights
-
-### 📄 Document Processing (Enterprise-Grade)
-- **Multi-Format Support**: PDF, DOCX, TXT, HTML, XLSX, PPTX processing via unstructured.io
-- **Semantic Search**: pgvector-powered similarity search across document content
-- **Email Attachments**: Automatic processing of email attachments with metadata
-- **Direct Processing**: HTTP-based communication with unstructured worker for real-time processing
-- **Vector Storage**: Cost-effective pgvector integration with Supabase PostgreSQL
-- **Content Chunking**: Intelligent document segmentation with embedding generation
-
-### 🔬 Graph Neural Networks & ML
-- **Link Prediction**: GNN models for predicting relationships between entities
-- **Node Classification**: Multi-class classification for documents, entities, and topics
-- **Expertise Recommendation**: Specialized GNN for expert identification and ranking
-- **Knowledge-First Inference**: Intelligent prediction strategy combining knowledge substrate with ML
-- **Real-time Predictions**: FastAPI service with <100ms inference latency
-- **Batch Processing**: Scalable batch inference with job management and progress tracking
-
-### 🔄 Automated MLOps Pipeline
-- **Model Monitoring**: Data drift detection, performance tracking, and alerting
-- **Automated Retraining**: Intelligent triggers based on performance drops and data drift
-- **Experiment Tracking**: MLflow integration for model versioning and artifact management
-- **Production Deployment**: Automated model deployment with health checks and rollback
-- **Prometheus Metrics**: Comprehensive monitoring with custom metrics and dashboards
-
-### 🤖 Advanced AI Agents
-- **Master Orchestrator**: AI-powered semantic routing with conversation context and task complexity analysis
-- **Research Agent**: Knowledge-enhanced web search with contextual query refinement and learning capabilities
-- **Quality Assurance Agent**: Comprehensive validation with insight storage
-- **Development Agent**: Code generation with LangChain tools and sandboxed execution
-- **Document Agent**: Document processing, upload, search, and email attachments with pgvector
-- **Communication Agent**: Multi-channel messaging (Email, Slack, Discord, Teams)
-
-### 💬 Interactive Chat System
-- **Conversation Context**: Maintains last 20 messages for contextual agent responses
-- **Dynamic Query Refinement**: Automatically improves queries based on conversation history
-- **Context-Aware Routing**: Agent selection considers conversation flow and previous topics
-- **Real-time Interactivity**: Every new message dynamically incorporated into agent planning
-- **Conversational Memory**: Agents remember and reference previous discussion points
-- **Intelligent Continuity**: Seamless conversation flow with topic extraction and analysis
-- **Planning Agent**: Advanced project planning with resource allocation
-- **Execution Agent**: Workflow orchestration and command execution
-
-### 🔄 Real-time Operations
-- **WebSocket Chat**: Instant communication with progress tracking
-- **Live Progress Updates**: See knowledge retrieval, processing, and storage phases
-- **Agent Coordination**: Multi-agent collaboration with load balancing
-- **Health Monitoring**: Continuous agent status and performance tracking
-
-### 🏗️ Enterprise Architecture
-- **Multi-Database**: Supabase (PostgreSQL), Neo4j (Graph), Redis (Cache)
-- **OpenRouter Integration**: Access to multiple AI models (OpenAI, Anthropic, Google, Meta)
-- **LangChain Framework**: Advanced AI tools and agent capabilities
-- **Scalable Design**: Docker deployment with comprehensive monitoring
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- **Node.js 18+** and npm
-
-# 3. Start Basic Services
-./scripts/start-basic.sh     # Unix/Linux/macOS
-./scripts/start-basic.ps1    # Windows PowerShell
+### System Overview
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        WEB[Web Interface]
+        API[REST API]
+        WS[WebSocket]
+    end
+    
+    subgraph "Application Layer"
+        MO[Master Orchestrator]
+        RA[Research Agent]
+        AA[Analysis Agent]
+        CA[Creative Agent]
+        QA[QA Agent]
+        PA[Planning Agent]
+        EA[Execution Agent]
+        CMA[Communication Agent]
+        DA[Development Agent]
+    end
+    
+    subgraph "Knowledge Layer"
+        KS[Knowledge Substrate]
+        PG[(PostgreSQL/Supabase)]
+        NEO[(Neo4j)]
+        REDIS[(Redis Cache)]
+    end
+    
+    subgraph "ML Layer"
+        MLS[ML Service]
+        MLF[MLflow]
+        PROM[Prometheus]
+        GNN[Graph Neural Networks]
+    end
+    
+    subgraph "External Services"
+        OAI[OpenAI/OpenRouter]
+        FC[Firecrawl]
+        WEB_API[Web APIs]
+    end
+    
+    WEB --> API
+    WEB --> WS
+    API --> MO
+    WS --> MO
+    
+    MO --> RA
+    MO --> AA
+    MO --> CA
+    MO --> QA
+    MO --> PA
+    MO --> EA
+    MO --> CMA
+    MO --> DA
+    
+    RA --> KS
+    AA --> KS
+    CA --> KS
+    QA --> KS
+    
+    KS --> PG
+    KS --> NEO
+    KS --> REDIS
+    
+    MLS --> MLF
+    MLS --> PROM
+    MLS --> GNN
+    MLS --> NEO
+    MLS --> PG
+    
+    RA --> OAI
+    RA --> FC
+    RA --> WEB_API
 ```
 
-### Full Mode with ML Services (Optional)
-```bash
-# 1. Enable ML Services in .env
-# Set ENABLE_ML_SERVICE=true
+## 📊 Component Diagrams
 
-# 2. Start with ML Services
-./scripts/start-with-ml.sh   # Unix/Linux/macOS  
-./scripts/start-with-ml.ps1  # Windows PowerShell
+### Agent Architecture
+```mermaid
+graph LR
+    subgraph "Master Orchestrator"
+        TC[Task Complexity Analysis]
+        AR[Agent Routing]
+        EP[Execution Planning]
+        CC[Conversation Context]
+    end
+    
+    subgraph "Specialized Agents"
+        RA[Research Agent<br/>• Knowledge Search<br/>• Web Research<br/>• Fact Verification]
+        AA[Analysis Agent<br/>• Data Analysis<br/>• Pattern Detection<br/>• Statistical Analysis]
+        CA[Creative Agent<br/>• Content Creation<br/>• Tone Adaptation<br/>• Engagement Optimization]
+        QA[QA Agent<br/>• Code Review<br/>• Quality Assessment<br/>• Best Practices]
+    end
+    
+    subgraph "Agent Tools"
+        KT[Knowledge Tools<br/>• Synthesis<br/>• Verification<br/>• Planning]
+        AT[Analysis Tools<br/>• Statistical<br/>• Trend Detection<br/>• Correlation]
+        CT[Creative Tools<br/>• Content Structure<br/>• Quality Metrics<br/>• Engagement]
+        QT[QA Tools<br/>• Code Analysis<br/>• Performance<br/>• Security]
+    end
+    
+    TC --> AR
+    AR --> EP
+    EP --> CC
+    
+    AR --> RA
+    AR --> AA
+    AR --> CA
+    AR --> QA
+    
+    RA --> KT
+    AA --> AT
+    CA --> CT
+    QA --> QT
 ```
 
-### Manual Docker Compose
-```bash
-# Basic mode (core services only)
-docker-compose -f docker-compose.simplified.yml up -d
-
-# With ML services
-docker-compose -f docker-compose.simplified.yml --profile ml-services up -d
+### Knowledge Substrate Flow
+```mermaid
+graph TD
+    subgraph "Knowledge Input"
+        UI[User Input]
+        WS[Web Search]
+        DOC[Document Processing]
+        API[API Data]
+    end
+    
+    subgraph "Processing Pipeline"
+        NLP[NLP Processing]
+        EMB[Embedding Generation]
+        CLS[Domain Classification]
+        EXT[Entity Extraction]
+    end
+    
+    subgraph "Storage Layer"
+        PG[(PostgreSQL<br/>• Knowledge Entities<br/>• Research Insights<br/>• QA Insights<br/>• Web Cache)]
+        NEO[(Neo4j<br/>• Entity Relationships<br/>• Knowledge Graph<br/>• Semantic Links)]
+        VEC[Vector Store<br/>• Embeddings<br/>• Similarity Search]
+    end
+    
+    subgraph "Retrieval & Usage"
+        SEM[Semantic Search]
+        CTX[Context Retrieval]
+        REC[Recommendations]
+        INS[Insights Generation]
+    end
+    
+    UI --> NLP
+    WS --> NLP
+    DOC --> NLP
+    API --> NLP
+    
+    NLP --> EMB
+    NLP --> CLS
+    NLP --> EXT
+    
+    EMB --> VEC
+    CLS --> PG
+    EXT --> NEO
+    
+    VEC --> SEM
+    PG --> CTX
+    NEO --> REC
+    
+    SEM --> INS
+    CTX --> INS
+    REC --> INS
 ```
 
-3. **ML Service Setup**
-   ```bash
-   # Set up ML service (includes Python dependencies)
-   npm run ml:setup      # Windows: npm run ml:setup:win
-{{ ... }}
-   
-   # Initialize ML database schema
-   npm run ml:init-db    # Windows: npm run ml:init-db:win
-   ```
+### ML Pipeline Architecture
+```mermaid
+graph TB
+    subgraph "Data Sources"
+        KG[(Knowledge Graph)]
+        PG_ML[(PostgreSQL)]
+        FEAT[Feature Store]
+    end
+    
+    subgraph "ML Training Pipeline"
+        DL[Data Loader]
+        FE[Feature Engineering]
+        TR[Model Training]
+        EVAL[Model Evaluation]
+        REG[Model Registry]
+    end
+    
+    subgraph "Model Types"
+        LP[Link Prediction<br/>GNN Models]
+        NC[Node Classification<br/>Multi-label Models]
+        ER[Expertise Recommendation<br/>Ranking Models]
+    end
+    
+    subgraph "MLOps Infrastructure"
+        MLF[MLflow<br/>Experiment Tracking]
+        DOCK[Docker<br/>Model Serving]
+        PROM[Prometheus<br/>Monitoring]
+        ALERT[Alerting System]
+    end
+    
+    subgraph "Inference & Serving"
+        RT[Real-time Predictor]
+        BATCH[Batch Predictor]
+        CACHE[Prediction Cache]
+        API_ML[ML API Endpoints]
+    end
+    
+    KG --> DL
+    PG_ML --> DL
+    FEAT --> FE
+    
+    DL --> FE
+    FE --> TR
+    TR --> EVAL
+    EVAL --> REG
+    
+    TR --> LP
+    TR --> NC
+    TR --> ER
+    
+    REG --> MLF
+    MLF --> DOCK
+    DOCK --> PROM
+    PROM --> ALERT
+    
+    REG --> RT
+    REG --> BATCH
+    RT --> CACHE
+    BATCH --> CACHE
+    CACHE --> API_ML
+```
 
-4. **Database Setup**
-   ```bash
-   # Initialize knowledge substrate
-   npm run init-db        # Windows: npm run init-db:win
-   
-   # Set up document processing
-   npm run setup-docs     # Windows: npm run setup-docs:win
-   ```
+## 🤖 Agent System
 
-5. **Start Development**
-   ```bash
-   # Start all services (including ML service)
-   npm run dev           # Windows: npm run dev:win
-   
-   # Or start individual services
-   npm start             # Main application
-   npm run ml:service    # ML service only
-   npm run docs:start    # Document processing
-   ```
+### Master Orchestrator
+The central coordination hub that:
+- Analyzes task complexity using AI-powered semantic understanding
+- Routes messages to appropriate specialized agents
+- Creates execution plans with conversation context
+- Manages fallback mechanisms and error handling
 
-6. **Test ML Service**
-   ```bash
-   # Test ML service endpoints
-   npm run ml:test       # Windows: npm run ml:test:win
-   ```
+### Specialized Agents
 
-7. **Access Applications**
-   - Main Chat Interface: http://localhost:3000/chat.html
-   - API Documentation: http://localhost:3000/api/docs
-   - ML Service API: http://localhost:8001/docs
-   - Document Processing: http://localhost:8002/docs
-#### Development & Testing
-```bash
-# Development
-npm run dev                      # Start with hot reload
-npm run start                    # Production start
+#### Research Agent
+- **Purpose**: Knowledge discovery and research
+- **Tools**: Web search, knowledge synthesis, fact verification
+- **Integration**: Firecrawl API, knowledge substrate, web search cache
+- **Learning**: Stores research patterns and insights for reuse
 
+#### Analysis Agent
+- **Purpose**: Data analysis and pattern detection
+- **Tools**: Statistical analysis, trend detection, correlation analysis
+- **Capabilities**: GitHub repository analysis, performance metrics
+- **Output**: Structured analysis with confidence scoring
+
+#### Creative Agent
+- **Purpose**: Content creation and optimization
+- **Tools**: Content structuring, tone adaptation, engagement optimization
+- **Features**: Quality metrics, audience targeting, creative synthesis
+
+#### Quality Assurance Agent
+- **Purpose**: Code review and quality assessment
+- **Tools**: Code analysis, security scanning, performance evaluation
+- **Standards**: Best practices enforcement, improvement recommendations
+
+### Agent Communication Flow
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant MO as Master Orchestrator
+    participant KS as Knowledge Substrate
+    participant RA as Research Agent
+    participant AI as AI Service (OpenRouter)
+    
+    U->>MO: User Message
+    MO->>KS: Get Conversation Context
+    KS-->>MO: Context History
+    MO->>AI: Analyze Task Complexity
+    AI-->>MO: Complexity Assessment
+    MO->>AI: Route to Agent
+    AI-->>MO: Agent Selection
+    MO->>RA: Execute Research Task
+    RA->>KS: Retrieve Knowledge Context
+    KS-->>RA: Relevant Knowledge
+    RA->>AI: Enhanced Research Query
+    AI-->>RA: Research Results
+    RA->>KS: Store New Insights
+    RA-->>MO: Research Response
+    MO-->>U: Final Response
+```
+
+## 🧠 Knowledge Substrate
+
+### Database Architecture
+
+#### PostgreSQL (Supabase) Tables
+- **knowledge_entities**: Core knowledge storage with vector embeddings
+- **research_insights**: Research patterns and findings with domain classification
+- **qa_insights**: Quality assurance metrics and improvement patterns
+- **web_search_cache**: Cached search results with 24-hour expiration
+- **knowledge_provenance**: Source tracking and evidence chains
+- **knowledge_conflicts**: Conflict detection and resolution
+
+#### Neo4j Graph Schema
+- **Entities**: People, organizations, technologies, concepts
+- **Documents**: Processed content with metadata
+- **Relationships**: Semantic connections and knowledge links
+- **ML Nodes**: Predictions, training runs, model registry
+
+### Domain Classification System
+- **ai**: Artificial intelligence, machine learning, neural networks
+- **software**: Programming, development, code repositories
+- **security**: Cybersecurity, vulnerabilities, authentication
+- **performance**: Optimization, scalability, benchmarking
+- **data**: Data analysis, databases, data processing
+- **api**: API development, endpoints, web services
+- **general**: Default classification for unmatched content
+
+### Knowledge Operations
+
+#### Storage Pattern
+```javascript
+// Enhanced knowledge storage with provenance
+await knowledgeSubstrate.storeKnowledge({
+  content: "AI model performance improves with larger datasets",
+  entityType: "research_finding",
+  domain: "ai",
+  confidence: 0.92,
+  source: "research_session_123",
+  provenance: {
+    agent: "ResearchAgent",
+    evidence: "Multiple academic papers and benchmarks",
+    sessionId: "session_456"
+  },
+  patterns: ["performance_scaling", "dataset_size_correlation"]
+});
+```
+
+#### Retrieval Pattern
+```javascript
+// Multi-tier knowledge retrieval
+const knowledge = await knowledgeSubstrate.retrieveContext({
+  query: "machine learning performance optimization",
+  domain: "ai",
+  limit: 10,
+  includeSemanticSimilarity: true,
+  confidenceThreshold: 0.7
+});
+```
+
+## 🔬 ML & MLOps Pipeline
+
+### Model Architecture
+
+#### Graph Neural Networks
+- **Link Prediction**: Predicts relationships between entities
+- **Node Classification**: Classifies documents and entities
+- **Expertise Recommendation**: Matches experts to domains
+
+#### Model Types
+```python
+# Link Prediction GNN
+class LinkPredictionGNN(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim, num_layers):
+        super().__init__()
+        self.gnn_layers = torch.nn.ModuleList([
+            GCNConv(input_dim if i == 0 else hidden_dim, hidden_dim)
+            for i in range(num_layers)
+        ])
+        self.classifier = torch.nn.Linear(hidden_dim * 2, 1)
+    
+    def forward(self, x, edge_index, edge_pairs):
+        # GNN forward pass with edge prediction
+        pass
+```
+
+### MLOps Workflow
+
+#### Training Pipeline
+1. **Data Extraction**: Neo4j → PyTorch Geometric conversion
+2. **Feature Engineering**: Node/edge feature creation
+3. **Model Training**: Multi-GPU training with early stopping
+4. **Evaluation**: Comprehensive metrics (AUC, precision, recall)
+5. **Model Registry**: MLflow tracking and versioning
+
+#### Deployment Pipeline
+1. **Model Validation**: Performance threshold checks
+2. **Containerization**: Docker image creation
+3. **Serving**: FastAPI endpoints with health checks
+4. **Monitoring**: Prometheus metrics and alerting
+
+#### Retraining Triggers
+- **Performance Degradation**: Accuracy drops below threshold
+- **Data Drift**: Distribution changes detected
+- **Scheduled**: Regular retraining intervals
+- **Manual**: Operator-initiated retraining
+
+### ML Service Components
+
+#### Real-time Predictor
+```python
+class RealTimePredictor:
+    def __init__(self):
+        self.knowledge_first = True  # Check knowledge before ML
+        self.model_cache = {}
+        self.prediction_cache = {}
+    
+    async def predict(self, prediction_type, input_data):
+        # Knowledge-first approach
+        knowledge_result = await self.check_knowledge_substrate(input_data)
+        if knowledge_result:
+            return knowledge_result
+        
+        # ML prediction fallback
+        return await self.ml_predict(prediction_type, input_data)
+```
+
+#### Batch Processor
+- **Job Management**: Async processing with progress tracking
+- **Scalability**: Configurable batch sizes and parallel processing
+- **Error Handling**: Retry logic and failure recovery
+- **Output Management**: Results storage and notification
+
+### Model Monitoring
+
+#### Performance Metrics
+- **Accuracy Tracking**: Real-time performance monitoring
+- **Latency Monitoring**: Inference time tracking
+- **Throughput Metrics**: Requests per second
+- **Resource Usage**: CPU, memory, GPU utilization
+
+#### Data Drift Detection
+- **Statistical Tests**: KS test, chi-square test
+- **Distribution Comparison**: Input feature drift
+- **Prediction Drift**: Output distribution changes
+- **Alerting**: Automated notifications on drift detection
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+#### Core Application
+```env
+# Server Configuration
+PORT=3000
+NODE_ENV=production
+LOG_LEVEL=info
+
+# AI Services
+OPENROUTER_API_KEY=your-openrouter-key
+OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+OPENROUTER_TEMPERATURE=0.7
+OPENAI_API_KEY=your-openai-key  # Fallback
+
+# Web Services
+FIRECRAWL_API_KEY=your-firecrawl-key
+```
+
+#### Database Configuration
+```env
+# Supabase (Primary Database)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_ANON_KEY=your-anon-key
+
+# Neo4j (Knowledge Graph)
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your-neo4j-password
+
+# Redis (Caching)
+REDIS_URL=redis://localhost:6379
+REDIS_PASSWORD=your-redis-password
+```
+
+#### ML Service Configuration
+```env
 # ML Service
-npm run ml:service              # Start ML service
-npm run ml:test                 # Test ML service (Windows: ml:test:win)
-npm run ml:docker               # Run ML service in Docker
+ML_SERVICE_ENABLED=true
+ML_SERVICE_URL=http://localhost:8001
+ML_MODEL_PATH=/app/models
+ML_BATCH_SIZE=32
+ML_INFERENCE_TIMEOUT=30
 
-# Testing
-npm run test                     # Run all tests
-npm run docs:test:win           # Test document processing (Windows)
-npm run docs:test:unix          # Test document processing (Linux/Mac)
+# MLflow
+MLFLOW_TRACKING_URI=http://localhost:5000
+MLFLOW_EXPERIMENT_NAME=athenai-models
+MLFLOW_S3_ENDPOINT_URL=your-s3-endpoint
 
-# Code quality
-npm run lint                     # Check code style
-npm run lint:fix                # Fix linting issues
+# Monitoring
+PROMETHEUS_ENABLED=true
+PROMETHEUS_PORT=9090
+ALERT_WEBHOOK_URL=your-alert-webhook
 ```
 
-### 🗄️ Database Considerations
-
-#### Supabase Setup (Required)
-1. **Create Supabase Project**: Visit [supabase.com](https://supabase.com) and create a new project
-2. **Enable pgvector**: In SQL Editor, run: `CREATE EXTENSION IF NOT EXISTS vector;`
-3. **Run Core Schema**: Execute `db/postgres/schema.sql` in Supabase SQL Editor
-4. **Run ML Schema**: Execute `db/supabase/ml_schema.sql` in Supabase SQL Editor
-5. **Run Functions**: Execute `db/supabase/functions.sql` in Supabase SQL Editor
-6. **Get Credentials**: Copy your project URL and service role key from Settings > API
-
-#### Neo4j Setup (Optional - for advanced knowledge graphs)
-1. **Create Neo4j Aura Instance**: Visit [neo4j.com/aura](https://neo4j.com/aura)
-2. **Run Core Schema**: Execute `db/neo4j/advanced_schema.cypher` in Neo4j Browser
-3. **Run ML Schema**: Execute `db/neo4j/ml_schema.cypher` in Neo4j Browser
-4. **Run Advanced Schema**: Execute `db/neo4j/advanced_schema.cypher` in Neo4j Browser
-5. **Get Connection Details**: Copy URI, username, and password
-
-#### Database Schema Overview
-```sql
--- Core Knowledge Tables (Supabase)
-knowledge_entities     -- Domain-classified knowledge storage
-research_insights      -- Learning from research queries
-qa_insights           -- Quality assurance learning
-web_search_cache      -- 24-hour intelligent caching
-documents             -- Document storage with embeddings
-document_chunks       -- Document chunks with vector search
-
--- ML Service Tables (Supabase)
-ml_model_predictions   -- ML prediction results and confidence scores
-ml_training_runs      -- Training job tracking and metrics
-ml_batch_jobs         -- Batch processing job management
-ml_monitoring_alerts  -- System alerts and notifications
-ml_data_drift_metrics -- Data drift detection and monitoring
-ml_model_registry     -- Model versioning and metadata
-ml_feature_store      -- Feature engineering and storage
-ml_retraining_jobs    -- Automated retraining pipeline
+#### Document Processing
+```env
+# Unstructured Service
+UNSTRUCTURED_API_KEY=your-unstructured-key
+UNSTRUCTURED_WORKER_URL=http://unstructured-worker:8080
+DOCUMENT_PROCESSING_ENABLED=true
 ```
 
-### Installation Options
+### Model Configuration Files
 
-#### Option 1: Simplified Docker Setup (Recommended)
+#### Training Configuration (`config/training_config.yaml`)
+```yaml
+model:
+  type: "link_prediction"
+  architecture: "gcn"
+  hidden_dim: 128
+  num_layers: 3
+  dropout: 0.2
 
+training:
+  epochs: 100
+  batch_size: 1024
+  learning_rate: 0.001
+  early_stopping_patience: 10
+  validation_split: 0.2
+
+optimization:
+  optimizer: "adam"
+  weight_decay: 0.0001
+  lr_scheduler: "cosine"
+```
+
+#### Deployment Configuration (`config/deployment_config.yaml`)
+```yaml
+serving:
+  model_name: "link_predictor_v1"
+  version: "1.0.0"
+  batch_size: 32
+  max_batch_delay: 100
+  timeout: 30
+
+scaling:
+  min_replicas: 1
+  max_replicas: 5
+  cpu_threshold: 70
+  memory_threshold: 80
+
+monitoring:
+  metrics_enabled: true
+  logging_level: "INFO"
+  health_check_interval: 30
+```
+
+## 🚀 Setup & Deployment
+
+### Quick Start
 ```bash
-# Clone the repository
-git clone <repository-url>
+# 1. Clone and install dependencies
+git clone <repository>
 cd AthenAi
-
-# Configure environment
-cp .env.simplified.example .env
-# Edit .env with your Supabase and API keys
-
-# Start with document processing (only 2 services)
-npm run docker:simplified
-
-# View logs
-npm run docker:simplified:logs
-```
-
-#### Option 2: Automated Local Setup
-
-```bash
-# Cross-platform setup
-npm run setup:win    # Windows
-npm run setup:unix   # Linux/Mac
-
-# Initialize databases
-npm run init-db:win    # Windows  
-npm run init-db:unix   # Linux/Mac
-
-# Start development server
-npm run start-dev:win    # Windows
-npm run start-dev:unix   # Linux/Mac
-```
-
-#### Option 3: Manual Setup
-
-```bash
-# Install dependencies
 npm install
 
-# Configure environment
+# 2. Configure environment
 cp .env.simplified.example .env
 # Edit .env with your API keys and database URLs
 
-# Initialize knowledge substrate
-# Run db/postgres/schema.sql in Supabase
-# Run db/neo4j/advanced_schema.cypher in Neo4j Browser (optional)
+# 3. Initialize databases
+# PostgreSQL: Run db/postgres/schema.sql in Supabase
+# Neo4j: Run db/neo4j/advanced_schema.cypher in Neo4j Browser
 
-# Start the server
+# 4. Start the application
 npm run dev
 ```
 
-### Access the Application
+### Docker Deployment
+```bash
+# Full stack with ML service
+docker-compose -f docker-compose.cloud.yml up -d
+
+# Simplified stack without ML
+docker-compose -f docker-compose.simplified.yml up -d
+```
+
+### Production Deployment
+
+#### Database Setup
+```bash
+# PostgreSQL Schema
+psql -h your-supabase-host -U postgres -d postgres -f db/postgres/schema.sql
+
+# Neo4j Schema
+cypher-shell -u neo4j -p password -f db/neo4j/advanced_schema.cypher
+
+# ML Schema (if using ML service)
+psql -h your-supabase-host -U postgres -d postgres -f db/supabase/ml_schema.sql
+```
+
+#### Service Configuration
+```bash
+# Initialize knowledge substrate
+./setup-knowledge-substrate.sh
+
+# Setup ML service (optional)
+./setup-ml-service.sh
+
+# Start production services
+./start-dev.sh --production
+```
+
+### Health Checks
+```bash
+# Application health
+curl http://localhost:3000/health
+
+# Database connectivity
+curl http://localhost:3000/health/database
+
+# ML service health (if enabled)
+curl http://localhost:8001/health
+```
+
+## 🌐 Access Points
 
 - **🏠 Main Portal**: http://localhost:3000/
 - **💬 AI Chat Interface**: http://localhost:3000/chat.html  
@@ -2251,3 +2602,18 @@ We welcome contributions to AthenAI! Please follow these guidelines:
 - Integration tests for API endpoints
 - Agent-specific tests for new agent capabilities
 - End-to-end tests for critical workflows
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Support
+
+- **Documentation**: Comprehensive guides in `/documentation` folder
+- **Issues**: Report bugs and feature requests via GitHub Issues
+- **Community**: Join our discussions for help and collaboration
+- **Enterprise**: Contact us for enterprise support and custom deployments
+
+---
+
+**AthenAI** - Intelligent Multi-Agent AI Platform with Knowledge Substrate Integration
