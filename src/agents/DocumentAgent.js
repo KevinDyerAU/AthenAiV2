@@ -7,6 +7,7 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { AgentExecutor, createOpenAIFunctionsAgent } = require('langchain/agents');
 const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
+const { StringOutputParser } = require('@langchain/core/output_parsers');
 const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
@@ -54,6 +55,38 @@ class DocumentAgent {
 
     createTools() {
         return [
+            // Think tool for step-by-step document reasoning
+            new DynamicTool({
+                name: 'think',
+                description: 'Think through complex document processing challenges step by step, evaluate different approaches, and reason about the optimal document management strategy',
+                func: async (input) => {
+                    try {
+                        const thinkPrompt = PromptTemplate.fromTemplate(`
+You are working through a complex document processing challenge. Break down your reasoning step by step.
+
+Document Challenge: {problem}
+
+Think through this systematically:
+1. What is the core document processing objective or user need?
+2. What type of document or content am I working with?
+3. What processing approaches or tools would be most effective?
+4. What are the key information extraction or search requirements?
+5. How should I structure the response to be most helpful?
+6. What potential issues or edge cases should I consider?
+
+Provide your step-by-step document processing reasoning:
+`);
+
+                        const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+                        const thinking = await chain.invoke({ problem: input });
+                        
+                        return `DOCUMENT PROCESSING THINKING PROCESS:\n${thinking}`;
+                    } catch (error) {
+                        return `Thinking error: ${error.message}`;
+                    }
+                }
+            }),
+
             new DynamicTool({
                 name: 'upload_document',
                 description: 'Upload and process a document file (PDF, DOCX, TXT, etc.). Returns document ID for tracking.',

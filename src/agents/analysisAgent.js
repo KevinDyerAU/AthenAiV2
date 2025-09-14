@@ -460,6 +460,38 @@ Use the following format for your analysis:
   // Create specialized analysis tools
   createAnalysisTools(sessionId) {
     return [
+      // Think tool for step-by-step analysis reasoning
+      new DynamicTool({
+        name: 'think',
+        description: 'Think through complex analysis challenges step by step, evaluate different analytical approaches, and reason about the optimal analysis strategy',
+        func: async (input) => {
+          try {
+            const thinkPrompt = PromptTemplate.fromTemplate(`
+You are working through a complex analysis challenge. Break down your analytical reasoning step by step.
+
+Analysis Challenge: {problem}
+
+Think through this systematically:
+1. What is the core analytical question or data insight I need to uncover?
+2. What are the key data dimensions and variables I should examine?
+3. What different analytical approaches or methodologies could I use?
+4. What patterns, trends, or correlations should I look for?
+5. What statistical methods would be most appropriate?
+6. How should I validate and interpret my findings?
+
+Provide your step-by-step analysis reasoning:
+`);
+
+            const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+            const thinking = await chain.invoke({ problem: input });
+            
+            return `ANALYSIS THINKING PROCESS:\n${thinking}`;
+          } catch (error) {
+            return `Thinking error: ${error.message}`;
+          }
+        }
+      }),
+
       new DynamicTool({
         name: 'statistical_analysis',
         description: 'Perform statistical analysis on numerical data including mean, median, mode, standard deviation, and correlation analysis',
