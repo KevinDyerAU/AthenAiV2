@@ -511,9 +511,10 @@ NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your-neo4j-password
 
-# Redis (Caching)
+# Redis (Caching) - Optional but recommended for performance
 REDIS_URL=redis://localhost:6379
 REDIS_PASSWORD=your-redis-password
+REDIS_USERNAME=your-redis-username  # Optional (Redis 6+)
 ```
 
 #### ML Service Configuration
@@ -603,7 +604,7 @@ cp .env.simplified.example .env
 # Edit .env with your API keys and database URLs
 
 # 3. Initialize databases
-# PostgreSQL: Run db/postgres/schema.sql in Supabase
+# Supabase: Run db/supabase/functions.sql in Supabase SQL Editor
 # Neo4j: Run db/neo4j/advanced_schema.cypher in Neo4j Browser
 
 # 4. Start the application
@@ -623,8 +624,9 @@ docker-compose -f docker-compose.simplified.yml up -d
 
 #### Database Setup
 ```bash
-# PostgreSQL Schema
-psql -h your-supabase-host -U postgres -d postgres -f db/postgres/schema.sql
+# Supabase Schema
+# Run db/supabase/functions.sql in Supabase SQL Editor
+# Run db/supabase/ml_schema.sql in Supabase SQL Editor (if using ML service)
 
 # Neo4j Schema
 cypher-shell -u neo4j -p password -f db/neo4j/advanced_schema.cypher
@@ -705,18 +707,18 @@ AthenAI uses a sophisticated, knowledge-driven architecture designed for enterpr
                                 ▼                        ▼         │
 ┌─────────────────────────────────────────────────────────────────┐│
 │                    KNOWLEDGE SUBSTRATE                          ││
-├─────────────────┬─────────────────┬─────────────────────────────┤│
-│   Supabase      │     Neo4j       │    OpenRouter               ││
-│   PostgreSQL    │ Knowledge Graph │   Multi-Model AI            ││
-│   + pgvector    │   (Optional)    │                             ││
-│                 │                 │                             ││
-│ • Entities      │ • Relationships │ • OpenAI                   ││
-│ • Insights      │ • Sessions      │ • Anthropic                ││
-│ • QA Data       │ • Patterns      │ • Google                   ││
-│ • Documents     │ • Agent Links   │ • Meta                     ││
-│ • Vector Search │                 │ • Custom Models            ││
-│ • Web Cache     │                 │                             ││
-└─────────────────┴─────────────────┴─────────────────────────────┘│
+├─────────────────┬─────────────────┬─────────────────┬───────────┤│
+│   Supabase      │     Neo4j       │     Redis       │OpenRouter ││
+│   PostgreSQL    │ Knowledge Graph │   Caching       │Multi-Model││
+│   + pgvector    │   (Optional)    │  (Optional)     │    AI     ││
+│                 │                 │                 │           ││
+│ • Entities      │ • Relationships │ • Agent Cache   │ • OpenAI  ││
+│ • Insights      │ • Sessions      │ • Context TTL   │ • Anthropic││
+│ • QA Data       │ • Patterns      │ • Templates     │ • Google  ││
+│ • Documents     │ • Agent Links   │ • Performance   │ • Meta    ││
+│ • Vector Search │                 │                 │ • Custom  ││
+│ • Web Cache     │                 │                 │           ││
+└─────────────────┴─────────────────┴─────────────────┴───────────┘│
                                 │                                  │
                                 ▼                                  │
                     ┌─────────────────────────┐                   │
@@ -801,7 +803,37 @@ web_search_cache (
 (Domain)-[:ENCOMPASSES]->(Entity)
 ```
 
-#### 3. Domain Classification System
+#### 3. Redis - Performance Caching (Optional)
+```javascript
+// Agent context caching with TTL
+await databaseService.cacheSet(
+  `qa:${orchestrationId}`,
+  qaResult,
+  3600 // 1 hour TTL
+);
+
+// Template caching for communication
+await databaseService.cacheSet(
+  `template:${templateName}`, 
+  template, 
+  86400 * 30 // 30 days TTL
+);
+
+// Graceful degradation - continues without Redis if unavailable
+const cachedResult = await databaseService.cacheGet(cacheKey);
+if (cachedResult) {
+  return cachedResult; // Fast cache hit
+}
+// Fallback to database query
+```
+
+**Cache Types:**
+- **Agent Context**: QA results, planning context, execution state (1 hour TTL)
+- **Communication Templates**: Email/message templates (30 days TTL)
+- **Performance Optimization**: Reduces database load and improves response times
+- **Graceful Degradation**: System continues without Redis if unavailable
+
+#### 4. Domain Classification System
 - **AI**: Machine learning, neural networks, AI research
 - **Software**: Development, frameworks, programming languages  
 - **Security**: Cybersecurity, vulnerabilities, best practices
@@ -1346,9 +1378,9 @@ UNSTRUCTURED_WORKER_URL=http://unstructured-worker:8080
 
 #### PostgreSQL (Supabase)
 ```sql
--- Run db/postgres/schema.sql in Supabase SQL Editor
--- Creates: knowledge_entities, research_insights, qa_insights, 
---          web_search_cache, provenance, conflicts tables
+-- Run db/supabase/functions.sql in Supabase SQL Editor
+-- Creates: Advanced search functions, processing statistics
+-- Run db/supabase/ml_schema.sql for ML service tables
 -- Includes: Vector embeddings, indexes, utility functions
 ```
 
@@ -1626,8 +1658,8 @@ class NewAgent {
 To extend the knowledge substrate:
 
 ```sql
--- Add new PostgreSQL tables
--- db/postgres/schema.sql
+-- Add new Supabase tables
+-- db/supabase/functions.sql
 
 -- Add new indexes for performance
 CREATE INDEX idx_new_feature ON new_table(column);
@@ -1639,8 +1671,6 @@ CREATE INDEX idx_new_feature ON new_table(column);
 
 -- Create new relationship types
 (Agent)-[:NEW_RELATIONSHIP]->(Entity)
-```
-
 ### Code Quality Standards
 
 - **ESLint**: Follow existing linting rules (`npm run lint`)
@@ -1666,9 +1696,11 @@ CREATE INDEX idx_new_feature ON new_table(column);
 
 - **Cost Efficiency**: Smart caching reduces API costs by up to 70%
 - **Performance**: Knowledge-enhanced responses are 3x faster for similar queries
+- **Redis Caching**: Agent context caching improves response times by 60%
 - **Intelligence**: AI routing achieves 95%+ accuracy in agent selection
 - **Scalability**: Microservices architecture supports enterprise deployment
 - **Flexibility**: Multi-model AI support via OpenRouter integration
+- **Graceful Degradation**: System continues operating even if Redis is unavailable
 
 ---
 
@@ -1798,29 +1830,36 @@ AthenAI uses a simplified, cost-optimized architecture:
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Web Client    │    │  Express.js API │    │ Master          │
 │                 │◄──►│                 │◄──►│ Orchestrator    │
-│ • Chat UI       │    │ • REST Routes   │    │                 │
-│ • Portal        │    │ • WebSocket     │    └─────────────────┘
-└─────────────────┘    └─────────────────┘              │
+│ • Chat UI       │    │ • REST Routes   │    │ • AI Routing    │
+│ • Portal        │    │ • WebSocket     │    │ • Task Analysis │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                │                        │
                                 │                        ▼
                                 │              ┌─────────────────┐
-                                │              │ Agent Handlers  │
-                                │              │ • Registration  │
-                                │              │ • Lifecycle     │
-                                │              │ • Coordination  │
+                                │              │ Knowledge-      │
+                                │              │ Enhanced Agents │
+                                │              │ • Research      │
+                                │              │ • QA            │
+                                │              │ • Development   │
+                                │              │ • Communication │
+                                │              │ • Planning      │
+                                │              │ • Execution     │
                                 │              └─────────────────┘
                                 │                        │
                                 ▼                        ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Supabase      │    │     Neo4j       │    │  Specialized    │
-│   (PostgreSQL)  │    │ (Knowledge Graph│    │    Agents       │
-│                 │    │                 │    │ • Development   │
-└─────────────────┘    └─────────────────┘    │ • Communication │
-                                │              │ • Planning      │
-                       ┌─────────────────┐    │ • Execution     │
-                       │     Redis       │    │ • Quality Assur │
-                       │   (Caching)     │    └─────────────────┘
-                       │                 │
-                       └─────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    KNOWLEDGE SUBSTRATE                          │
+├─────────────────┬─────────────────┬─────────────────┬───────────┤
+│   Supabase      │     Neo4j       │     Redis       │OpenRouter │
+│   PostgreSQL    │ Knowledge Graph │   Caching       │Multi-Model│
+│   + pgvector    │   (Optional)    │  (Optional)     │    AI     │
+│                 │                 │                 │           │
+│ • Entities      │ • Relationships │ • Agent Cache   │ • OpenAI  │
+│ • Insights      │ • Sessions      │ • Context TTL   │ • Anthropic│
+│ • QA Data       │ • Patterns      │ • Templates     │ • Google  │
+│ • Documents     │ • Agent Links   │ • Performance   │ • Meta    │
+│ • Vector Search │                 │                 │ • Custom  │
+└─────────────────┴─────────────────┴─────────────────┴───────────┘
 ```
 
 ## API Reference

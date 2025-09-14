@@ -17,8 +17,8 @@ These scripts:
 - Read `.env` for connection details
 - Connect to running containers
 - Apply idempotent schema files:
-  - Postgres: `db/postgres/schema.sql`
-  - Neo4j: `db/neo4j/schema.cypher`
+  - Supabase: `db/supabase/functions.sql`
+  - Neo4j: `db/neo4j/advanced_schema.cypher`
 
 ## Required Environment
 

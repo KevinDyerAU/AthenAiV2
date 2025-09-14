@@ -65,7 +65,7 @@ check_knowledge_substrate_files() {
     echo -e "${BLUE}📁 Checking knowledge substrate files...${NC}"
     
     declare -A files=(
-        ["db/postgres/schema.sql"]="Supabase PostgreSQL schema"
+        ["db/supabase/functions.sql"]="Supabase functions and schema"
         ["db/neo4j/advanced_schema.cypher"]="Neo4j graph database schema"
         ["KNOWLEDGE_SUBSTRATE_README.md"]="Documentation"
         ["src/services/database.js"]="Database service implementation"
@@ -160,7 +160,7 @@ show_setup_instructions() {
     echo -e "${YELLOW}1. Supabase PostgreSQL Setup:${NC}"
     echo -e "   • Open your Supabase dashboard"
     echo -e "   • Navigate to SQL Editor"
-    echo -e "   • Copy and paste the contents of: db/postgres/schema.sql"
+    echo -e "   • Copy and paste the contents of: db/supabase/functions.sql"
     echo -e "   • Execute the SQL script"
     echo ""
     

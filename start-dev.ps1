@@ -193,8 +193,10 @@ function Initialize-PostgresSchema {
     Write-Info "🐘 Initializing PostgreSQL knowledge substrate..."
     
     $schemaFiles = @(
-        "db/postgres/schema.sql",
-        "db\postgres\schema.sql"
+        "db/supabase/functions.sql",
+        "db\supabase\functions.sql",
+        "db/supabase/ml_schema.sql",
+        "db\supabase\ml_schema.sql"
     )
     
     $foundSchema = $false
@@ -212,7 +214,7 @@ function Initialize-PostgresSchema {
     }
     
     if (-not $foundSchema) {
-        Write-Error "❌ No PostgreSQL schema files found. Expected: db/postgres/schema.sql or db\postgres\schema.sql"
+        Write-Error "❌ No Supabase schema files found. Expected: db/supabase/functions.sql or db/supabase/ml_schema.sql"
         return $false
     }
     
@@ -409,7 +411,7 @@ function Main {
         Write-Info "📋 Next steps:"
         Write-Info "  1. Update your .env file with actual database credentials"
         Write-Info "  2. Run the knowledge substrate schemas in your database consoles:"
-        Write-Info "     - Supabase: db/postgres/schema.sql"
+        Write-Info "     - Supabase: db/supabase/functions.sql"
         Write-Info "     - Neo4j: db/neo4j/advanced_schema.cypher"
         Write-Info "  3. Start the application with: .\start-dev.ps1 -Start"
         Write-Info "  4. Visit http://localhost:3000 to test the application"

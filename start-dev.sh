@@ -139,7 +139,7 @@ check_neo4j() {
 init_postgres() {
     info "🐘 Initializing PostgreSQL knowledge substrate..."
     
-    local schema_files=("db/postgres/schema.sql" "db/postgres/schema.sql")
+    local schema_files=("db/supabase/functions.sql" "db/supabase/ml_schema.sql")
     local found_schema=false
     
     for file in "${schema_files[@]}"; do
@@ -156,7 +156,7 @@ init_postgres() {
     done
     
     if [[ "$found_schema" == false ]]; then
-        err "❌ No PostgreSQL schema files found. Expected: db/postgres/schema.sql or db/postgres/schema.sql"
+        err "❌ No Supabase schema files found. Expected: db/supabase/functions.sql or db/supabase/ml_schema.sql"
         return 1
     fi
     
@@ -331,7 +331,7 @@ main() {
         info "📋 Next steps:"
         info "  1. Update your .env file with actual database credentials"
         info "  2. Run the knowledge substrate schemas in your database consoles:"
-        info "     - Supabase: db/postgres/schema.sql"
+        info "     - Supabase: db/supabase/functions.sql"
         info "     - Neo4j: db/neo4j/advanced_schema.cypher"
         info "  3. Start the application with: ./start-dev.sh --start"
         info "  4. Visit http://localhost:3000 to test the application"
