@@ -139,7 +139,7 @@ check_neo4j() {
 init_postgres() {
     info "🐘 Initializing PostgreSQL knowledge substrate..."
     
-    local schema_files=("init-knowledge-substrate.sql" "db/postgres/schema.sql")
+    local schema_files=("db/postgres/schema.sql" "db/postgres/schema.sql")
     local found_schema=false
     
     for file in "${schema_files[@]}"; do
@@ -156,7 +156,7 @@ init_postgres() {
     done
     
     if [[ "$found_schema" == false ]]; then
-        err "❌ No PostgreSQL schema files found. Expected: init-knowledge-substrate.sql or db/postgres/schema.sql"
+        err "❌ No PostgreSQL schema files found. Expected: db/postgres/schema.sql or db/postgres/schema.sql"
         return 1
     fi
     
@@ -167,7 +167,7 @@ init_postgres() {
 init_neo4j() {
     info "🕸️  Initializing Neo4j knowledge substrate..."
     
-    local schema_files=("init-neo4j-knowledge.cypher" "db/neo4j/schema.cypher")
+    local schema_files=("db/neo4j/advanced_schema.cypher" "db/neo4j/schema.cypher")
     local found_schema=false
     
     for file in "${schema_files[@]}"; do
@@ -184,7 +184,7 @@ init_neo4j() {
     done
     
     if [[ "$found_schema" == false ]]; then
-        err "❌ No Neo4j schema files found. Expected: init-neo4j-knowledge.cypher or db/neo4j/schema.cypher"
+        err "❌ No Neo4j schema files found. Expected: db/neo4j/advanced_schema.cypher or db/neo4j/schema.cypher"
         return 1
     fi
     
@@ -331,8 +331,8 @@ main() {
         info "📋 Next steps:"
         info "  1. Update your .env file with actual database credentials"
         info "  2. Run the knowledge substrate schemas in your database consoles:"
-        info "     - Supabase: init-knowledge-substrate.sql"
-        info "     - Neo4j: init-neo4j-knowledge.cypher"
+        info "     - Supabase: db/postgres/schema.sql"
+        info "     - Neo4j: db/neo4j/advanced_schema.cypher"
         info "  3. Start the application with: ./start-dev.sh --start"
         info "  4. Visit http://localhost:3000 to test the application"
         info "  5. Check http://localhost:3000/chat.html for AI chat interface"

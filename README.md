@@ -219,14 +219,14 @@ npm run lint:fix                # Fix linting issues
 #### Supabase Setup (Required)
 1. **Create Supabase Project**: Visit [supabase.com](https://supabase.com) and create a new project
 2. **Enable pgvector**: In SQL Editor, run: `CREATE EXTENSION IF NOT EXISTS vector;`
-3. **Run Core Schema**: Execute `init-knowledge-substrate.sql` in Supabase SQL Editor
+3. **Run Core Schema**: Execute `db/postgres/schema.sql` in Supabase SQL Editor
 4. **Run ML Schema**: Execute `db/supabase/ml_schema.sql` in Supabase SQL Editor
 5. **Run Functions**: Execute `db/supabase/functions.sql` in Supabase SQL Editor
 6. **Get Credentials**: Copy your project URL and service role key from Settings > API
 
 #### Neo4j Setup (Optional - for advanced knowledge graphs)
 1. **Create Neo4j Aura Instance**: Visit [neo4j.com/aura](https://neo4j.com/aura)
-2. **Run Core Schema**: Execute `init-neo4j-knowledge.cypher` in Neo4j Browser
+2. **Run Core Schema**: Execute `db/neo4j/advanced_schema.cypher` in Neo4j Browser
 3. **Run ML Schema**: Execute `db/neo4j/ml_schema.cypher` in Neo4j Browser
 4. **Run Advanced Schema**: Execute `db/neo4j/advanced_schema.cypher` in Neo4j Browser
 5. **Get Connection Details**: Copy URI, username, and password
@@ -299,8 +299,8 @@ cp .env.simplified.example .env
 # Edit .env with your API keys and database URLs
 
 # Initialize knowledge substrate
-# Run init-knowledge-substrate.sql in Supabase
-# Run init-neo4j-knowledge.cypher in Neo4j Browser (optional)
+# Run db/postgres/schema.sql in Supabase
+# Run db/neo4j/advanced_schema.cypher in Neo4j Browser (optional)
 
 # Start the server
 npm run dev
@@ -995,7 +995,7 @@ UNSTRUCTURED_WORKER_URL=http://unstructured-worker:8080
 
 #### PostgreSQL (Supabase)
 ```sql
--- Run init-knowledge-substrate.sql in Supabase SQL Editor
+-- Run db/postgres/schema.sql in Supabase SQL Editor
 -- Creates: knowledge_entities, research_insights, qa_insights, 
 --          web_search_cache, provenance, conflicts tables
 -- Includes: Vector embeddings, indexes, utility functions
@@ -1003,7 +1003,7 @@ UNSTRUCTURED_WORKER_URL=http://unstructured-worker:8080
 
 #### Neo4j (Knowledge Graph)
 ```cypher
--- Run init-neo4j-knowledge.cypher in Neo4j Browser
+-- Run db/neo4j/advanced_schema.cypher in Neo4j Browser
 -- Creates: Constraints, indexes, sample data
 -- Includes: Knowledge relationships, session tracking, agent links
 ```
@@ -1051,8 +1051,11 @@ src/
     └── rateLimiter.js            # Rate limiting
 
 # Knowledge Substrate Files
-├── init-knowledge-substrate.sql   # PostgreSQL schema
-├── init-neo4j-knowledge.cypher   # Neo4j schema
+├── db/
+│   ├── postgres/
+│   │   └── schema.sql            # PostgreSQL schema
+│   └── neo4j/
+│       └── advanced_schema.cypher # Neo4j schema
 ├── KNOWLEDGE_SUBSTRATE_README.md  # Detailed setup guide
 
 # Document Processing Files
@@ -1273,7 +1276,7 @@ To extend the knowledge substrate:
 
 ```sql
 -- Add new PostgreSQL tables
--- init-knowledge-substrate.sql
+-- db/postgres/schema.sql
 
 -- Add new indexes for performance
 CREATE INDEX idx_new_feature ON new_table(column);
@@ -1281,7 +1284,7 @@ CREATE INDEX idx_new_feature ON new_table(column);
 
 ```cypher
 -- Add new Neo4j relationships
--- init-neo4j-knowledge.cypher
+-- db/neo4j/advanced_schema.cypher
 
 -- Create new relationship types
 (Agent)-[:NEW_RELATIONSHIP]->(Entity)

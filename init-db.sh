@@ -104,7 +104,7 @@ init_postgres() {
 init_neo4j() {
     echo -e "${BLUE}🕸️  Initializing Neo4j knowledge substrate...${NC}"
     
-    local schema_files=("init-neo4j-knowledge.cypher" "db/neo4j/schema.cypher")
+    local schema_files=("db/neo4j/advanced_schema.cypher" "db/neo4j/schema.cypher")
     local found_schema=false
     
     for file in "${schema_files[@]}"; do
@@ -122,7 +122,7 @@ init_neo4j() {
     
     if [ "$found_schema" = false ]; then
         echo -e "${RED}❌ No Neo4j schema files found. Expected:${NC}"
-        echo "   - init-neo4j-knowledge.cypher (recommended)"
+        echo "   - db/neo4j/advanced_schema.cypher (recommended)"
         echo "   - db/neo4j/schema.cypher (fallback)"
         return 1
     fi

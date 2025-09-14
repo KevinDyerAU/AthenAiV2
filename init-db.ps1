@@ -123,7 +123,7 @@ function Initialize-Neo4jSchema {
     Write-ColorOutput "🕸️  Initializing Neo4j knowledge substrate..." "Blue"
     
     $schemaFiles = @(
-        "init-neo4j-knowledge.cypher",
+        "db/neo4j/advanced_schema.cypher",
         "db\neo4j\schema.cypher"
     )
     
@@ -143,7 +143,7 @@ function Initialize-Neo4jSchema {
     
     if (-not $foundSchema) {
         Write-ColorOutput "❌ No Neo4j schema files found. Expected:" "Red"
-        Write-ColorOutput "   - init-neo4j-knowledge.cypher (recommended)" "White"
+        Write-ColorOutput "   - db/neo4j/advanced_schema.cypher (recommended)" "White"
         Write-ColorOutput "   - db\neo4j\schema.cypher (fallback)" "White"
         return $false
     }

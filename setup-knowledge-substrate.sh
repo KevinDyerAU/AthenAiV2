@@ -65,8 +65,8 @@ check_knowledge_substrate_files() {
     echo -e "${BLUE}📁 Checking knowledge substrate files...${NC}"
     
     declare -A files=(
-        ["init-knowledge-substrate.sql"]="Supabase PostgreSQL schema"
-        ["init-neo4j-knowledge.cypher"]="Neo4j graph database schema"
+        ["db/postgres/schema.sql"]="Supabase PostgreSQL schema"
+        ["db/neo4j/advanced_schema.cypher"]="Neo4j graph database schema"
         ["KNOWLEDGE_SUBSTRATE_README.md"]="Documentation"
         ["src/services/database.js"]="Database service implementation"
     )
@@ -160,14 +160,14 @@ show_setup_instructions() {
     echo -e "${YELLOW}1. Supabase PostgreSQL Setup:${NC}"
     echo -e "   • Open your Supabase dashboard"
     echo -e "   • Navigate to SQL Editor"
-    echo -e "   • Copy and paste the contents of: init-knowledge-substrate.sql"
+    echo -e "   • Copy and paste the contents of: db/postgres/schema.sql"
     echo -e "   • Execute the SQL script"
     echo ""
     
     echo -e "${YELLOW}2. Neo4j Graph Database Setup:${NC}"
     echo -e "   • Open Neo4j Browser at your instance URL"
     echo -e "   • Login with your credentials"
-    echo -e "   • Copy and paste the contents of: init-neo4j-knowledge.cypher"
+    echo -e "   • Copy and paste the contents of: db/neo4j/advanced_schema.cypher"
     echo -e "   • Execute the Cypher script"
     echo ""
     

@@ -52,8 +52,8 @@ function Test-KnowledgeSubstrateFiles {
     Write-ColorOutput "📁 Checking knowledge substrate files..." "Blue"
     
     $files = @{
-        "init-knowledge-substrate.sql" = "Supabase PostgreSQL schema"
-        "init-neo4j-knowledge.cypher" = "Neo4j graph database schema"
+        "db\postgres\schema.sql" = "Supabase PostgreSQL schema"
+        "db\neo4j\advanced_schema.cypher" = "Neo4j graph database schema"
         "KNOWLEDGE_SUBSTRATE_README.md" = "Documentation"
         "src\services\database.js" = "Database service implementation"
     }
@@ -153,14 +153,14 @@ function Show-SetupInstructions {
     Write-ColorOutput "1. Supabase PostgreSQL Setup:" "Yellow"
     Write-ColorOutput "   • Open your Supabase dashboard" "White"
     Write-ColorOutput "   • Navigate to SQL Editor" "White"
-    Write-ColorOutput "   • Copy and paste the contents of: init-knowledge-substrate.sql" "White"
+    Write-ColorOutput "   • Copy and paste the contents of: db\postgres\schema.sql" "White"
     Write-ColorOutput "   • Execute the SQL script" "White"
     Write-Host ""
     
     Write-ColorOutput "2. Neo4j Graph Database Setup:" "Yellow"
     Write-ColorOutput "   • Open Neo4j Browser at your instance URL" "White"
     Write-ColorOutput "   • Login with your credentials" "White"
-    Write-ColorOutput "   • Copy and paste the contents of: init-neo4j-knowledge.cypher" "White"
+    Write-ColorOutput "   • Copy and paste the contents of: db\neo4j\advanced_schema.cypher" "White"
     Write-ColorOutput "   • Execute the Cypher script" "White"
     Write-Host ""
     

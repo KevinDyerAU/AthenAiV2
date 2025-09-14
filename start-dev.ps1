@@ -193,7 +193,7 @@ function Initialize-PostgresSchema {
     Write-Info "🐘 Initializing PostgreSQL knowledge substrate..."
     
     $schemaFiles = @(
-        "init-knowledge-substrate.sql",
+        "db/postgres/schema.sql",
         "db\postgres\schema.sql"
     )
     
@@ -212,7 +212,7 @@ function Initialize-PostgresSchema {
     }
     
     if (-not $foundSchema) {
-        Write-Error "❌ No PostgreSQL schema files found. Expected: init-knowledge-substrate.sql or db\postgres\schema.sql"
+        Write-Error "❌ No PostgreSQL schema files found. Expected: db/postgres/schema.sql or db\postgres\schema.sql"
         return $false
     }
     
@@ -224,7 +224,7 @@ function Initialize-Neo4jSchema {
     Write-Info "🕸️  Initializing Neo4j knowledge substrate..."
     
     $schemaFiles = @(
-        "init-neo4j-knowledge.cypher",
+        "db/neo4j/advanced_schema.cypher",
         "db\neo4j\schema.cypher"
     )
     
@@ -243,7 +243,7 @@ function Initialize-Neo4jSchema {
     }
     
     if (-not $foundSchema) {
-        Write-Error "❌ No Neo4j schema files found. Expected: init-neo4j-knowledge.cypher or db\neo4j\schema.cypher"
+        Write-Error "❌ No Neo4j schema files found. Expected: db/neo4j/advanced_schema.cypher or db\neo4j\schema.cypher"
         return $false
     }
     
@@ -409,8 +409,8 @@ function Main {
         Write-Info "📋 Next steps:"
         Write-Info "  1. Update your .env file with actual database credentials"
         Write-Info "  2. Run the knowledge substrate schemas in your database consoles:"
-        Write-Info "     - Supabase: init-knowledge-substrate.sql"
-        Write-Info "     - Neo4j: init-neo4j-knowledge.cypher"
+        Write-Info "     - Supabase: db/postgres/schema.sql"
+        Write-Info "     - Neo4j: db/neo4j/advanced_schema.cypher"
         Write-Info "  3. Start the application with: .\start-dev.ps1 -Start"
         Write-Info "  4. Visit http://localhost:3000 to test the application"
         Write-Info "  5. Check http://localhost:3000/chat.html for AI chat interface"

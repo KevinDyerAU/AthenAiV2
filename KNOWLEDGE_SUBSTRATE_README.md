@@ -134,13 +134,13 @@ The system automatically classifies content into domains:
 ### 1. Initialize Supabase Schema
 ```bash
 # Run the SQL initialization script
-psql -h your-supabase-host -U postgres -d postgres -f init-knowledge-substrate.sql
+psql -h your-supabase-host -U postgres -d postgres -f db/postgres/schema.sql
 ```
 
 ### 2. Initialize Neo4j Schema
 ```bash
 # Run the Cypher initialization script
-cypher-shell -u neo4j -p password -f init-neo4j-knowledge.cypher
+cypher-shell -u neo4j -p password -f db/neo4j/advanced_schema.cypher
 ```
 
 ### 3. Environment Configuration
