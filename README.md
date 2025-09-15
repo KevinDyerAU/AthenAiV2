@@ -356,6 +356,55 @@ const prioritizedActions = prioritizeActionsFromKnowledge(similarIncidents, defa
 - **Knowledge Sync**: Every 10 minutes
 - **History Cleanup**: Every hour
 
+### Self-Healing Agent Implementation
+
+The `SelfHealingAgent` class (`src/utils/selfHealingAgent.js`) provides the core autonomous recovery functionality:
+
+#### Health Monitoring Thresholds
+```javascript
+healthThresholds: {
+  errorRate: 0.15,              // 15% error rate triggers healing
+  responseTime: 10000,          // 10 seconds response time
+  memoryUsage: 0.85,            // 85% memory usage
+  agentFailureRate: 0.2,        // 20% agent failure rate
+  dbConnectionFailures: 5,      // 5 consecutive DB failures
+  websocketDisconnections: 10   // 10 disconnections per minute
+}
+```
+
+#### AI-Powered Analysis
+The agent uses LangChain integration with OpenRouter/OpenAI for intelligent decision-making:
+- **Think Tool**: 6-step reasoning process before taking healing actions
+- **Context Analysis**: Evaluates system state, error patterns, and historical data
+- **Strategy Selection**: AI chooses optimal recovery approach based on issue type and severity
+- **Risk Assessment**: Evaluates potential impact of healing actions before execution
+
+#### Healing Strategy Registry
+```javascript
+healingStrategies: {
+  'high_error_rate': handleHighErrorRate,      // Cache clearing, agent restarts
+  'slow_response': handleSlowResponse,         // Resource scaling, optimization
+  'memory_pressure': handleMemoryPressure,    // GC, cache clearing, restarts
+  'agent_failures': handleAgentFailures,      // Agent registry reset, backups
+  'database_issues': handleDatabaseIssues,    // Connection recovery, optimization
+  'websocket_issues': handleWebSocketIssues,  // Server restart, state reset
+  'ai_api_failures': handleAIAPIFailures      // Endpoint switching, fallbacks
+}
+```
+
+#### Knowledge Substrate Integration
+- **Semantic Similarity**: Matches current issues with historical patterns
+- **Learning Cache**: Stores successful healing patterns for future reference
+- **Pattern Recognition**: Uses 0.75 similarity threshold for pattern matching
+- **Predictive Insights**: Analyzes trends to prevent issues before they occur
+
+#### Cooldown Management
+Prevents rapid repeated healing actions with severity-based cooldown periods:
+- **Critical**: 5 minutes cooldown
+- **High**: 10 minutes cooldown  
+- **Medium**: 15 minutes cooldown
+- **Low**: 30 minutes cooldown
+
 ### Healing Insights Database
 ```sql
 -- All healing events and outcomes
