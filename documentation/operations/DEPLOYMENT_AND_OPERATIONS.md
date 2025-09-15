@@ -1,52 +1,34 @@
-# Deployment and Operations Guide
+# AthenAI Deployment and Operations
 
-## Overview
-This guide covers infrastructure requirements, installation, configuration, validation, monitoring, maintenance, troubleshooting, and rollback for NeoV3.
+**Note**: This file contains deprecated Kubernetes/Terraform deployment information. AthenAI now uses Docker Compose for deployment.
 
-## Prerequisites
-- Kubernetes cluster and `kubectl` access.
-- Terraform CLI for optional cluster provisioning.
-- Container registry access for images (e.g., GHCR).
-- Secrets: kubeconfig (base64 for CI), app secrets via K8s secrets.
+## Current Deployment Methods
 
-## Infrastructure
-- Terraform modules:
-  - EKS: `infrastructure/terraform/eks/`
-  - AKS: `infrastructure/terraform/aks/`
-  - GKE: `infrastructure/terraform/gke/`
-- In-cluster resources: `infrastructure/terraform/k8s/`
+For current AthenAI deployment, see the main [README.md](../../README.md) which includes:
 
-### Provision a cluster (example: EKS)
-```
-cd infrastructure/terraform/eks
-terraform init
-terraform apply -auto-approve
-# Configure kubeconfig:
-aws eks update-kubeconfig --name <cluster> --region <region>
+### Docker Deployment
+```bash
+# Full stack with ML service
+docker-compose -f docker-compose.cloud.yml up -d
+
+# Simplified stack without ML
+docker-compose -f docker-compose.simplified.yml up -d
 ```
 
-## Deployment
-- Kustomize base and overlays:
-  - Base: `infrastructure/k8s/base/`
-  - Dev:  `infrastructure/k8s/overlays/dev/`
-  - Prod: `infrastructure/k8s/overlays/prod/`
-- Parameterized images in base and overlays. CI can override via `kustomize edit set image`.
-
-### Manual deploy
-```
-# Dev
-kubectl apply -k infrastructure/k8s/overlays/dev
-kubectl -n neov3-dev rollout status deploy/api-service
-
-# Prod
-kubectl apply -k infrastructure/k8s/overlays/prod
-kubectl -n neov3 rollout status deploy/api-service
+### Development Setup
+```bash
+# Local development
+npm install
+cp .env.simplified.example .env
+# Configure your API keys
+npm run dev
 ```
 
-### CI/CD deploy (GitHub Actions)
-- Workflow: `.github/workflows/deploy.yml`
-- Inputs: environment (dev/prod), namespace, api_image, api_tag, push_image, approve_rollback (prod only)
-- Prod requires GitHub Environment `prod` approval. No auto-rollback; use `approve_rollback=true` to trigger rollback job.
+## Database Setup
+- Supabase: Run SQL files in `db/supabase/` directory
+- Neo4j: Run Cypher files in `db/neo4j/` directory
+
+For complete setup instructions, refer to the main README.md file.
 
 ## Configuration
 - K8s ConfigMap: `infrastructure/k8s/base/configmap.yaml`

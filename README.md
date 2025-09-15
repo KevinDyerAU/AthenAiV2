@@ -1,52 +1,61 @@
-# AthenAI — Enterprise AI Platform with Knowledge Substrate & MLOps
+# AthenAI — Enterprise AI Platform with Intelligent Self-Healing
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js 18+](https://img.shields.io/badge/node.js-18+-green.svg)](https://nodejs.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.1+-red.svg)](https://pytorch.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-ML%20Service-green.svg)](https://fastapi.tiangolo.com/)
-[![MLflow](https://img.shields.io/badge/MLflow-Experiment%20Tracking-blue.svg)](https://mlflow.org/)
-[![Socket.IO](https://img.shields.io/badge/Socket.IO-4.x-blue.svg)](https://socket.io/)
 [![Express.js](https://img.shields.io/badge/Express.js-4.x-lightgrey.svg)](https://expressjs.com/)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-4.x-blue.svg)](https://socket.io/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green.svg)](https://supabase.com/)
 [![Neo4j](https://img.shields.io/badge/Neo4j-Knowledge%20Graph-blue.svg)](https://neo4j.com/)
 [![LangChain](https://img.shields.io/badge/LangChain-AI%20Framework-orange.svg)](https://langchain.com/)
+[![OpenRouter](https://img.shields.io/badge/OpenRouter-Multi%20Model%20AI-purple.svg)](https://openrouter.ai/)
 
-> **Enterprise AI platform combining multi-agent orchestration, knowledge substrate management, and MLOps capabilities. Features intelligent conversation handling, continuous learning, and automated model lifecycle management.**
+> **Enterprise AI platform with intelligent multi-agent orchestration, knowledge substrate learning, and autonomous self-healing capabilities. Features AI-powered decision making, continuous learning, and predictive system recovery.**
 
 ## Table of Contents
 
 - [🎯 Overview](#overview)
+- [✨ Key Features](#key-features)
 - [🏗️ Architecture](#architecture)
-- [📊 Component Diagrams](#component-diagrams)
-- [🤖 Agent System](#agent-system)
+- [🤖 AI Agent System](#ai-agent-system)
 - [🧠 Knowledge Substrate](#knowledge-substrate)
-- [🔬 ML & MLOps Pipeline](#ml--mlops-pipeline)
+- [🔧 Intelligent Self-Healing](#intelligent-self-healing)
 - [⚙️ Configuration](#configuration)
-- [🚀 Setup & Deployment](#setup--deployment)
-- [🔧 Self-Healing & Monitoring](#self-healing--monitoring)
-- [📊 Monitoring & Maintenance](#monitoring--maintenance)
-- [📡 API Reference](#api-reference)
-- [✨ Features](#features)
-- [🛠️ Development](#development)
-- [🧪 Testing](#testing)
+- [🚀 Quick Start](#quick-start)
+- [🌐 Access Points](#access-points)
+- [🔮 Future Roadmap](#future-roadmap)
 - [🤝 Contributing](#contributing)
 
 ## 🎯 Overview
 
-AthenAI is an enterprise-grade AI platform that combines multi-agent orchestration, knowledge substrate management, and MLOps capabilities. The system provides intelligent conversation handling, continuous learning, and automated model lifecycle management.
+AthenAI is an enterprise-grade AI platform that combines intelligent multi-agent orchestration, knowledge substrate learning, and autonomous self-healing capabilities. The system features AI-powered decision making, continuous learning from interactions, and predictive system recovery.
 
-### 🎯 Competitive Advantages
+**Core Philosophy**: Every interaction teaches the system something new, making it smarter and more resilient over time.
 
-- **Multi-Model AI Access**: OpenRouter integration provides access to 200+ AI models (OpenAI, Anthropic, Google, Meta, etc.)
-- **Intelligent Agent Routing**: AI-powered task analysis routes queries to specialized agents automatically
-- **AI-Powered Knowledge Substrate**: Revolutionary learning system with AI content analysis, entity extraction, and pattern recognition
-- **Advanced AI Processing**: Replaces basic NLP with sophisticated AI for domain classification and relationship discovery
-- **Intelligent Self-Healing**: AI-powered autonomous recovery with predictive analysis and knowledge-informed decisions
-- **Cost Efficiency**: Smart AI-driven caching reduces API costs by up to 70%
-- **Enterprise Security**: Row-level security, audit trails, and compliance-ready architecture
+## ✨ Key Features
+
+### 🤖 Intelligent AI Agents
+- **Multi-Model AI Access**: OpenRouter integration with 200+ models (OpenAI, Anthropic, Google, Meta, etc.)
+- **AI-Powered Routing**: Semantic task analysis automatically routes queries to specialized agents
+- **Think-First Architecture**: All agents use AI reasoning before taking actions
+- **Contextual Memory**: Agents remember and build upon previous conversations
+
+### 🧠 Knowledge Substrate
+- **Continuous Learning**: Every interaction is analyzed and stored for future reference
+- **Semantic Similarity**: Intelligent caching using AI-powered pattern matching
+- **Domain Classification**: Automatic categorization of content (AI, software, security, etc.)
+- **Cost Optimization**: Smart caching reduces API costs by up to 70%
+
+### 🔧 Autonomous Self-Healing
+- **AI-Powered Analysis**: LLM reasoning analyzes system issues before taking action
+- **Predictive Prevention**: Identifies risk patterns and prevents issues before they escalate
+- **Knowledge-Informed Recovery**: Uses historical healing patterns for optimal decisions
+- **Continuous Improvement**: Learns from every healing event to improve strategies
+
+### 🏢 Enterprise Ready
+- **Real-time Collaboration**: WebSocket-based chat with live progress tracking
 - **Scalable Architecture**: Cloud-native design handles enterprise workloads
-- **Real-time Collaboration**: WebSocket-based chat with progress tracking
-- **Advanced Analytics**: Built-in performance monitoring and usage analytics
+- **Security First**: Row-level security, audit trails, and compliance-ready
+- **Comprehensive Monitoring**: Built-in observability and performance analytics
 
 ## 🏗️ Architecture
 
@@ -59,36 +68,30 @@ graph TB
         WS[WebSocket]
     end
     
-    subgraph "Application Layer"
-        MO[Master Orchestrator]
-        RA[Research Agent]
-        AA[Analysis Agent]
-        CA[Creative Agent]
-        QA[QA Agent]
-        PA[Planning Agent]
-        EA[Execution Agent]
-        CMA[Communication Agent]
-        DA[Development Agent]
+    subgraph "AI Agent Layer"
+        MO[Master Orchestrator<br/>AI Routing & Analysis]
+        SH[Self-Healing Agent<br/>AI Analysis & Recovery]
+        RA[Research Agent<br/>Knowledge + Web Search]
+        AA[Analysis Agent<br/>Data Analysis & Insights]
+        CA[Creative Agent<br/>Content Generation]
+        QA[QA Agent<br/>Quality Assurance]
+        PA[Planning Agent<br/>Project Planning]
+        EA[Execution Agent<br/>Task Execution]
+        CMA[Communication Agent<br/>Message Handling]
+        DA[Development Agent<br/>Code & Development]
     end
     
-    subgraph "Knowledge Layer"
-        KS[Knowledge Substrate]
-        PG[(PostgreSQL/Supabase)]
-        NEO[(Neo4j)]
-        REDIS[(Redis Cache)]
+    subgraph "Knowledge Substrate"
+        KS[Knowledge Processing<br/>AI Analysis & Learning]
+        PG[(PostgreSQL/Supabase<br/>Structured Data)]
+        NEO[(Neo4j<br/>Knowledge Graph)]
+        REDIS[(Redis<br/>Performance Cache)]
     end
     
-    subgraph "ML Layer"
-        MLS[ML Service]
-        MLF[MLflow]
-        PROM[Prometheus]
-        GNN[Graph Neural Networks]
-    end
-    
-    subgraph "External Services"
-        OAI[OpenAI/OpenRouter]
-        FC[Firecrawl]
-        WEB_API[Web APIs]
+    subgraph "External AI Services"
+        OR[OpenRouter<br/>200+ AI Models]
+        FC[Firecrawl<br/>Web Scraping]
+        SERP[SerpAPI<br/>Search Results]
     end
     
     WEB --> API
@@ -96,6 +99,7 @@ graph TB
     API --> MO
     WS --> MO
     
+    MO --> SH
     MO --> RA
     MO --> AA
     MO --> CA
@@ -105,6 +109,7 @@ graph TB
     MO --> CMA
     MO --> DA
     
+    SH --> KS
     RA --> KS
     AA --> KS
     CA --> KS
@@ -114,379 +119,266 @@ graph TB
     KS --> NEO
     KS --> REDIS
     
-    MLS --> MLF
-    MLS --> PROM
-    MLS --> GNN
-    MLS --> NEO
-    MLS --> PG
-    
-    RA --> OAI
+    RA --> OR
     RA --> FC
-    RA --> WEB_API
+    RA --> SERP
+    AA --> OR
+    CA --> OR
+    QA --> OR
+    SH --> OR
 ```
 
-## 📊 Component Diagrams
-
-### Agent Architecture
-```mermaid
-graph LR
-    subgraph "Master Orchestrator"
-        TC[Task Complexity Analysis]
-        AR[Agent Routing]
-        EP[Execution Planning]
-        CC[Conversation Context]
-    end
-    
-    subgraph "Specialized Agents"
-        RA[Research Agent<br/>• Knowledge Search<br/>• Web Research<br/>• Fact Verification]
-        AA[Analysis Agent<br/>• Data Analysis<br/>• Pattern Detection<br/>• Statistical Analysis]
-        CA[Creative Agent<br/>• Content Creation<br/>• Tone Adaptation<br/>• Engagement Optimization]
-        QA[QA Agent<br/>• Code Review<br/>• Quality Assessment<br/>• Best Practices]
-    end
-    
-    subgraph "Agent Tools"
-        KT[Knowledge Tools<br/>• Synthesis<br/>• Verification<br/>• Planning]
-        AT[Analysis Tools<br/>• Statistical<br/>• Trend Detection<br/>• Correlation]
-        CT[Creative Tools<br/>• Content Structure<br/>• Quality Metrics<br/>• Engagement]
-        QT[QA Tools<br/>• Code Analysis<br/>• Performance<br/>• Security]
-    end
-    
-    TC --> AR
-    AR --> EP
-    EP --> CC
-    
-    AR --> RA
-    AR --> AA
-    AR --> CA
-    AR --> QA
-    
-    RA --> KT
-    AA --> AT
-    CA --> CT
-    QA --> QT
-```
-
-### Knowledge Substrate Flow
-```mermaid
-graph TD
-    subgraph "Knowledge Input"
-        UI[User Input]
-        WS[Web Search]
-        DOC[Document Processing]
-        API[API Data]
-    end
-    
-    subgraph "AI Processing Pipeline"
-        AI[AI Content Analysis]
-        EMB[AI Embedding Generation]
-        CLS[AI Domain Classification]
-        EXT[AI Entity Extraction]
-        PAT[AI Pattern Recognition]
-    end
-    
-    subgraph "Storage Layer"
-        PG[(PostgreSQL<br/>• Knowledge Entities<br/>• Research Insights<br/>• QA Insights<br/>• Web Cache)]
-        NEO[(Neo4j<br/>• Entity Relationships<br/>• Knowledge Graph<br/>• Semantic Links)]
-        VEC[Vector Store<br/>• Embeddings<br/>• Similarity Search]
-    end
-    
-    subgraph "Retrieval & Usage"
-        SEM[Semantic Search]
-        CTX[Context Retrieval]
-        REC[Recommendations]
-        INS[Insights Generation]
-    end
-    
-    UI --> AI
-    WS --> AI
-    DOC --> AI
-    API --> AI
-    
-    AI --> EMB
-    AI --> CLS
-    AI --> EXT
-    AI --> PAT
-    
-    EMB --> VEC
-    CLS --> PG
-    EXT --> NEO
-    PAT --> NEO
-    
-    VEC --> SEM
-    PG --> CTX
-    NEO --> REC
-    
-    SEM --> INS
-    CTX --> INS
-    REC --> INS
-```
-
-### ML Pipeline Architecture
-```mermaid
-graph TB
-    subgraph "Data Sources"
-        KG[(Knowledge Graph)]
-        PG_ML[(PostgreSQL)]
-        FEAT[Feature Store]
-    end
-    
-    subgraph "ML Training Pipeline"
-        DL[Data Loader]
-        FE[Feature Engineering]
-        TR[Model Training]
-        EVAL[Model Evaluation]
-        REG[Model Registry]
-    end
-    
-    subgraph "Model Types"
-        LP[Link Prediction<br/>GNN Models]
-        NC[Node Classification<br/>Multi-label Models]
-        ER[Expertise Recommendation<br/>Ranking Models]
-    end
-    
-    subgraph "MLOps Infrastructure"
-        MLF[MLflow<br/>Experiment Tracking]
-        DOCK[Docker<br/>Model Serving]
-        PROM[Prometheus<br/>Monitoring]
-        ALERT[Alerting System]
-    end
-    
-    subgraph "Inference & Serving"
-        RT[Real-time Predictor]
-        BATCH[Batch Predictor]
-        CACHE[Prediction Cache]
-        API_ML[ML API Endpoints]
-    end
-    
-    KG --> DL
-    PG_ML --> DL
-    FEAT --> FE
-    
-    DL --> FE
-    FE --> TR
-    TR --> EVAL
-    EVAL --> REG
-    
-    TR --> LP
-    TR --> NC
-    TR --> ER
-    
-    REG --> MLF
-    MLF --> DOCK
-    DOCK --> PROM
-    PROM --> ALERT
-    
-    REG --> RT
-    REG --> BATCH
-    RT --> CACHE
-    BATCH --> CACHE
-    CACHE --> API_ML
-```
-
-## 🤖 Agent System
-
-### Master Orchestrator
-The central coordination hub that:
-- Analyzes task complexity using AI-powered semantic understanding
-- Routes messages to appropriate specialized agents
-- Creates execution plans with conversation context
-- Manages fallback mechanisms and error handling
-
-### Specialized Agents
-
-#### Research Agent
-- **Purpose**: Knowledge discovery and research
-- **Tools**: Web search, knowledge synthesis, fact verification
-- **Integration**: Firecrawl API, knowledge substrate, web search cache
-- **Learning**: Stores research patterns and insights for reuse
-
-#### Analysis Agent
-- **Purpose**: Data analysis and pattern detection
-- **Tools**: Statistical analysis, trend detection, correlation analysis
-- **Capabilities**: GitHub repository analysis, performance metrics
-- **Output**: Structured analysis with confidence scoring
-
-#### Creative Agent
-- **Purpose**: Content creation and optimization
-- **Tools**: Content structuring, tone adaptation, engagement optimization
-- **Features**: Quality metrics, audience targeting, creative synthesis
-
-#### Quality Assurance Agent
-- **Purpose**: Code review and quality assessment
-- **Tools**: Code analysis, security scanning, performance evaluation
-- **Standards**: Best practices enforcement, improvement recommendations
-
-### Agent Communication Flow
+### AI Agent Flow
 ```mermaid
 sequenceDiagram
     participant U as User
     participant MO as Master Orchestrator
+    participant AI as AI Service (OpenRouter)
     participant KS as Knowledge Substrate
     participant RA as Research Agent
-    participant AI as AI Service (OpenRouter)
+    participant SH as Self-Healing Agent
     
-    U->>MO: User Message
-    MO->>KS: Get Conversation Context
-    KS-->>MO: Context History
+    U->>MO: User Query
     MO->>AI: Analyze Task Complexity
-    AI-->>MO: Complexity Assessment
-    MO->>AI: Route to Agent
+    AI-->>MO: Task Analysis
+    MO->>AI: Route to Best Agent
     AI-->>MO: Agent Selection
+    
     MO->>RA: Execute Research Task
-    RA->>KS: Retrieve Knowledge Context
-    KS-->>RA: Relevant Knowledge
+    RA->>AI: Think About Research Strategy
+    AI-->>RA: Research Plan
+    RA->>KS: Check Knowledge Cache
+    KS-->>RA: Cached Results (if available)
     RA->>AI: Enhanced Research Query
     AI-->>RA: Research Results
-    RA->>KS: Store New Insights
+    RA->>KS: Store New Knowledge
     RA-->>MO: Research Response
+    
+    Note over SH: Continuous Monitoring
+    SH->>SH: Health Check Every 30s
+    SH->>AI: Analyze System Issues (if any)
+    AI-->>SH: Healing Strategy
+    SH->>KS: Store Healing Patterns
+    
     MO-->>U: Final Response
+```
+
+### Self-Healing Architecture
+```mermaid
+graph TD
+    subgraph "Monitoring Layer"
+        HC[Health Checks<br/>Every 30 seconds]
+        PA[Predictive Analysis<br/>Every 5 minutes]
+        KS_SYNC[Knowledge Sync<br/>Every 10 minutes]
+    end
+    
+    subgraph "AI Analysis Layer"
+        THINK[AI Think Tool<br/>LLM Reasoning]
+        PATTERN[Pattern Matching<br/>Semantic Similarity]
+        PREDICT[Risk Prediction<br/>Historical Analysis]
+    end
+    
+    subgraph "Knowledge Integration"
+        HI[(Healing Insights<br/>All Events & Outcomes)]
+        HP[(Healing Patterns<br/>Successful Strategies)]
+        PRED[(Predictions<br/>Risk Indicators)]
+    end
+    
+    subgraph "Recovery Actions"
+        CACHE[Cache Management]
+        RESTART[Service Restart]
+        SCALE[Resource Scaling]
+        FALLBACK[Fallback Systems]
+    end
+    
+    HC --> THINK
+    PA --> PATTERN
+    KS_SYNC --> PREDICT
+    
+    THINK --> HI
+    PATTERN --> HP
+    PREDICT --> PRED
+    
+    HI --> CACHE
+    HP --> RESTART
+    PRED --> SCALE
+    SCALE --> FALLBACK
+```
+
+## 🤖 AI Agent System
+
+### Master Orchestrator
+The central AI-powered coordination hub:
+- **Semantic Task Analysis**: Uses LLM to understand user intent beyond keywords
+- **Intelligent Routing**: Routes queries to optimal agents based on complexity and domain
+- **Context Management**: Maintains conversation history and builds upon previous interactions
+- **Fallback Handling**: Graceful degradation when specialized agents are unavailable
+
+### Specialized AI Agents
+
+#### Research Agent
+- **Knowledge-First Approach**: Checks knowledge substrate before web searches
+- **AI-Enhanced Search**: Uses LLM to optimize search queries and analyze results
+- **Pattern Learning**: Stores research insights for future similar queries
+- **Multi-Source Integration**: Combines cached knowledge with fresh web data
+
+#### Analysis Agent
+- **AI-Powered Insights**: Uses LLM for data interpretation and pattern recognition
+- **Statistical Analysis**: Advanced analytics with confidence scoring
+- **Domain Expertise**: Specialized tools for different analysis types
+- **Quality Assurance**: Self-evaluation of analysis accuracy
+
+#### Quality Assurance Agent
+- **AI Code Review**: LLM-powered code analysis and improvement suggestions
+- **Best Practices**: Automated compliance checking and recommendations
+- **Security Analysis**: Vulnerability detection and mitigation strategies
+- **Performance Optimization**: Identifies bottlenecks and optimization opportunities
+
+#### Creative Agent
+- **Content Generation**: AI-powered writing with tone and style adaptation
+- **Engagement Optimization**: Analyzes and improves content effectiveness
+- **Multi-Format Support**: Handles various content types and formats
+- **Quality Metrics**: Built-in assessment of creative output
+
+### Think-First Architecture
+All agents use AI reasoning before taking actions:
+```javascript
+// Every agent follows this pattern
+const analysis = await agent.thinkAbout(task, context);
+const knowledgeContext = await agent.queryKnowledge(task);
+const result = await agent.execute(task, analysis, knowledgeContext);
 ```
 
 ## 🧠 Knowledge Substrate
 
-### Database Architecture
+### AI-Powered Learning System
+The Knowledge Substrate is AthenAI's revolutionary learning system that makes every interaction smarter:
 
-#### PostgreSQL (Supabase) Tables
-- **knowledge_entities**: Core knowledge storage with vector embeddings
-- **research_insights**: Research patterns and findings with domain classification
-- **qa_insights**: Quality assurance metrics and improvement patterns
-- **web_search_cache**: Cached search results with 24-hour expiration
-- **knowledge_provenance**: Source tracking and evidence chains
-- **knowledge_conflicts**: Conflict detection and resolution
+#### Core Components
+- **PostgreSQL (Supabase)**: Structured knowledge storage with vector embeddings
+- **Neo4j**: Knowledge graph for entity relationships and semantic connections
+- **Redis**: High-performance caching for frequently accessed data
 
-#### Neo4j Graph Schema
-- **Entities**: People, organizations, technologies, concepts
-- **Documents**: Processed content with metadata
-- **Relationships**: Semantic connections and knowledge links
-- **ML Nodes**: Predictions, training runs, model registry
+#### AI Processing Pipeline
+1. **Content Analysis**: LLM analyzes all interactions for insights and patterns
+2. **Domain Classification**: Automatic categorization (AI, software, security, performance, data, general)
+3. **Entity Extraction**: Identifies key concepts, technologies, and relationships
+4. **Pattern Recognition**: Discovers themes and connections across content
+5. **Embedding Generation**: Creates semantic vectors for similarity matching
 
-### Domain Classification System
-- **ai**: Artificial intelligence, machine learning, neural networks
-- **software**: Programming, development, code repositories
-- **security**: Cybersecurity, vulnerabilities, authentication
-- **performance**: Optimization, scalability, benchmarking
-- **data**: Data analysis, databases, data processing
-- **api**: API development, endpoints, web services
-- **general**: Default classification for unmatched content
-
-### Knowledge Operations
-
-#### Storage Pattern
+#### Intelligent Caching
 ```javascript
-// Enhanced knowledge storage with provenance
-await knowledgeSubstrate.storeKnowledge({
-  content: "AI model performance improves with larger datasets",
-  entityType: "research_finding",
-  domain: "ai",
-  confidence: 0.92,
-  source: "research_session_123",
-  provenance: {
-    agent: "ResearchAgent",
-    evidence: "Multiple academic papers and benchmarks",
-    sessionId: "session_456"
-  },
-  patterns: ["performance_scaling", "dataset_size_correlation"]
-});
+// Knowledge-first approach
+const cachedResult = await knowledgeSubstrate.findSimilar(query, domain);
+if (cachedResult.confidence > 0.8) {
+  return enhanceWithFreshData(cachedResult);
+}
+// Fallback to fresh processing
 ```
 
-#### Retrieval Pattern
+#### Learning Mechanisms
+- **Semantic Similarity**: Finds related content using AI-powered pattern matching
+- **Context Propagation**: Maintains conversation context across interactions
+- **Success Pattern Recognition**: Learns what works and applies it to similar situations
+- **Continuous Improvement**: Every interaction teaches the system something new
+
+### Data Storage Schema
+```sql
+-- Core knowledge entities with AI analysis
+knowledge_entities (
+  id, content, entity_type, domain, confidence_score,
+  embeddings, metadata, created_at
+)
+
+-- Research insights and patterns
+research_insights (
+  id, query_hash, domain, patterns, search_results,
+  session_id, metadata, created_at
+)
+
+-- Quality assurance learnings
+qa_insights (
+  id, content_hash, qa_type, quality_metrics,
+  improvement_patterns, metadata, created_at
+)
+
+-- Intelligent web search cache
+web_search_cache (
+  id, query_hash, domain, results, hit_count,
+  expires_at, metadata, created_at
+)
+```
+
+## 🔧 Intelligent Self-Healing
+
+### AI-Powered Autonomous Recovery
+AthenAI features an advanced self-healing system that uses AI reasoning and historical knowledge to automatically recover from issues:
+
+#### Core Capabilities
+- **AI Analysis First**: Uses LLM to analyze system issues before taking any action
+- **Knowledge-Informed Decisions**: Leverages historical healing patterns for optimal recovery strategies
+- **Predictive Prevention**: Identifies risk patterns and prevents issues before they escalate
+- **Continuous Learning**: Improves healing strategies based on outcomes over time
+
+#### AI Think Tool Integration
 ```javascript
-// Multi-tier knowledge retrieval
-const knowledge = await knowledgeSubstrate.retrieveContext({
-  query: "machine learning performance optimization",
-  domain: "ai",
-  limit: 10,
-  includeSemanticSimilarity: true,
-  confidenceThreshold: 0.7
-});
+// AI reasoning before healing actions
+const aiAnalysis = await selfHealingAgent.thinkAboutHealing(issueType, severity, context);
+// Returns: 6-step analysis including root cause, impact, strategy, risks, success criteria
 ```
 
-## 🔬 ML & MLOps Pipeline
+#### Automated Recovery Strategies
+1. **High Error Rate**: Cache clearing, agent restarts, metrics reset, verbose logging
+2. **Memory Pressure**: Garbage collection, cache clearing, process restarts, resource scaling
+3. **Slow Response**: Resource scaling, cache optimization, service restarts, profiling
+4. **Agent Failures**: Agent restarts, state clearing, registry reset, backup activation
+5. **Database Issues**: Connection recovery, pool clearing, replica switching, optimization
+6. **WebSocket Issues**: Server restart, connection state reset, queue clearing, debugging
+7. **AI API Failures**: Endpoint switching, rate limit adjustment, cache clearing, fallback models
 
-### Model Architecture
+#### Predictive Analysis
+- **Risk Pattern Detection**: Monitors memory trends, error rates, response times
+- **Proactive Healing**: Triggers preventive actions when risk scores exceed 0.8 threshold
+- **Historical Learning**: Analyzes patterns that preceded similar issues
+- **Success Rate Optimization**: Prioritizes actions based on historical effectiveness
 
-#### Graph Neural Networks
-- **Link Prediction**: Predicts relationships between entities
-- **Node Classification**: Classifies documents and entities
-- **Expertise Recommendation**: Matches experts to domains
-
-#### Model Types
-```python
-# Link Prediction GNN
-class LinkPredictionGNN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers):
-        super().__init__()
-        self.gnn_layers = torch.nn.ModuleList([
-            GCNConv(input_dim if i == 0 else hidden_dim, hidden_dim)
-            for i in range(num_layers)
-        ])
-        self.classifier = torch.nn.Linear(hidden_dim * 2, 1)
-    
-    def forward(self, x, edge_index, edge_pairs):
-        # GNN forward pass with edge prediction
-        pass
+#### Knowledge Integration
+```javascript
+// Historical pattern matching
+const similarIncidents = await findSimilarHealingIncidents(contextSignature);
+const successfulPatterns = await getSuccessfulHealingPatterns(issueType);
+const prioritizedActions = prioritizeActionsFromKnowledge(similarIncidents, defaultActions);
 ```
 
-### MLOps Workflow
+#### Monitoring Schedule
+- **Health Checks**: Every 30 seconds
+- **Predictive Analysis**: Every 5 minutes
+- **Knowledge Sync**: Every 10 minutes
+- **History Cleanup**: Every hour
 
-#### Training Pipeline
-1. **Data Extraction**: Neo4j → PyTorch Geometric conversion
-2. **Feature Engineering**: Node/edge feature creation
-3. **Model Training**: Multi-GPU training with early stopping
-4. **Evaluation**: Comprehensive metrics (AUC, precision, recall)
-5. **Model Registry**: MLflow tracking and versioning
+### Healing Insights Database
+```sql
+-- All healing events and outcomes
+healing_insights (
+  id, event_id, issue_type, context_signature, context_hash,
+  actions_taken, success, duration_ms, error_message,
+  system_metrics, metadata, created_at
+)
 
-#### Deployment Pipeline
-1. **Model Validation**: Performance threshold checks
-2. **Containerization**: Docker image creation
-3. **Serving**: FastAPI endpoints with health checks
-4. **Monitoring**: Prometheus metrics and alerting
+-- Aggregated successful strategies
+healing_patterns (
+  id, issue_type, pattern_signature, success_rate,
+  total_occurrences, successful_occurrences,
+  common_actions, context_patterns, last_updated
+)
 
-#### Retraining Triggers
-- **Performance Degradation**: Accuracy drops below threshold
-- **Data Drift**: Distribution changes detected
-- **Scheduled**: Regular retraining intervals
-- **Manual**: Operator-initiated retraining
-
-### ML Service Components
-
-#### Real-time Predictor
-```python
-class RealTimePredictor:
-    def __init__(self):
-        self.knowledge_first = True  # Check knowledge before ML
-        self.model_cache = {}
-        self.prediction_cache = {}
-    
-    async def predict(self, prediction_type, input_data):
-        # Knowledge-first approach
-        knowledge_result = await self.check_knowledge_substrate(input_data)
-        if knowledge_result:
-            return knowledge_result
-        
-        # ML prediction fallback
-        return await self.ml_predict(prediction_type, input_data)
+-- Predictive patterns and risk indicators
+healing_predictions (
+  id, pattern_type, risk_indicators, predicted_issue,
+  confidence_score, historical_accuracy, trigger_count,
+  correct_predictions, false_positives, last_triggered
+)
 ```
-
-#### Batch Processor
-- **Job Management**: Async processing with progress tracking
-- **Scalability**: Configurable batch sizes and parallel processing
-- **Error Handling**: Retry logic and failure recovery
-- **Output Management**: Results storage and notification
-
-### Model Monitoring
-
-#### Performance Metrics
-- **Accuracy Tracking**: Real-time performance monitoring
-- **Latency Monitoring**: Inference time tracking
-- **Throughput Metrics**: Requests per second
-- **Resource Usage**: CPU, memory, GPU utilization
-
-#### Data Drift Detection
-- **Statistical Tests**: KS test, chi-square test
-- **Distribution Comparison**: Input feature drift
-- **Prediction Drift**: Output distribution changes
-- **Alerting**: Automated notifications on drift detection
 
 ## ⚙️ Configuration
 
@@ -494,111 +386,278 @@ class RealTimePredictor:
 
 #### Core Application
 ```env
-# Server Configuration
+# Application Configuration
+NODE_ENV=development
 PORT=3000
-NODE_ENV=production
-LOG_LEVEL=info
+APP_NAME=athenai
 
-# AI Services
-OPENROUTER_API_KEY=your-openrouter-key
-OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
-OPENROUTER_TEMPERATURE=0.7
-OPENAI_API_KEY=your-openai-key  # Fallback
+# AI Services (Primary: OpenRouter)
+USE_OPENROUTER=true
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=x-ai/grok-code-fast-1
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_TEMPERATURE=0.1
 
-# Web Services
-FIRECRAWL_API_KEY=your-firecrawl-key
+# AI Services (Fallback: OpenAI)
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4
+OPENAI_TEMPERATURE=0.1
 ```
 
 #### Database Configuration
 ```env
 # Supabase (Primary Database)
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
+POSTGRES_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres
 
 # Neo4j (Knowledge Graph)
-NEO4J_URI=bolt://localhost:7687
+NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=your-neo4j-password
+NEO4J_PASSWORD=your_neo4j_password_here
 
-# Redis (Caching) - Optional but recommended for performance
-REDIS_URL=redis://localhost:6379
-REDIS_PASSWORD=your-redis-password
-REDIS_USERNAME=your-redis-username  # Optional (Redis 6+)
+# Redis (Performance Cache - Optional)
+REDIS_URL=redis://your-redis-url:port
+REDIS_PASSWORD=your_redis_password
+REDIS_USERNAME=your_redis_username
 ```
 
-#### ML Service Configuration
+#### External Services
 ```env
-# ML Service
-ML_SERVICE_ENABLED=true
-ML_SERVICE_URL=http://localhost:8001
-ML_MODEL_PATH=/app/models
-ML_BATCH_SIZE=32
-ML_INFERENCE_TIMEOUT=30
+# Web Search and Scraping
+SERPAPI_API_KEY=your_serpapi_key_here
+FIRECRAWL_API_KEY=your_firecrawl_api_key_here
+API_SECRET_KEY=your_api_secret_key_here
 
-# MLflow
-MLFLOW_TRACKING_URI=http://localhost:5000
-MLFLOW_EXPERIMENT_NAME=athenai-models
-MLFLOW_S3_ENDPOINT_URL=your-s3-endpoint
-
-# Monitoring
-PROMETHEUS_ENABLED=true
-PROMETHEUS_PORT=9090
-ALERT_WEBHOOK_URL=your-alert-webhook
-```
-
-#### Document Processing
-```env
-# Unstructured Service
-UNSTRUCTURED_API_KEY=your-unstructured-key
+# Document Processing
 UNSTRUCTURED_WORKER_URL=http://unstructured-worker:8080
-DOCUMENT_PROCESSING_ENABLED=true
+WORKER_CONCURRENCY=2
+UPLOAD_DIR=./data/unstructured/input
+EMBEDDING_MODEL=text-embedding-3-small
+
+# LangChain Tracing
+LANGCHAIN_API_KEY=your_langsmith_api_key_here
+LANGCHAIN_PROJECT=athenai
+LANGCHAIN_TRACING_V2=true
 ```
 
-### Model Configuration Files
+#### Feature Flags
+```env
+# Core Features (Production Ready)
+FEATURE_ENABLE_PLANNING=true
+FEATURE_ENABLE_EXECUTION=true
+FEATURE_ENABLE_QA=true
+FEATURE_ENABLE_COMMUNICATION=true
+CONSCIOUSNESS_SUBSTRATE_ENABLED=true
+INTER_AGENT_COMMUNICATION_ENABLED=true
+AI_CHAT_AGENT_ENABLED=true
+WORKFLOW_ORCHESTRATION_ENABLED=true
+MULTI_MODEL_AI_ENABLED=true
+VECTOR_SEARCH_ENABLED=true
+REAL_TIME_MONITORING_ENABLED=true
+ADVANCED_ANALYTICS_ENABLED=true
 
-#### Training Configuration (`config/training_config.yaml`)
-```yaml
-model:
-  type: "link_prediction"
-  architecture: "gcn"
-  hidden_dim: 128
-  num_layers: 3
-  dropout: 0.2
-
-training:
-  epochs: 100
-  batch_size: 1024
-  learning_rate: 0.001
-  early_stopping_patience: 10
-  validation_split: 0.2
-
-optimization:
-  optimizer: "adam"
-  weight_decay: 0.0001
-  lr_scheduler: "cosine"
+# ML Service Features (Optional)
+ML_SERVICE_ENABLED=true
+ML_TRAINING_ENABLED=true
+ML_BATCH_PROCESSING_ENABLED=true
+ML_MONITORING_ENABLED=true
+ML_RETRAINING_ENABLED=true
+ML_DRIFT_DETECTION_ENABLED=true
+ML_FEATURE_STORE_ENABLED=true
+ML_GPU_ACCELERATION_ENABLED=false
 ```
 
-#### Deployment Configuration (`config/deployment_config.yaml`)
-```yaml
-serving:
-  model_name: "link_predictor_v1"
-  version: "1.0.0"
-  batch_size: 32
-  max_batch_delay: 100
-  timeout: 30
+## 🚀 Quick Start
 
-scaling:
-  min_replicas: 1
-  max_replicas: 5
-  cpu_threshold: 70
-  memory_threshold: 80
+### Prerequisites
+- Node.js 18+
+- PostgreSQL database (Supabase recommended)
+- OpenRouter API key (or OpenAI as fallback)
 
-monitoring:
-  metrics_enabled: true
-  logging_level: "INFO"
-  health_check_interval: 30
+### Installation
+```bash
+# 1. Clone the repository
+git clone <repository-url>
+cd AthenAi
+
+# 2. Install dependencies
+npm install
+
+# 3. Configure environment
+cp .env.simplified.example .env
+# Edit .env with your API keys and database URLs
+
+# 4. Initialize databases
+# Supabase: Run db/supabase/functions.sql in Supabase SQL Editor
+# Neo4j: Run db/neo4j/advanced_schema.cypher in Neo4j Browser
+# Healing: Run db/supabase/healing_insights_schema.sql in Supabase SQL Editor
+
+# 5. Start the application
+npm run dev
 ```
+
+### Docker Deployment
+```bash
+# Full stack deployment
+docker-compose -f docker-compose.cloud.yml up -d
+
+# Simplified deployment (without ML service)
+docker-compose -f docker-compose.simplified.yml up -d
+```
+
+### Health Checks
+```bash
+# Application health
+curl http://localhost:3000/health
+
+# Database connectivity
+curl http://localhost:3000/health/database
+```
+
+## 🌐 Access Points
+
+### Web Interfaces
+- **🏠 Main Portal**: http://localhost:3000/
+- **💬 AI Chat Interface**: http://localhost:3000/chat.html
+- **📊 System Health**: http://localhost:3000/health
+
+### Getting Started
+1. **Test the AI Chat**: Visit `/chat.html` and start a conversation
+2. **Try Different Agents**: Ask research questions, request code reviews, or get creative content
+3. **Watch Learning**: Notice how the system remembers context and improves responses
+4. **Monitor Self-Healing**: Check logs to see autonomous recovery in action
+5. **Explore Knowledge**: Ask follow-up questions to see cached knowledge in use
+
+### Example Interactions
+```
+# Research Query
+"Research the latest developments in AI self-healing systems"
+→ Research Agent analyzes, checks knowledge cache, performs web search, stores insights
+
+# Code Review
+"Review this JavaScript function for performance issues"
+→ QA Agent analyzes code, provides suggestions, learns patterns for future reviews
+
+# Creative Content
+"Write a technical blog post about knowledge substrates"
+→ Creative Agent generates content, adapts tone, optimizes for engagement
+```
+
+## 🔮 Future Roadmap
+
+### Experimental Features (Available but Disabled by Default)
+```env
+# Advanced experimental features
+DYNAMIC_AGENT_CREATION_ENABLED=false    # AI creates new specialized agents on demand
+AUTO_SCALING_ENABLED=false              # Automatic resource scaling based on load
+PREDICTIVE_ANALYTICS_ENABLED=false      # Advanced predictive insights and forecasting
+```
+
+### Forward-Looking Features & Research Areas
+
+#### Planned Features (Next 6 Months)
+- **Dynamic Agent Creation**: Runtime creation of specialized agents based on task requirements
+- **Auto-Scaling Infrastructure**: Automatic resource scaling based on workload and performance metrics
+- **Advanced Predictive Analytics**: Enhanced ML models for system behavior prediction and optimization
+- **Multi-Modal AI Integration**: Support for image, audio, and video processing capabilities
+- **Enhanced Security Framework**: Advanced threat detection and automated security response
+- **Multi-Language Support**: Agents that work in multiple programming languages
+- **Cross-System Learning**: Knowledge sharing between multiple AthenAI instances
+
+#### Research & Development (6-18 Months)
+- **Quantum-Enhanced AI**: Exploring quantum machine learning applications for complex optimization
+  - *Status*: Experimental flag available (`QUANTUM_COMPUTING_INTEGRATION_ENABLED=false`)
+  - *Goal*: Quantum-classical hybrid algorithms for knowledge graph processing
+- **Neuromorphic Computing**: Brain-inspired computing architectures for energy-efficient AI
+- **Federated Learning**: Distributed learning across multiple organizations while preserving privacy
+- **Explainable AI**: Enhanced transparency in AI decision-making processes with detailed reasoning chains
+- **Edge AI Deployment**: Lightweight agent deployment for edge computing environments
+
+#### Long-term Vision (18+ Months)
+- **Autonomous System Evolution**: Self-modifying code and architecture improvements
+- **Advanced Consciousness Modeling**: More sophisticated reasoning and decision-making frameworks
+- **Distributed Intelligence**: Multi-node AI coordination and collaboration across geographic regions
+- **Biological Integration**: Bio-inspired computing and potential brain-computer interface research
+- **Sustainable AI**: Carbon-neutral AI operations and green computing initiatives
+
+#### Feature Flag Configuration
+Many experimental features can be enabled via environment variables:
+```env
+# Enable experimental features (use with caution in production)
+DYNAMIC_AGENT_CREATION_ENABLED=false        # Dynamic agent spawning
+AUTO_SCALING_ENABLED=false                  # Automatic infrastructure scaling
+PREDICTIVE_ANALYTICS_ENABLED=false          # Advanced ML predictions
+QUANTUM_COMPUTING_INTEGRATION_ENABLED=false # Quantum-classical hybrid processing
+```
+
+**Note**: Experimental features are under active development and may not be production-ready. Enable them in development environments for testing and feedback.
+
+## 🤝 Contributing
+
+### Development Setup
+```bash
+# Fork and clone the repository
+git clone https://github.com/your-username/AthenAi.git
+cd AthenAi
+
+# Install dependencies
+npm install
+
+# Set up development environment
+cp .env.simplified.example .env.development
+# Configure your development API keys
+
+# Run tests
+npm test
+
+# Start development server
+npm run dev
+```
+
+### Project Structure
+```
+AthenAi/
+├── src/
+│   ├── agents/           # AI agent implementations
+│   ├── services/         # Core services (database, etc.)
+│   ├── utils/           # Utilities (logging, monitoring, self-healing)
+│   ├── routes/          # API routes
+│   └── middleware/      # Express middleware
+├── db/
+│   ├── supabase/        # PostgreSQL schemas and functions
+│   └── neo4j/          # Neo4j graph schemas
+├── public/             # Web interface files
+├── tests/              # Test suites
+└── documentation/      # Additional documentation
+```
+
+### Contributing Guidelines
+1. **Follow the Think-First Pattern**: All new agents should use AI reasoning before actions
+2. **Knowledge Integration**: Ensure new features integrate with the knowledge substrate
+3. **Self-Healing Awareness**: Consider how new features interact with the self-healing system
+4. **Comprehensive Testing**: Include unit tests and integration tests
+5. **Documentation**: Update README and relevant documentation
+
+### Code Style
+- Use ESLint configuration provided
+- Follow existing patterns for agent implementation
+- Include comprehensive error handling
+- Add logging for debugging and monitoring
+
+### Submitting Changes
+1. Create a feature branch from `main`
+2. Make your changes with tests
+3. Update documentation as needed
+4. Submit a pull request with detailed description
+5. Ensure all CI checks pass
+
+---
+
+**AthenAI** - Making AI systems smarter, more resilient, and continuously learning from every interaction.
+
+For questions or support, please open an issue or contact the development team.
 
 ## 🚀 Setup & Deployment
 
@@ -628,6 +687,132 @@ docker-compose -f docker-compose.cloud.yml up -d
 
 # Simplified stack without ML
 docker-compose -f docker-compose.simplified.yml up -d
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+AthenAI uses environment variables for configuration. Copy `.env.simplified.example` to `.env` and configure the following:
+
+#### Core Application
+```env
+# Application Configuration
+NODE_ENV=development
+PORT=3000
+APP_NAME=athenai
+```
+
+#### AI Services
+```env
+# Primary AI Service (OpenRouter - Recommended)
+USE_OPENROUTER=true
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=x-ai/grok-code-fast-1
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_TEMPERATURE=0.1
+
+# Fallback AI Service (OpenAI)
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4
+OPENAI_TEMPERATURE=0.1
+```
+
+#### Database Configuration
+```env
+# Supabase (Primary Database & Knowledge Substrate)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
+POSTGRES_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres
+
+# Neo4j (Knowledge Graph)
+NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_neo4j_password_here
+
+# Redis (Caching - Optional)
+REDIS_URL=redis://your-redis-url:port
+REDIS_PASSWORD=your_redis_password
+REDIS_USERNAME=your_redis_username  # Optional (Redis 6+)
+```
+
+#### LangChain Integration
+```env
+# LangChain and LangSmith Configuration
+LANGCHAIN_API_KEY=your_langsmith_api_key_here
+LANGCHAIN_PROJECT=athenai
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_CALLBACKS_BACKGROUND=true
+```
+
+#### Document Processing
+```env
+# Document Processing Worker (Local Docker)
+UNSTRUCTURED_WORKER_URL=http://unstructured-worker:8080
+WORKER_CONCURRENCY=2
+LOG_LEVEL=INFO
+UPLOAD_DIR=./data/unstructured/input
+EMBEDDING_MODEL=text-embedding-3-small
+```
+
+#### Web Search APIs (Optional)
+```env
+# Search APIs for Enhanced Research
+SERPAPI_API_KEY=your_serpapi_key_here
+FIRECRAWL_API_KEY=your_firecrawl_api_key_here
+API_SECRET_KEY=your_api_secret_key_here
+```
+
+#### ML Service Configuration (Optional)
+```env
+# ML Service (Enable with ENABLE_ML_SERVICE=true)
+ENABLE_ML_SERVICE=false
+ML_SERVICE_HOST=ml-service
+ML_SERVICE_PORT=8001
+MLFLOW_TRACKING_URI=http://mlflow:5000
+MLFLOW_EXPERIMENT_NAME=athenai_ml
+
+# Model Configuration
+ML_MODEL_CACHE_SIZE=10
+ML_BATCH_SIZE=32
+ML_TRAINING_EPOCHS=100
+ML_LEARNING_RATE=0.001
+
+# Monitoring and Retraining
+ML_MONITORING_ENABLED=true
+ML_RETRAINING_ENABLED=true
+ML_RETRAINING_SCHEDULE="0 2 * * 0"  # Weekly at 2 AM Sunday
+```
+
+#### Feature Flags
+```env
+# Core Features
+FEATURE_ENABLE_PLANNING=true
+FEATURE_ENABLE_EXECUTION=true
+FEATURE_ENABLE_QA=true
+FEATURE_ENABLE_COMMUNICATION=true
+CONSCIOUSNESS_SUBSTRATE_ENABLED=true
+INTER_AGENT_COMMUNICATION_ENABLED=true
+AI_CHAT_AGENT_ENABLED=true
+WORKFLOW_ORCHESTRATION_ENABLED=true
+MULTI_MODEL_AI_ENABLED=true
+VECTOR_SEARCH_ENABLED=true
+REAL_TIME_MONITORING_ENABLED=true
+ADVANCED_ANALYTICS_ENABLED=true
+
+# Experimental Features (Future Development)
+DYNAMIC_AGENT_CREATION_ENABLED=false
+AUTO_SCALING_ENABLED=false
+PREDICTIVE_ANALYTICS_ENABLED=false
+QUANTUM_COMPUTING_INTEGRATION_ENABLED=false
+
+# ML Service Features
+ML_SERVICE_ENABLED=true
+ML_TRAINING_ENABLED=true
+ML_BATCH_PROCESSING_ENABLED=true
+ML_DRIFT_DETECTION_ENABLED=true
+ML_GPU_ACCELERATION_ENABLED=false
 ```
 
 ### Production Deployment

@@ -1,52 +1,18 @@
-# Configuration Overview
+# AthenAI Configuration
 
-This directory explains how to configure NeoV3 locally and in other environments. For the full, exhaustive list of variables and defaults, see `documentation/configuration/ENVIRONMENT_CONFIG.md`.
+**Note**: This directory contains deprecated configuration documentation. Current configuration is documented in the main README.md file.
 
-## Key environment variables (summary)
+Please refer to the [Configuration section in README.md](../../README.md#%EF%B8%8F-configuration) for up-to-date environment variable documentation that matches the AthenAI Node.js implementation.
 
-Refer to `.env.example` and `unified.env.example` in repo root. These are consumed by `docker-compose.yml` and the API.
+## Quick Reference
 
-- API
-  - HOST, PORT (default 8000)
-  - FLASK_ENV, SECRET_KEY
-- RabbitMQ
-  - RABBITMQ_DEFAULT_USER (default ai_agent_queue_user)
-  - RABBITMQ_DEFAULT_PASS (set this in your `.env`)
-  - RABBITMQ_URL (derived): `amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/`
-- Neo4j
-  - NEO4J_URI (default `bolt://neo4j:7687`)
-  - NEO4J_USER, NEO4J_PASSWORD
-- Postgres
-  - POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
-  - DATABASE_URL for API (psql URL)
-- Observability
-  - Grafana, Prometheus, Alertmanager: ports are mapped in `docker-compose*.yml`
-  - OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME (for services emitting traces/metrics)
-- Unstructured Worker
-  - UNSTRUCTURED_QUEUE (default `documents.process`)
-  - OPENAI_API_KEY, OPENAI_API_BASE (if embeddings required)
+For AthenAI configuration:
+1. Copy `.env.simplified.example` to `.env`
+2. Configure your API keys and database connections
+3. See README.md for complete variable documentation
+4. Start with `npm run dev` or Docker Compose
 
-See `ENVIRONMENT_CONFIG.md` for all supported variables.
-
-## API base paths and docs
-
-- RESTX prefix is `/api` (defined in `api/extensions.py` via `prefix="/api"`).
-- Health (back-compat): `GET /system/health` (defined in `api/app.py`).
-- Swagger UI: `GET /api/docs`
-- ReDoc: `GET /redoc` (spec at `GET /api/swagger.json`).
-
-## Document ingestion endpoint
-
-- Path: `POST /api/documents/enqueue`
-- JSON body:
-  - `doc_id` (string, required)
-  - `file_name` or `file_path` (one required)
-  - `content_type` (`pdf`|`text`, default `pdf`)
-  - `metadata` (object)
-- Queue used: `UNSTRUCTURED_QUEUE` (default `documents.process`).
-
-## Quick start
-
-- Create `.env` from `.env.example` and set secrets.
-- Start: `./deploy-local.sh --fresh` (or PowerShell equivalents).
-- Open local portal: `index.html` in repo root.
+## Access Points
+- Chat Interface: `http://localhost:3000/chat.html`
+- Web Interface: `http://localhost:3000`
+- API Health: `http://localhost:3000/health`
