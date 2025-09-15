@@ -75,7 +75,7 @@ check_neo4j() {
 init_postgres() {
     echo -e "${BLUE}🐘 Initializing PostgreSQL knowledge substrate...${NC}"
     
-    local schema_files=("db/supabase/functions.sql")
+    local schema_files=("db/supabase/functions.sql" "db/supabase/knowledge_search_functions.sql" "db/supabase/healing_insights_schema.sql")
     local found_schema=false
     
     for file in "${schema_files[@]}"; do
@@ -94,6 +94,8 @@ init_postgres() {
     if [ "$found_schema" = false ]; then
         echo -e "${RED}❌ No Supabase schema files found. Expected:${NC}"
         echo "   - db/supabase/functions.sql"
+        echo "   - db/supabase/knowledge_search_functions.sql"
+        echo "   - db/supabase/healing_insights_schema.sql"
         return 1
     fi
     
@@ -104,7 +106,7 @@ init_postgres() {
 init_neo4j() {
     echo -e "${BLUE}🕸️  Initializing Neo4j knowledge substrate...${NC}"
     
-    local schema_files=("db/neo4j/advanced_schema.cypher" "db/neo4j/schema.cypher")
+    local schema_files=("db/neo4j/advanced_schema.cypher" "db/neo4j/knowledge_search_index.cypher" "db/neo4j/ml_schema.cypher")
     local found_schema=false
     
     for file in "${schema_files[@]}"; do
@@ -122,8 +124,9 @@ init_neo4j() {
     
     if [ "$found_schema" = false ]; then
         echo -e "${RED}❌ No Neo4j schema files found. Expected:${NC}"
-        echo "   - db/neo4j/advanced_schema.cypher (recommended)"
-        echo "   - db/neo4j/schema.cypher (fallback)"
+        echo "   - db/neo4j/advanced_schema.cypher (main schema)"
+        echo "   - db/neo4j/knowledge_search_index.cypher (search indexes)"
+        echo "   - db/neo4j/ml_schema.cypher (ML extensions)"
         return 1
     fi
     

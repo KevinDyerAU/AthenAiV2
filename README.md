@@ -489,10 +489,19 @@ npm install
 cp .env.simplified.example .env
 # Edit .env with your API keys and database URLs
 
-# 4. Initialize databases
+# 4. Initialize databases (choose one method)
+
+# Method A: Use convenience scripts (recommended)
+# Unix/Linux/macOS:
+./init-db.sh
+
+# Windows:
+.\init-db.ps1
+
+# Method B: Manual database setup
 # Supabase: Run db/supabase/functions.sql in Supabase SQL Editor
 # Neo4j: Run db/neo4j/advanced_schema.cypher in Neo4j Browser
-# Healing: Run db/supabase/healing_insights_schema.sql in Supabase SQL Editor
+# ML Service: Run db/supabase/ml_schema.sql in Supabase SQL Editor
 
 # 5. Start the application
 npm run dev
@@ -505,6 +514,102 @@ docker-compose -f docker-compose.cloud.yml up -d
 
 # Simplified deployment (without ML service)
 docker-compose -f docker-compose.simplified.yml up -d
+```
+
+## 🗄️ Database Setup
+
+### Database Initialization Scripts
+
+AthenAI provides convenience scripts to initialize your databases with the required schemas:
+
+#### Core Database Setup
+```bash
+# Unix/Linux/macOS
+./init-db.sh
+
+# Windows
+.\init-db.ps1
+```
+
+**What these scripts do:**
+- Load environment variables from `.env` file
+- Validate Supabase and Neo4j configuration
+- Guide you through manual schema execution
+- Install Node.js dependencies
+- Run basic database connection tests
+
+#### ML Service Database Setup
+```bash
+# Unix/Linux/macOS
+./init-ml-db.sh
+
+# Windows
+.\init-ml-db.ps1
+```
+
+**What these scripts do:**
+- Initialize ML service database schema
+- Set up PyTorch integration tables
+- Configure monitoring and retraining infrastructure
+- Test Supabase connection with ML service credentials
+
+#### Neo4j Schema Execution
+```bash
+# Unix/Linux/macOS
+./run-neo4j-schema.sh [schema-file]
+
+# Windows
+.\run-neo4j-schema.ps1 [-SchemaFile schema-file]
+```
+
+**What these scripts do:**
+- Execute Neo4j schema files using `cypher-shell`
+- Use environment variables for authentication
+- Default to `db/neo4j/advanced_schema.cypher`
+
+### Database Schema Files
+
+#### Supabase (PostgreSQL)
+- `db/supabase/functions.sql` - Core knowledge substrate functions and ML service functions
+- `db/supabase/knowledge_search_functions.sql` - Vector similarity and hybrid search functions
+- `db/supabase/ml_schema.sql` - ML service tables, triggers, and policies
+- `db/supabase/healing_insights_schema.sql` - Self-healing system schema
+
+#### Neo4j (Graph Database)
+- `db/neo4j/advanced_schema.cypher` - Complete knowledge graph schema with ML extensions
+- `db/neo4j/knowledge_search_index.cypher` - Full-text search indexes
+- `db/neo4j/ml_schema.cypher` - ML-specific constraints and indexes
+
+### Manual Database Setup
+
+If you prefer manual setup or the scripts don't work in your environment:
+
+1. **Supabase Setup:**
+   - Open your Supabase project dashboard
+   - Go to SQL Editor
+   - Execute the following files in order:
+     - `db/supabase/functions.sql`
+     - `db/supabase/ml_schema.sql` (if using ML service)
+     - `db/supabase/healing_insights_schema.sql`
+
+2. **Neo4j Setup:**
+   - Open Neo4j Browser
+   - Execute `db/neo4j/advanced_schema.cypher`
+   - Optionally execute `db/neo4j/knowledge_search_index.cypher`
+
+### Environment Variables Required
+
+The scripts validate these environment variables from your `.env` file:
+
+```env
+# Required for all scripts
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# Required for Neo4j scripts
+NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_password
 ```
 
 ### Health Checks

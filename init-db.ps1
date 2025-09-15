@@ -92,7 +92,9 @@ function Initialize-PostgresSchema {
     Write-ColorOutput "🐘 Initializing PostgreSQL knowledge substrate..." "Blue"
     
     $schemaFiles = @(
-        "db\postgres\schema.sql"
+        "db\supabase\functions.sql",
+        "db\supabase\knowledge_search_functions.sql",
+        "db\supabase\healing_insights_schema.sql"
     )
     
     $foundSchema = $false
@@ -111,7 +113,9 @@ function Initialize-PostgresSchema {
     
     if (-not $foundSchema) {
         Write-ColorOutput "❌ No PostgreSQL schema files found. Expected:" "Red"
-        Write-ColorOutput "   - db\postgres\schema.sql" "White"
+        Write-ColorOutput "   - db\supabase\functions.sql" "White"
+        Write-ColorOutput "   - db\supabase\knowledge_search_functions.sql" "White"
+        Write-ColorOutput "   - db\supabase\healing_insights_schema.sql" "White"
         return $false
     }
     
@@ -124,7 +128,8 @@ function Initialize-Neo4jSchema {
     
     $schemaFiles = @(
         "db/neo4j/advanced_schema.cypher",
-        "db\neo4j\schema.cypher"
+        "db/neo4j/knowledge_search_index.cypher",
+        "db/neo4j/ml_schema.cypher"
     )
     
     $foundSchema = $false
@@ -143,8 +148,9 @@ function Initialize-Neo4jSchema {
     
     if (-not $foundSchema) {
         Write-ColorOutput "❌ No Neo4j schema files found. Expected:" "Red"
-        Write-ColorOutput "   - db/neo4j/advanced_schema.cypher (recommended)" "White"
-        Write-ColorOutput "   - db\neo4j\schema.cypher (fallback)" "White"
+        Write-ColorOutput "   - db/neo4j/advanced_schema.cypher (main schema)" "White"
+        Write-ColorOutput "   - db/neo4j/knowledge_search_index.cypher (search indexes)" "White"
+        Write-ColorOutput "   - db/neo4j/ml_schema.cypher (ML extensions)" "White"
         return $false
     }
     
@@ -232,8 +238,8 @@ function Main {
     Write-ColorOutput "📋 Next steps:" "Blue"
     Write-ColorOutput "  1. Update your .env file with actual database credentials" "White"
     Write-ColorOutput "  2. Run the knowledge substrate schemas in your database consoles:" "White"
-    Write-ColorOutput "     - Supabase: db\postgres\schema.sql" "White"
-    Write-ColorOutput "     - Neo4j: db\neo4j\schema.cypher" "White"
+    Write-ColorOutput "     - Supabase: db\supabase\functions.sql" "White"
+    Write-ColorOutput "     - Neo4j: db\neo4j\advanced_schema.cypher" "White"
     Write-ColorOutput "  3. Start the application with: npm run dev" "White"
     Write-ColorOutput "  4. Visit http://localhost:3000 to test the application" "White"
     Write-ColorOutput "  5. Check http://localhost:3000/chat.html for AI chat interface" "White"

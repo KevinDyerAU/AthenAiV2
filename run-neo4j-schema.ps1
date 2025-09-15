@@ -5,7 +5,7 @@ param(
     [string]$Neo4jUri = $env:NEO4J_URI,
     [string]$Neo4jUser = $env:NEO4J_USER,
     [string]$Neo4jPassword = $env:NEO4J_PASSWORD,
-    [string]$SchemaFile = "db\neo4j\schema.cypher"
+    [string]$SchemaFile = "db\neo4j\advanced_schema.cypher"
 )
 
 # Check if Neo4j environment variables are set

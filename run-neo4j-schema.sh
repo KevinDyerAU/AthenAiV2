@@ -6,7 +6,7 @@
 NEO4J_URI=${NEO4J_URI:-""}
 NEO4J_USER=${NEO4J_USER:-""}
 NEO4J_PASSWORD=${NEO4J_PASSWORD:-""}
-SCHEMA_FILE=${1:-"db/neo4j/schema.cypher"}
+SCHEMA_FILE=${1:-"db/neo4j/advanced_schema.cypher"}
 
 # Check if Neo4j environment variables are set
 if [ -z "$NEO4J_URI" ]; then
