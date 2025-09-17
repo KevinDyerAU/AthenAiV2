@@ -19,9 +19,10 @@ CREATE INDEX relationship_type_index IF NOT EXISTS FOR ()-[r:RELATED_TO]-() ON (
 CREATE INDEX relationship_confidence_index IF NOT EXISTS FOR ()-[r:RELATED_TO]-() ON (r.confidence);
 
 // Create full-text search indexes for content discovery
-CALL db.index.fulltext.createNodeIndex('entitySearch', ['Entity'], ['name', 'description']) IF NOT EXISTS;
-CALL db.index.fulltext.createNodeIndex('documentSearch', ['Document', 'Chunk'], ['content', 'title']) IF NOT EXISTS;
-CALL db.index.fulltext.createNodeIndex('knowledgeSearch', ['Entity', 'Document', 'Chunk'], ['name', 'content', 'title', 'description']) IF NOT EXISTS;
+// Using modern Neo4j 5.x syntax for full-text indexes
+CREATE FULLTEXT INDEX entitySearch FOR (e:Entity) ON EACH [e.name, e.description];
+CREATE FULLTEXT INDEX documentSearch FOR (d:Document|Chunk) ON EACH [d.content, d.title];
+CREATE FULLTEXT INDEX knowledgeSearch FOR (n:Entity|Document|Chunk) ON EACH [n.name, n.content, n.title, n.description];
 
 // Enhanced Entity node structure
 // Entities represent people, organizations, concepts, technologies, etc.
