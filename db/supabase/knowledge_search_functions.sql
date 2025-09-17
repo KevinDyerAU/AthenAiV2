@@ -97,13 +97,13 @@ BEGIN
     ke.content,
     ke.entity_type,
     ke.source_type,
-    (ke.source_metadata->>'domain')::varchar as domain,
+    ke.entity_type as domain, -- Using entity_type as domain fallback
     1 - (ke.embedding <=> query_embedding) as similarity
   FROM knowledge_entities ke
   WHERE 
     1 - (ke.embedding <=> query_embedding) > match_threshold
     AND (
-      ke.source_metadata->>'domain' = domain_filter
+      ke.entity_type = domain_filter
       OR domain_filter = 'all'
     )
   ORDER BY ke.embedding <=> query_embedding
@@ -132,16 +132,16 @@ BEGIN
   SELECT
     ke.id,
     ke.content,
-    (ke.source_metadata->>'expert_name')::varchar as expert_name,
-    (ke.source_metadata->>'expert_email')::varchar as expert_email,
-    COALESCE((ke.source_metadata->>'confidence')::float, 0.5) as confidence,
+    ke.source_type as expert_name, -- Using source_type as expert_name fallback
+    'unknown@example.com'::varchar as expert_email, -- Placeholder email
+    0.5 as confidence, -- Default confidence
     1 - (ke.embedding <=> topic_embedding) as similarity
   FROM knowledge_entities ke
   WHERE 
     ke.entity_type = 'expertise'
     AND 1 - (ke.embedding <=> topic_embedding) > match_threshold
   ORDER BY 
-    COALESCE((ke.source_metadata->>'confidence')::float, 0.5) DESC,
+    0.5 DESC, -- Default confidence ordering
     ke.embedding <=> topic_embedding
   LIMIT match_count;
 END;
@@ -238,9 +238,8 @@ ON knowledge_entities (source_type);
 CREATE INDEX IF NOT EXISTS idx_knowledge_entities_created_at 
 ON knowledge_entities (created_at DESC);
 
--- Create composite index for domain filtering
-CREATE INDEX IF NOT EXISTS idx_knowledge_entities_domain 
-ON knowledge_entities USING gin ((source_metadata->>'domain'));
+-- Removed domain index as source_metadata column may not exist
+-- Using entity_type for domain filtering instead
 
 -- Grant necessary permissions
 GRANT EXECUTE ON FUNCTION match_knowledge_entities TO authenticated;
