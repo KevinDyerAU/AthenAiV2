@@ -728,33 +728,44 @@ AthenAI provides convenience scripts to initialize your databases with the requi
 
 ### Database Schema Files
 
-#### Supabase (PostgreSQL)
-- `db/supabase/functions.sql` - Core knowledge substrate functions and ML service functions
-- `db/supabase/knowledge_search_functions.sql` - Vector similarity and hybrid search functions
-- `db/supabase/ml_schema.sql` - ML service tables, triggers, and policies
-- `db/supabase/healing_insights_schema.sql` - Self-healing system schema
+**⚠️ IMPORTANT**: The init scripts only suggest running one file from each database, but you need to run **ALL** schema files for complete functionality.
 
-#### Neo4j (Graph Database)
-- `db/neo4j/advanced_schema.cypher` - Complete knowledge graph schema with ML extensions
-- `db/neo4j/knowledge_search_index.cypher` - Full-text search indexes
-- `db/neo4j/ml_schema.cypher` - ML-specific constraints and indexes
+#### Supabase (PostgreSQL) - 4 Files Required
+Execute these files **in order** for complete setup:
+
+1. **`db/supabase/functions.sql`** - Core knowledge substrate functions and ML service functions
+2. **`db/supabase/knowledge_search_functions.sql`** - Vector similarity and hybrid search functions  
+3. **`db/supabase/healing_insights_schema.sql`** - Self-healing system schema
+4. **`db/supabase/ml_schema.sql`** - ML service tables, triggers, and policies
+
+#### Neo4j (Graph Database) - 3 Files Required
+Execute these files **in order** for complete setup:
+
+1. **`db/neo4j/advanced_schema.cypher`** - Complete knowledge graph schema with ML extensions
+2. **`db/neo4j/knowledge_search_index.cypher`** - Full-text search indexes
+3. **`db/neo4j/ml_schema.cypher`** - ML-specific constraints and indexes
 
 ### Manual Database Setup
 
-If you prefer manual setup or the scripts don't work in your environment:
+**Complete Setup Instructions** (all files required):
 
 1. **Supabase Setup:**
    - Open your Supabase project dashboard
    - Go to SQL Editor
-   - Execute the following files in order:
-     - `db/supabase/functions.sql`
-     - `db/supabase/ml_schema.sql` (if using ML service)
-     - `db/supabase/healing_insights_schema.sql`
+   - Execute **ALL** files in this exact order:
+     1. `db/supabase/functions.sql` (core functions first)
+     2. `db/supabase/knowledge_search_functions.sql` (search capabilities)
+     3. `db/supabase/healing_insights_schema.sql` (monitoring system)
+     4. `db/supabase/ml_schema.sql` (ML service integration)
 
 2. **Neo4j Setup:**
    - Open Neo4j Browser
-   - Execute `db/neo4j/advanced_schema.cypher`
-   - Optionally execute `db/neo4j/knowledge_search_index.cypher`
+   - Execute **ALL** files in this exact order:
+     1. `db/neo4j/advanced_schema.cypher` (main schema first)
+     2. `db/neo4j/knowledge_search_index.cypher` (search indexes)
+     3. `db/neo4j/ml_schema.cypher` (ML extensions)
+
+**Note**: The init scripts (`init-db.sh`/`init-db.ps1`) currently only suggest the first file found in each directory. You must manually run all remaining schema files for the complete AthenAI knowledge substrate, self-healing capabilities, ML integration, and multi-agent system to work properly.
 
 ### Environment Variables Required
 

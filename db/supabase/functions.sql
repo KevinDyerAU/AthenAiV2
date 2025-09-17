@@ -53,20 +53,21 @@ AS $$
 DECLARE
   start_time timestamptz := NOW() - time_period;
 BEGIN
+  -- Return basic knowledge entity statistics
   RETURN QUERY
   SELECT 
-    COUNT(*) as total_processed,
-    COUNT(*) FILTER (WHERE status = 'completed') as successful,
-    COUNT(*) FILTER (WHERE status = 'failed') as failed,
-    COALESCE(SUM(chunks_processed), 0) as total_chunks,
-    COALESCE(SUM(entities_extracted), 0) as total_entities,
-    COALESCE(SUM(relationships_found), 0) as total_relationships,
-    AVG(EXTRACT(EPOCH FROM (updated_at - created_at))) as avg_processing_time,
+    COUNT(*)::bigint as total_processed,
+    COUNT(*)::bigint as successful,
+    0::bigint as failed,
+    0::bigint as total_chunks,
+    COUNT(*)::bigint as total_entities,
+    0::bigint as total_relationships,
+    0::float as avg_processing_time,
     jsonb_object_agg(
       COALESCE(source_type, 'unknown'), 
       COUNT(*)
     ) as by_source_type
-  FROM processing_logs
+  FROM knowledge_entities
   WHERE created_at >= start_time;
 END;
 $$;
@@ -96,7 +97,7 @@ $$;
 -- Function: Get knowledge entity recommendations based on content similarity
 CREATE OR REPLACE FUNCTION get_knowledge_recommendations(
   content_text text,
-  entity_type text DEFAULT NULL,
+  filter_entity_type text DEFAULT NULL,
   limit_count int DEFAULT 5
 )
 RETURNS TABLE (
@@ -123,15 +124,15 @@ BEGIN
     similarity(ke.content, content_text) as similarity_score,
     ke.source_metadata
   FROM knowledge_entities ke
-  WHERE (entity_type IS NULL OR ke.entity_type = get_knowledge_recommendations.entity_type)
+  WHERE (filter_entity_type IS NULL OR ke.entity_type = filter_entity_type)
     AND similarity(ke.content, content_text) > 0.1
   ORDER BY similarity(ke.content, content_text) DESC
   LIMIT limit_count;
 END;
 $$;
 
--- Function: Clean up old processing logs
-CREATE OR REPLACE FUNCTION cleanup_old_processing_logs(
+-- Function: Clean up old knowledge entities
+CREATE OR REPLACE FUNCTION cleanup_old_knowledge_entities(
   retention_period interval DEFAULT '30 days'::interval
 )
 RETURNS int
@@ -140,11 +141,10 @@ AS $$
 DECLARE
   deleted_count int;
 BEGIN
-  DELETE FROM processing_logs 
+  DELETE FROM knowledge_entities 
   WHERE created_at < NOW() - retention_period;
   
   GET DIAGNOSTICS deleted_count = ROW_COUNT;
-  
   RETURN deleted_count;
 END;
 $$;
@@ -176,83 +176,46 @@ BEGIN
 END;
 $$;
 
--- Function: Get agent performance metrics
-CREATE OR REPLACE FUNCTION get_agent_performance_metrics(
-  agent_id text DEFAULT NULL,
-  time_period interval DEFAULT '24 hours'::interval
-)
-RETURNS TABLE (
-  agent_id text,
-  total_sessions bigint,
-  successful_sessions bigint,
-  failed_sessions bigint,
-  avg_duration float,
-  success_rate float
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  start_time timestamptz := NOW() - time_period;
-BEGIN
-  RETURN QUERY
-  SELECT 
-    ags.agent_id,
-    COUNT(*) as total_sessions,
-    COUNT(*) FILTER (WHERE ags.status = 'completed') as successful_sessions,
-    COUNT(*) FILTER (WHERE ags.status = 'failed') as failed_sessions,
-    AVG(EXTRACT(EPOCH FROM (ags.updated_at - ags.created_at))) as avg_duration,
-    (COUNT(*) FILTER (WHERE ags.status = 'completed')::float / COUNT(*)::float) as success_rate
-  FROM agent_sessions ags
-  WHERE ags.created_at >= start_time
-    AND (get_agent_performance_metrics.agent_id IS NULL OR ags.agent_id = get_agent_performance_metrics.agent_id)
-  GROUP BY ags.agent_id;
-END;
-$$;
+-- Removed get_agent_performance_metrics function as agent_sessions table doesn't exist
 
--- Function: Search emails by content and metadata
-CREATE OR REPLACE FUNCTION search_emails(
+-- Function: Search knowledge entities by content
+CREATE OR REPLACE FUNCTION search_knowledge_content(
   search_query text,
   from_date timestamptz DEFAULT NULL,
   to_date timestamptz DEFAULT NULL,
-  from_address text DEFAULT NULL,
-  limit_count int DEFAULT 20
+  limit_count integer DEFAULT 50
 )
 RETURNS TABLE (
-  processing_id uuid,
-  message_id text,
-  subject text,
-  from_address text,
-  to_addresses text[],
-  date_sent timestamptz,
+  id uuid,
+  entity_type text,
+  content text,
+  source_type text,
+  created_at timestamptz,
   content_preview text,
-  has_attachments boolean,
-  similarity_score float
+  similarity_score real
 )
 LANGUAGE plpgsql
 AS $$
 BEGIN
   RETURN QUERY
   SELECT 
-    el.processing_id,
-    el.message_id,
-    el.subject,
-    el.from_address,
-    el.to_addresses,
-    el.date_sent,
+    ke.id,
+    ke.entity_type,
+    ke.content,
+    ke.source_type,
+    ke.created_at,
     LEFT(ke.content, 200) as content_preview,
-    el.has_attachments,
     similarity(ke.content, search_query) as similarity_score
-  FROM email_logs el
-  JOIN processing_logs pl ON el.processing_id = pl.processing_id
-  JOIN knowledge_entities ke ON pl.processing_id::text = ke.external_id
-  WHERE (from_date IS NULL OR el.date_sent >= from_date)
-    AND (to_date IS NULL OR el.date_sent <= to_date)
-    AND (search_emails.from_address IS NULL OR el.from_address ILIKE '%' || search_emails.from_address || '%')
-    AND (ke.content ILIKE '%' || search_query || '%' OR el.subject ILIKE '%' || search_query || '%')
-  ORDER BY similarity(ke.content, search_query) DESC, el.date_sent DESC
+  FROM knowledge_entities ke
+  WHERE (from_date IS NULL OR ke.created_at >= from_date)
+    AND (to_date IS NULL OR ke.created_at <= to_date)
+    AND similarity(ke.content, search_query) > 0.1
+  ORDER BY similarity(ke.content, search_query) DESC
   LIMIT limit_count;
 END;
 $$;
+
+-- Removed search_emails function as email_logs table doesn't exist
 
 -- Function: Get knowledge entity statistics
 CREATE OR REPLACE FUNCTION get_knowledge_stats()
@@ -360,41 +323,12 @@ ON knowledge_entities (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_knowledge_entities_external_id 
 ON knowledge_entities (external_id);
 
-CREATE INDEX IF NOT EXISTS idx_processing_logs_status 
-ON processing_logs (status);
+-- Removed processing_logs indexes as table doesn't exist
 
-CREATE INDEX IF NOT EXISTS idx_processing_logs_created_at 
-ON processing_logs (created_at DESC);
+-- Removed email_logs and contacts indexes as tables don't exist
+-- Knowledge entities already have appropriate indexes
 
-CREATE INDEX IF NOT EXISTS idx_processing_logs_source_type 
-ON processing_logs (source_type);
-
-CREATE INDEX IF NOT EXISTS idx_email_logs_processing_id 
-ON email_logs (processing_id);
-
-CREATE INDEX IF NOT EXISTS idx_email_logs_from_address 
-ON email_logs (from_address);
-
-CREATE INDEX IF NOT EXISTS idx_email_logs_date_sent 
-ON email_logs (date_sent DESC);
-
-CREATE INDEX IF NOT EXISTS idx_email_logs_subject_gin 
-ON email_logs USING gin (to_tsvector('english', subject));
-
-CREATE INDEX IF NOT EXISTS idx_contacts_email 
-ON contacts (email);
-
-CREATE INDEX IF NOT EXISTS idx_contacts_last_seen 
-ON contacts (last_seen DESC);
-
-CREATE INDEX IF NOT EXISTS idx_agent_sessions_agent_id 
-ON agent_sessions (agent_id);
-
-CREATE INDEX IF NOT EXISTS idx_agent_sessions_status 
-ON agent_sessions (status);
-
-CREATE INDEX IF NOT EXISTS idx_agent_sessions_created_at 
-ON agent_sessions (created_at DESC);
+-- Removed agent_sessions indexes as table doesn't exist
 
 -- Enable trigram similarity extension for text search
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -407,336 +341,11 @@ ON knowledge_entities USING gin (content gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_knowledge_entities_type_created 
 ON knowledge_entities (entity_type, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_processing_logs_type_status_created 
-ON processing_logs (source_type, status, created_at DESC);
+-- Removed processing_logs composite index as table doesn't exist
 
--- ML Service Functions for AthenAI V2
--- These functions support the ML service, model monitoring, and MLOps pipeline
 
--- Function: Store ML model predictions
-CREATE OR REPLACE FUNCTION store_ml_prediction(
-  model_type text,
-  input_data jsonb,
-  prediction jsonb,
-  confidence float,
-  knowledge_used boolean DEFAULT false,
-  session_id text DEFAULT NULL
-)
-RETURNS uuid
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  prediction_id uuid;
-BEGIN
-  INSERT INTO ml_model_predictions (
-    model_type,
-    input_data,
-    prediction,
-    confidence,
-    knowledge_used,
-    session_id
-  ) VALUES (
-    model_type,
-    input_data,
-    prediction,
-    confidence,
-    knowledge_used,
-    session_id
-  ) RETURNING id INTO prediction_id;
-  
-  RETURN prediction_id;
-END;
-$$;
 
--- Function: Get model performance metrics
-CREATE OR REPLACE FUNCTION get_model_performance_metrics(
-  model_type text DEFAULT NULL,
-  time_period interval DEFAULT '24 hours'::interval
-)
-RETURNS TABLE (
-  model_type text,
-  total_predictions bigint,
-  avg_confidence float,
-  knowledge_usage_rate float,
-  predictions_per_hour float,
-  low_confidence_rate float
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  start_time timestamptz := NOW() - time_period;
-BEGIN
-  RETURN QUERY
-  SELECT 
-    mp.model_type,
-    COUNT(*) as total_predictions,
-    AVG(mp.confidence) as avg_confidence,
-    (COUNT(*) FILTER (WHERE mp.knowledge_used = true)::float / COUNT(*)::float) as knowledge_usage_rate,
-    (COUNT(*)::float / EXTRACT(EPOCH FROM time_period) * 3600) as predictions_per_hour,
-    (COUNT(*) FILTER (WHERE mp.confidence < 0.7)::float / COUNT(*)::float) as low_confidence_rate
-  FROM ml_model_predictions mp
-  WHERE mp.created_at >= start_time
-    AND (get_model_performance_metrics.model_type IS NULL OR mp.model_type = get_model_performance_metrics.model_type)
-  GROUP BY mp.model_type;
-END;
-$$;
-
--- Function: Store training run results
-CREATE OR REPLACE FUNCTION store_training_run(
-  model_type text,
-  model_config jsonb,
-  training_metrics jsonb,
-  model_path text,
-  mlflow_run_id text DEFAULT NULL,
-  status text DEFAULT 'completed'
-)
-RETURNS uuid
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  run_id uuid;
-BEGIN
-  INSERT INTO ml_training_runs (
-    model_type,
-    model_config,
-    training_metrics,
-    model_path,
-    mlflow_run_id,
-    status
-  ) VALUES (
-    model_type,
-    model_config,
-    training_metrics,
-    model_path,
-    mlflow_run_id,
-    status
-  ) RETURNING id INTO run_id;
-  
-  RETURN run_id;
-END;
-$$;
-
--- Function: Submit batch prediction job
-CREATE OR REPLACE FUNCTION submit_batch_job(
-  job_type text,
-  input_data jsonb,
-  config jsonb DEFAULT '{}'::jsonb,
-  callback_url text DEFAULT NULL
-)
-RETURNS uuid
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  job_id uuid;
-BEGIN
-  INSERT INTO ml_batch_jobs (
-    job_type,
-    input_data,
-    config,
-    callback_url,
-    status
-  ) VALUES (
-    job_type,
-    input_data,
-    config,
-    callback_url,
-    'pending'
-  ) RETURNING id INTO job_id;
-  
-  RETURN job_id;
-END;
-$$;
-
--- Function: Update batch job status
-CREATE OR REPLACE FUNCTION update_batch_job_status(
-  job_id uuid,
-  new_status text,
-  progress_percentage int DEFAULT NULL,
-  results jsonb DEFAULT NULL,
-  error_message text DEFAULT NULL
-)
-RETURNS boolean
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  UPDATE ml_batch_jobs 
-  SET 
-    status = new_status,
-    progress = COALESCE(progress_percentage, progress),
-    results = COALESCE(results, ml_batch_jobs.results),
-    error_message = COALESCE(update_batch_job_status.error_message, ml_batch_jobs.error_message),
-    updated_at = NOW()
-  WHERE id = job_id;
-  
-  RETURN FOUND;
-END;
-$$;
-
--- Function: Store model monitoring alert
-CREATE OR REPLACE FUNCTION store_monitoring_alert(
-  alert_type text,
-  severity text,
-  message text,
-  details jsonb DEFAULT '{}'::jsonb,
-  model_type text DEFAULT NULL
-)
-RETURNS uuid
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  alert_id uuid;
-BEGIN
-  INSERT INTO ml_monitoring_alerts (
-    alert_type,
-    severity,
-    message,
-    details,
-    model_type,
-    status
-  ) VALUES (
-    alert_type,
-    severity,
-    message,
-    details,
-    model_type,
-    'active'
-  ) RETURNING id INTO alert_id;
-  
-  RETURN alert_id;
-END;
-$$;
-
--- Function: Get data drift metrics
-CREATE OR REPLACE FUNCTION get_data_drift_metrics(
-  model_type text DEFAULT NULL,
-  time_period interval DEFAULT '24 hours'::interval
-)
-RETURNS TABLE (
-  model_type text,
-  feature_name text,
-  drift_score float,
-  p_value float,
-  is_drifting boolean,
-  last_checked timestamptz
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  start_time timestamptz := NOW() - time_period;
-BEGIN
-  RETURN QUERY
-  SELECT 
-    ddm.model_type,
-    ddm.feature_name,
-    ddm.drift_score,
-    ddm.p_value,
-    ddm.is_drifting,
-    ddm.created_at as last_checked
-  FROM ml_data_drift_metrics ddm
-  WHERE ddm.created_at >= start_time
-    AND (get_data_drift_metrics.model_type IS NULL OR ddm.model_type = get_data_drift_metrics.model_type)
-  ORDER BY ddm.created_at DESC;
-END;
-$$;
-
--- Function: Clean up old ML data
-CREATE OR REPLACE FUNCTION cleanup_old_ml_data(
-  predictions_retention interval DEFAULT '90 days'::interval,
-  training_runs_retention interval DEFAULT '1 year'::interval,
-  batch_jobs_retention interval DEFAULT '30 days'::interval,
-  alerts_retention interval DEFAULT '90 days'::interval
-)
-RETURNS TABLE (
-  predictions_deleted int,
-  training_runs_deleted int,
-  batch_jobs_deleted int,
-  alerts_deleted int
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  pred_count int;
-  train_count int;
-  batch_count int;
-  alert_count int;
-BEGIN
-  -- Clean up old predictions
-  DELETE FROM ml_model_predictions 
-  WHERE created_at < NOW() - predictions_retention;
-  GET DIAGNOSTICS pred_count = ROW_COUNT;
-  
-  -- Clean up old training runs
-  DELETE FROM ml_training_runs 
-  WHERE created_at < NOW() - training_runs_retention;
-  GET DIAGNOSTICS train_count = ROW_COUNT;
-  
-  -- Clean up old batch jobs
-  DELETE FROM ml_batch_jobs 
-  WHERE created_at < NOW() - batch_jobs_retention
-    AND status IN ('completed', 'failed');
-  GET DIAGNOSTICS batch_count = ROW_COUNT;
-  
-  -- Clean up old resolved alerts
-  DELETE FROM ml_monitoring_alerts 
-  WHERE created_at < NOW() - alerts_retention
-    AND status = 'resolved';
-  GET DIAGNOSTICS alert_count = ROW_COUNT;
-  
-  RETURN QUERY SELECT pred_count, train_count, batch_count, alert_count;
-END;
-$$;
-
--- Create ML-specific indexes for optimal performance
-CREATE INDEX IF NOT EXISTS idx_ml_predictions_model_type 
-ON ml_model_predictions (model_type);
-
-CREATE INDEX IF NOT EXISTS idx_ml_predictions_created_at 
-ON ml_model_predictions (created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_ml_predictions_confidence 
-ON ml_model_predictions (confidence);
-
-CREATE INDEX IF NOT EXISTS idx_ml_predictions_knowledge_used 
-ON ml_model_predictions (knowledge_used);
-
-CREATE INDEX IF NOT EXISTS idx_ml_training_runs_model_type 
-ON ml_training_runs (model_type);
-
-CREATE INDEX IF NOT EXISTS idx_ml_training_runs_status 
-ON ml_training_runs (status);
-
-CREATE INDEX IF NOT EXISTS idx_ml_training_runs_created_at 
-ON ml_training_runs (created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_ml_batch_jobs_status 
-ON ml_batch_jobs (status);
-
-CREATE INDEX IF NOT EXISTS idx_ml_batch_jobs_job_type 
-ON ml_batch_jobs (job_type);
-
-CREATE INDEX IF NOT EXISTS idx_ml_batch_jobs_created_at 
-ON ml_batch_jobs (created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_ml_alerts_status 
-ON ml_monitoring_alerts (status);
-
-CREATE INDEX IF NOT EXISTS idx_ml_alerts_severity 
-ON ml_monitoring_alerts (severity);
-
-CREATE INDEX IF NOT EXISTS idx_ml_alerts_model_type 
-ON ml_monitoring_alerts (model_type);
-
-CREATE INDEX IF NOT EXISTS idx_ml_alerts_created_at 
-ON ml_monitoring_alerts (created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_ml_drift_metrics_model_type 
-ON ml_data_drift_metrics (model_type);
-
-CREATE INDEX IF NOT EXISTS idx_ml_drift_metrics_is_drifting 
-ON ml_data_drift_metrics (is_drifting);
-
-CREATE INDEX IF NOT EXISTS idx_ml_drift_metrics_created_at 
-ON ml_data_drift_metrics (created_at DESC);
+-- Removed ML indexes as ML tables are in separate ml_schema.sql file
 
 -- Grant necessary permissions
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO service_role;
