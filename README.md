@@ -429,6 +429,116 @@ healing_predictions (
 )
 ```
 
+## 📧 Email Monitoring & Processing
+
+AthenAI provides comprehensive email monitoring through a distributed microservice architecture with AI-powered analysis and knowledge integration.
+
+### 🏗️ Email Service Architecture
+
+**Microservice Design**
+- Dedicated email processing service (`services/email-service/`)
+- RabbitMQ message queue for asynchronous processing
+- Gmail API integration for email retrieval and management
+- Knowledge substrate integration with Supabase and Neo4j
+
+### 🔄 Email Processing Pipeline
+
+#### Queue-Based Processing
+```javascript
+// RabbitMQ Queues
+email_processing_queue: {
+  purpose: "Individual email processing",
+  ttl: "1 hour",
+  maxRetries: 3
+}
+
+email_batch_processing_queue: {
+  purpose: "Batch email processing", 
+  ttl: "2 hours",
+  maxRetries: 2
+}
+```
+
+#### AI-Powered Analysis Stages
+1. **Email Fetching**: Retrieve email content via Gmail API
+2. **Embedding Generation**: Create vector embeddings for similarity search
+3. **Knowledge Search**: Find similar emails (0.8 similarity threshold)
+4. **Contact Extraction**: Parse and store contact information
+5. **Attachment Processing**: Handle email attachments
+6. **Knowledge Creation**: Store insights in knowledge substrate
+
+### 🤖 Intelligent Email Processing
+
+**Agent-Based Processing**
+- **Think Function**: AI reasoning to decide next processing step
+- **Knowledge-First Priority**: Checks existing knowledge before external processing
+- **Session Tracking**: Complete audit trail in agent_sessions table
+- **Iterative Processing**: Maximum 10 iterations per email with timeout protection
+
+**Gmail API Integration**
+```javascript
+// Core Gmail Operations
+- OAuth2 authentication with credentials/token files
+- Message retrieval, parsing, and attachment handling
+- Email sending, labeling, and status management
+- Base64 encoding/decoding for message content
+```
+
+### 🗄️ Data Storage & Knowledge Integration
+
+**Supabase Integration**
+- Email logs and processing status
+- Agent sessions tracking
+- Vector embeddings for similarity search
+- Contact extraction and storage
+
+**Neo4j Integration**
+- Email relationship mapping
+- Contact network analysis
+- Knowledge graph connections
+- Email thread relationships
+
+### 📊 Monitoring & Observability
+
+**Structured Logging**
+```javascript
+// Winston logging with JSON format
+- email_service.log: Service-level operations
+- email_processor.log: Processing pipeline events
+- agent_tools.log: AI decision-making logs
+- gmail.log: Gmail API interactions
+```
+
+**Health Monitoring**
+- RabbitMQ connection status
+- Gmail API connectivity
+- Processing queue metrics
+- Uptime and performance tracking
+
+### 🚀 Email Processing Workflow
+
+1. **Email Detection**: Gmail API monitors for new emails
+2. **Queue Submission**: Email IDs sent to RabbitMQ processing queue
+3. **AI Analysis**: Agent tools analyze content and context using LLM reasoning
+4. **Knowledge Storage**: Insights stored in Supabase/Neo4j knowledge substrate
+5. **Action Execution**: Automated responses, labeling, or forwarding
+6. **Session Tracking**: Complete processing audit trail
+
+### ⚙️ Email Service Configuration
+
+```env
+# Email Service
+RABBITMQ_URI=amqp://localhost:5672
+GMAIL_CREDENTIALS_PATH=/app/gmail_credentials.json
+GMAIL_TOKEN_PATH=/app/gmail_token.json
+
+# Email Processing
+EMAIL_PROCESSING_ENABLED=true
+EMAIL_BATCH_SIZE=10
+EMAIL_RETRY_ATTEMPTS=3
+EMAIL_SIMILARITY_THRESHOLD=0.8
+```
+
 ## ⚙️ Configuration
 
 ### Environment Variables
