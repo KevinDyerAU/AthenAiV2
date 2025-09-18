@@ -9,12 +9,12 @@ const axios = require('axios');
 const { logger } = require('../utils/logger');
 const { createSupabaseClient } = require('../services/database');
 const { createNeo4jDriver } = require('../utils/neo4j');
-const { LangChainAgent } = require('./LangChainAgent');
+const BaseAgent = require('./BaseAgent');
 const { progressBroadcaster } = require('../services/progressBroadcaster');
 const { ErrorHandler, AgentExecutionError, AIAPIError } = require('../utils/errorHandler');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
 const { SemanticSimilarity } = require('../utils/semanticSimilarity');
-const BaseAgent = require('./BaseAgent');
+const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
 const databaseService = require('../services/database');
 
 class ResearchAgent extends BaseAgent {
