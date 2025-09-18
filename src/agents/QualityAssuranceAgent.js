@@ -24,7 +24,7 @@ class QualityAssuranceAgent {
     this.reasoning = new ReasoningFramework('QualityAssuranceAgent');
     
     if (useOpenRouter) {
-      this.llm = new ChatOpenAI({
+            this.llm = new ChatOpenAI({
         modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
         temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENROUTER_API_KEY,
@@ -32,12 +32,11 @@ class QualityAssuranceAgent {
           baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
           defaultHeaders: {
             'HTTP-Referer': 'https://athenai.local',
-            'X-Title': 'AthenAI Quality Assurance Agent'
+            'X-Title': 'AthenAI System'
           }
         },
-        timeout: parseInt(process.env.OPENROUTER_TIMEOUT) || 60000,
-        maxRetries: 2,
-        tags: ['qa-agent', 'athenai', 'openrouter']
+        timeout: 10000,
+        maxRetries: 2
       });
     } else {
       this.llm = new ChatOpenAI({

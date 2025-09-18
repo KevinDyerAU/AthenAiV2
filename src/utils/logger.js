@@ -17,6 +17,7 @@ const logger = winston.createLogger({
 
 if (process.env.NODE_ENV !== 'production') {
   logger.add(new winston.transports.Console({
+    level: process.env.LOG_LEVEL || 'info',
     format: winston.format.combine(
       winston.format.colorize(),
       winston.format.simple()

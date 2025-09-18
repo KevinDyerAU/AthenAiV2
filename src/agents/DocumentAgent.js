@@ -28,16 +28,20 @@ class DocumentAgent {
             ...config
         };
 
-        this.llm = new ChatOpenAI({
-            openAIApiKey: this.config.openaiApiKey,
-            configuration: {
-                baseURL: this.config.openaiBaseURL,
-            },
-            modelName: this.config.model,
-            temperature: this.config.temperature,
-            timeout: 60000,
-            maxRetries: 2,
-        });
+              this.llm = new ChatOpenAI({
+        modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+        temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
+        openAIApiKey: process.env.OPENROUTER_API_KEY,
+        configuration: {
+          baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+          defaultHeaders: {
+            'HTTP-Referer': 'https://athenai.local',
+            'X-Title': 'AthenAI System'
+          }
+        },
+        timeout: 10000,
+        maxRetries: 2
+      });
 
         // PostgreSQL connection pool
         this.pgPool = new Pool({

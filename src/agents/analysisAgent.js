@@ -25,12 +25,11 @@ class AnalysisAgent {
           baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
           defaultHeaders: {
             'HTTP-Referer': 'https://athenai.local',
-            'X-Title': 'AthenAI Analysis Agent'
+            'X-Title': 'AthenAI System'
           }
         },
-        timeout: parseInt(process.env.OPENROUTER_TIMEOUT) || 60000,
-        maxRetries: 2,
-        tags: ['analysis-agent', 'athenai', 'openrouter']
+        timeout: 10000,
+        maxRetries: 2
       });
     } else {
       this.llm = new ChatOpenAI({

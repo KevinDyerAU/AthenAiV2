@@ -11,7 +11,21 @@ class MasterOrchestrator {
     // Primary OpenAI configuration with OpenRouter fallback
     const useOpenRouter = process.env.USE_OPENROUTER === 'true';
     
+    // Log configuration details for debugging
+    logger.debug('MasterOrchestrator: Initializing with configuration', {
+      useOpenRouter,
+      openRouterModel: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+      openAiModel: process.env.OPENAI_MODEL || 'gpt-4',
+      hasOpenRouterKey: !!process.env.OPENROUTER_API_KEY,
+      hasOpenAiKey: !!process.env.OPENAI_API_KEY,
+      openRouterKeyLength: process.env.OPENROUTER_API_KEY ? process.env.OPENROUTER_API_KEY.length : 0,
+      openAiKeyLength: process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.length : 0
+    });
+    
     if (useOpenRouter) {
+      if (!process.env.OPENROUTER_API_KEY) {
+        logger.error('MasterOrchestrator: OpenRouter selected but OPENROUTER_API_KEY not configured');
+      }
       this.llm = new ChatOpenAI({
         modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
         temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
@@ -20,14 +34,16 @@ class MasterOrchestrator {
           baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
           defaultHeaders: {
             'HTTP-Referer': 'https://athenai.local',
-            'X-Title': 'AthenAI Master Orchestrator'
+            'X-Title': 'AthenAI System'
           }
         },
-        timeout: parseInt(process.env.OPENROUTER_TIMEOUT) || 30000,
-        maxRetries: 2,
-        tags: ['master-orchestrator', 'athenai', 'openrouter']
+        timeout: 10000,
+        maxRetries: 2
       });
     } else {
+      if (!process.env.OPENAI_API_KEY) {
+        logger.error('MasterOrchestrator: OpenAI selected but OPENAI_API_KEY not configured');
+      }
       this.llm = new ChatOpenAI({
         modelName: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
@@ -172,6 +188,85 @@ Respond with ONLY the JSON object.`);
     }
   }
 
+  async routeToAgent(task, sessionId, conversationContext = []) {
+    const startTime = Date.now();
+    try {
+      // Ensure task is a string
+      const taskString = typeof task === 'string' ? task : JSON.stringify(task);
+      
+      logger.debug('MasterOrchestrator: Starting agent routing process', {
+        taskString: taskString.substring(0, 200) + '...',
+        sessionId,
+        conversationContextLength: conversationContext.length,
+        timestamp: new Date().toISOString()
+      });
+
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'registry_routing_start',
+        message: 'Consulting AgentRegistry for optimal agent selection...',
+        progress: 30
+      });
+
+      // First, try AgentRegistry-based routing
+      logger.info('MasterOrchestrator: Attempting AgentRegistry selection', { sessionId });
+      const selectedAgent = await agentRegistry.selectAgent(taskString, conversationContext);
+      
+      if (!selectedAgent) {
+        logger.warn('MasterOrchestrator: AgentRegistry returned null/undefined agent', { 
+          sessionId,
+          taskString: taskString.substring(0, 100) + '...'
+        });
+        throw new Error('AgentRegistry returned no agent selection');
+      }
+      
+      logger.info('MasterOrchestrator: AgentRegistry selection completed', {
+        selectedAgent: selectedAgent ? {
+          id: selectedAgent.id,
+          name: selectedAgent.name,
+          confidence: selectedAgent.confidence_threshold,
+          capabilities: selectedAgent.capabilities
+        } : null,
+        sessionId,
+        routingTime: Date.now() - startTime
+      });
+
+      await progressBroadcaster.broadcastProgress(sessionId, {
+        phase: 'registry_routing_complete',
+        message: `AgentRegistry selected: ${selectedAgent.name}`,
+        progress: 50
+      });
+
+      // Map registry agent to our routing format
+      const routingResult = this.mapRegistryAgentToRouting(selectedAgent, taskString);
+      
+      logger.info('MasterOrchestrator: Agent routing determination complete', { 
+        routingResult,
+        selectedAgentId: selectedAgent.id,
+        totalRoutingTime: Date.now() - startTime,
+        sessionId
+      });
+
+      return routingResult;
+
+    } catch (error) {
+      const routingTime = Date.now() - startTime;
+      logger.error('MasterOrchestrator: AgentRegistry routing failed, using fallback', {
+        error: {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        },
+        taskString: typeof task === 'string' ? task.substring(0, 100) + '...' : JSON.stringify(task).substring(0, 100) + '...',
+        sessionId,
+        routingTime,
+        timestamp: new Date().toISOString()
+      });
+
+      // Fallback to AI-powered routing if registry fails
+      return this.fallbackAIRouting(task, sessionId, conversationContext);
+    }
+  }
+
   async determineAgentRouting(task, sessionId = 'default') {
     try {
       // Ensure task is a string
@@ -231,23 +326,44 @@ Respond with ONLY the JSON object.`);
   }
 
   async fallbackAIRouting(task, sessionId, conversationContext = []) {
+    const startTime = Date.now();
     try {
       // Ensure task is a string
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
+      
+      logger.debug('MasterOrchestrator: Starting fallback AI routing', {
+        taskString: taskString.substring(0, 100) + '...',
+        sessionId,
+        conversationContextLength: conversationContext.length,
+        timestamp: new Date().toISOString()
+      });
       
       // Check if API key is available
       const useOpenRouter = process.env.USE_OPENROUTER === 'true';
       const apiKey = useOpenRouter ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY;
       
+      logger.debug('MasterOrchestrator: API key validation', {
+        useOpenRouter,
+        hasApiKey: !!apiKey,
+        apiKeyLength: apiKey ? apiKey.length : 0,
+        sessionId
+      });
+      
       if (!apiKey) {
-        logger.warn('No API key available, using fallback keyword matching for agent routing');
-        await progressBroadcaster.broadcastProgress(sessionId, {
-          phase: 'no_api_key',
-          message: 'No API key configured, using keyword-based routing',
-          progress: 40,
-          error: 'No API key configured'
+        const errorMessage = useOpenRouter 
+          ? 'OpenRouter API key is not configured. Please set OPENROUTER_API_KEY in your environment variables.'
+          : 'OpenAI API key is not configured. Please set OPENAI_API_KEY in your environment variables.';
+        
+        logger.error('MasterOrchestrator: No API key available', {
+          useOpenRouter,
+          sessionId,
+          taskString: taskString.substring(0, 100) + '...',
+          timestamp: new Date().toISOString(),
+          error: errorMessage
         });
-        throw new Error('No API key configured');
+        
+        progressBroadcaster.errorProgress(sessionId, errorMessage);
+        throw new Error(errorMessage);
       }
       
       // Build context summary for routing
@@ -313,11 +429,7 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
           }
         });
         
-        await progressBroadcaster.broadcastProgress(sessionId, {
-          phase: 'ai_routing',
-          message: 'Calling AI model for agent routing...',
-          progress: 40
-        });
+        progressBroadcaster.updateProgress(sessionId, 'ai_routing', 'Calling AI model for agent routing...', { progress: 40 });
         
         const startTime = Date.now();
         const response = await Promise.race([
@@ -341,38 +453,31 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
           sessionId
         });
         
-        await progressBroadcaster.broadcastProgress(sessionId, {
-          phase: 'ai_routing_complete',
-          message: `AI selected agent: "${primaryAgent}" (${typeof primaryAgent}) in ${responseTime}ms`,
-          progress: 50
-        });
+        progressBroadcaster.updateProgress(sessionId, 'ai_routing_complete', `AI selected agent: "${primaryAgent}" in ${responseTime}ms`, { progress: 50 });
       } catch (error) {
-        logger.warn('MasterOrchestrator: Agent routing API call failed, using keyword-based fallback', { 
-          error: error.message,
-          stack: error.stack,
-          taskString: taskString.substring(0, 100) + '...'
-        });
-        // Intelligent keyword-based fallback when AI routing fails
-        await progressBroadcaster.broadcastProgress(sessionId, {
-          phase: 'fallback_routing',
-          message: `AI routing failed: ${error.message}. Using keyword-based fallback...`,
-          progress: 45,
-          error: error.message
-        });
-        
-        primaryAgent = this.getKeywordBasedAgent(taskString);
-        logger.info('MasterOrchestrator: Keyword-based fallback selected agent', { 
-          primaryAgent,
-          taskString: taskString.substring(0, 200) + '...',
-          fullTaskString: taskString,
-          sessionId
+        const aiRoutingTime = Date.now() - startTime;
+        logger.error('MasterOrchestrator: Agent routing API call failed', { 
+          error: {
+            message: error.message,
+            name: error.name,
+            stack: error.stack,
+            code: error.code
+          },
+          taskString: taskString.substring(0, 100) + '...',
+          sessionId,
+          aiRoutingTime,
+          useOpenRouter,
+          hasApiKey: !!apiKey,
+          timestamp: new Date().toISOString()
         });
         
-        await progressBroadcaster.broadcastProgress(sessionId, {
-          phase: 'fallback_complete',
-          message: `Fallback selected agent: ${primaryAgent}`,
-          progress: 50
-        });
+        // Return proper error instead of falling back to keywords
+        const errorMessage = error.message.includes('timeout') 
+          ? 'AI routing service timed out. Please check your API key configuration and try again.'
+          : `AI routing failed: ${error.message}. Please verify your API key is valid and try again.`;
+        
+        progressBroadcaster.errorProgress(sessionId, errorMessage);
+        throw new Error(errorMessage);
       }
       
       // Clean and validate the response
@@ -644,8 +749,10 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
   }
 
   async executeOrchestration(inputData) {
+    const startTime = Date.now();
     const sessionId = inputData.sessionId || this.generateSessionId();
     const taskMessage = inputData.message || inputData.task || inputData;
+    const conversationContext = inputData.conversationContext || [];
     
     try {
       logger.info('MasterOrchestrator: Starting orchestration', {
@@ -666,6 +773,7 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       
       const routing = await this.routeToAgent(taskMessage, sessionId, conversationContext);
       
+      const orchestrationId = this.generateSessionId();
       logger.info('MasterOrchestrator: Agent routing complete', { 
         orchestrationId, 
         routing 
@@ -686,6 +794,12 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       });
 
       // Step 4: Store orchestration result
+      const metadata = {
+        orchestration_id: orchestrationId,
+        task_type: routing.primary,
+        complexity_level: complexity.level || 'simple'
+      };
+      
       this.executionPlans.set(orchestrationId, {
         complexity,
         routing,
@@ -695,7 +809,7 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
           ...metadata,
           created_at: new Date().toISOString(),
           session_id: sessionId,
-          user_id: userId
+          user_id: inputData.userId || 'anonymous'
         }
       });
 
@@ -726,13 +840,23 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       return result;
       
     } catch (error) {
+      const orchestrationTime = Date.now() - startTime;
       logger.error('MasterOrchestrator: Orchestration execution failed', {
-        error: error.message,
-        stack: error.stack,
-        name: error.name,
+        error: {
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+          code: error.code
+        },
         sessionId,
         taskMessage: taskMessage?.substring(0, 100) + '...',
-        timestamp: new Date().toISOString()
+        orchestrationTime,
+        timestamp: new Date().toISOString(),
+        context: {
+          hasTaskMessage: !!taskMessage,
+          taskMessageType: typeof taskMessage,
+          taskMessageLength: taskMessage?.length || 0
+        }
       });
       progressBroadcaster.errorProgress(sessionId, error);
       throw error;
@@ -755,6 +879,15 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       lowerMessage: lowerMessage.substring(0, 200) + '...',
       fullMessage: message
     });
+    
+    // Simple greetings and casual conversation patterns
+    if (lowerMessage.match(/^(hi|hello|hey|good morning|good afternoon|good evening|greetings|howdy)$/i) ||
+        lowerMessage.match(/^(hi|hello|hey)\s*[!.]*$/i) ||
+        lowerMessage.includes('how are you') || lowerMessage.includes('what\'s up') ||
+        lowerMessage.includes('good day') || lowerMessage.includes('nice to meet')) {
+      logger.info('MasterOrchestrator: Matched greeting pattern', { pattern: 'general' });
+      return 'general';
+    }
     
     // Repository/GitHub analysis patterns
     if (lowerMessage.includes('github.com') || lowerMessage.includes('repository') || 
@@ -812,12 +945,37 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       return 'communication';
     }
     
-    // Default to research for general queries
-    logger.info('MasterOrchestrator: No specific pattern matched, defaulting to research', { 
-      pattern: 'research',
+    // Default to general for simple queries and conversations
+    logger.info('MasterOrchestrator: No specific pattern matched, defaulting to general', { 
+      pattern: 'general',
       reason: 'default_fallback'
     });
-    return 'research';
+    return 'general';
+  }
+
+  determinePriority(complexityLevel) {
+    switch (complexityLevel) {
+      case 'simple':
+        return 'low';
+      case 'moderate':
+        return 'medium';
+      case 'complex':
+        return 'high';
+      case 'very_complex':
+        return 'critical';
+      default:
+        return 'medium';
+    }
+  }
+
+  createCheckpoints(executionOrder) {
+    return executionOrder.map((agent, index) => ({
+      checkpoint_id: `checkpoint_${index + 1}`,
+      agent: agent,
+      description: `Complete ${agent} agent execution`,
+      estimated_duration: 30,
+      dependencies: index > 0 ? [`checkpoint_${index}`] : []
+    }));
   }
 
   async shutdown() {
