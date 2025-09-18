@@ -5,13 +5,13 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
-const http = require('http');
-const socketIo = require('socket.io');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 const path = require('path');
 const { logger } = require('./utils/logger');
 const { advancedLogger, setLogContext, generateCorrelationId, startTimer, endTimer } = require('./utils/advancedLogger');
 const { monitoringCollector } = require('./utils/monitoringCollector');
-const { ErrorHandler, WebSocketError, AgentExecutionError } = require('./utils/errorHandler');
+const { ErrorHandler, WebSocketError, AgentExecutionError, athenAIErrorMiddleware } = require('./utils/errorHandler');
 const { rateLimiter } = require('./middleware/rateLimiter');
 const routes = require('./routes');
 const { databaseService } = require('./services/database');
@@ -115,7 +115,7 @@ app.get('/health', (req, res) => {
 app.use('/api', routes);
 
 // Error handling
-app.use(errorHandler);
+app.use(athenAIErrorMiddleware);
 
 // 404 handler
 app.use('*', (req, res) => {

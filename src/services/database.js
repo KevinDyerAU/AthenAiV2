@@ -855,4 +855,23 @@ class DatabaseService {
 // Singleton instance
 const databaseService = new DatabaseService();
 
-module.exports = { databaseService };
+// Legacy function for backward compatibility
+function createSupabaseClient() {
+  if (!databaseService.supabase) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase configuration missing. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+    }
+    
+    databaseService.supabase = createClient(supabaseUrl, supabaseKey);
+  }
+  
+  return databaseService.supabase;
+}
+
+module.exports = { 
+  databaseService,
+  createSupabaseClient
+};
