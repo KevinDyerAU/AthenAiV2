@@ -16,6 +16,7 @@ const { ReasoningFramework } = require('../utils/reasoningFramework');
 const { SemanticSimilarity } = require('../utils/semanticSimilarity');
 const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
 const databaseService = require('../services/database');
+const { KnowledgeSubstrateHelper } = require('../utils/knowledgeSubstrateHelper');
 
 class ResearchAgent extends BaseAgent {
   constructor() {
@@ -60,96 +61,37 @@ class ResearchAgent extends BaseAgent {
     // Initialize reasoning framework
     this.reasoning = new ReasoningFramework('ResearchAgent');
     
+    // Initialize knowledge substrate helper
+    this.knowledgeHelper = new KnowledgeSubstrateHelper('ResearchAgent', 'research');
+    
     // Initialize tools after constructor
     this.initializeTools();
   }
 
   async retrieveKnowledgeContext(query, sessionId) {
-    try {
-      const queryHash = this.generateQueryHash(query);
-      const domain = this.inferQueryDomain(query);
-
-      // First try exact hash match for fastest retrieval
-      let similarResearch = await databaseService.getResearchInsightsByQueryHash(queryHash, 3);
-      
-      // If no exact matches, get broader set for semantic similarity matching
-      if (!similarResearch || similarResearch.length === 0) {
-        similarResearch = await databaseService.getResearchInsightsForSimilarity(domain, 20);
-        logger.info('No exact hash matches found, retrieved research insights for semantic similarity', {
-          domain,
-          count: similarResearch.length,
-          query: query.substring(0, 100) + '...'
-        });
-      } else {
-        logger.info('Found exact hash matches for research query', {
-          count: similarResearch.length,
-          queryHash
-        });
+    return await this.knowledgeHelper.retrieveKnowledgeContext(query, 'research', {
+      complexity: 'medium',
+      filters: {
+        session_id: sessionId
       }
-      
-      // Retrieve knowledge entities by domain
-      const domainEntities = await databaseService.getKnowledgeEntitiesByDomain(domain, 5);
-      
-      return {
-        similarResearch,
-        domainEntities,
-        queryHash,
-        domain
-      };
-    } catch (error) {
-      logger.error('Error retrieving knowledge context:', error);
-      return { similarResearch: [], domainEntities: [], queryHash: null, domain: 'general' };
-    }
+    });
   }
 
   async storeResearchInsights(query, results, sessionId) {
-    try {
-      const queryHash = this.generateQueryHash(query);
-      const domain = this.inferQueryDomain(query);
-      const patterns = this.extractResearchPatterns(results);
-      
-      logger.info('ResearchAgent: Storing research insights in database', {
-        queryHash,
-        domain,
-        queryLength: query.length,
-        resultsLength: results?.length || 0,
-        sessionId,
-        patterns: patterns?.length || 0
-      });
-      
-      // Store research insights
-      const storeResult = await databaseService.storeResearchInsights({
-        query_hash: queryHash,
-        original_query: query, 
-        query_text: query,
-        domain: domain,
-        research_results: results, 
-        insights: results,
-        patterns: patterns,
-        confidence_score: 0.85,
-        session_id: sessionId
-      });
-
-      logger.info('ResearchAgent: Research insights stored successfully', {
-        storeResult,
-        queryHash,
-        sessionId
-      });
-
-      // Create knowledge entities for significant findings
-      if (results.length > 100) { 
-        await databaseService.createKnowledgeEntity({
-          entity_type: 'research_finding',
-          entity_name: `Research: ${query.substring(0, 50)}...`,
-          domain: domain,
-          content: results.substring(0, 500),
-          metadata: { query, patterns, session_id: sessionId },
-          confidence_score: 0.8
-        });
-      }
-    } catch (error) {
-      logger.error('Error storing research insights:', error);
-    }
+    const researchResult = {
+      success: true,
+      query: query,
+      output: results,
+      insights: this.extractResearchPatterns(results)
+    };
+    
+    const context = {
+      objective: query,
+      sessionId: sessionId,
+      complexity: { level: 'medium', score: 6.0 }
+    };
+    
+    return await this.knowledgeHelper.storeKnowledgeResults(researchResult, context, 'research');
   }
 
   async processMessage(inputData, options = {}) {
