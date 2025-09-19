@@ -1,6 +1,6 @@
 const { PlanningAgent } = require('../../src/agents/PlanningAgent');
 const { AgentRegistry } = require('../../src/agents/AgentRegistry');
-const databaseService = require('../../src/services/database');
+const { databaseService } = require('../../src/services/database');
 const path = require('path');
 
 // Load environment variables for testing
@@ -243,7 +243,7 @@ class SimplePlanningAgentTest {
       
       // Check for agent awareness in the result
       const planContent = result.output || result.result || '';
-      const mentionedAgents = agentRegistryInfo.agents.filter(agent => 
+      const mentionedAgents = agentRegistryInfo.available_agents.filter(agent => 
         planContent.toLowerCase().includes(agent.name.toLowerCase())
       );
       

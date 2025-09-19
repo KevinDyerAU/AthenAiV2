@@ -14,7 +14,8 @@ const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
 const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
-const progressBroadcaster = require('../services/progressBroadcaster');
+const { progressBroadcaster } = require('../services/progressBroadcaster');
+const { KnowledgeSubstrateHelper } = require('../utils/knowledgeSubstrateHelper');
 
 class DevelopmentAgent {
   constructor() {
@@ -22,7 +23,7 @@ class DevelopmentAgent {
     const useOpenRouter = process.env.USE_OPENROUTER === 'true';
     
     if (useOpenRouter) {
-            this.llm = new ChatOpenAI({
+      this.llm = new ChatOpenAI({
         modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
         temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENROUTER_API_KEY,
@@ -41,15 +42,84 @@ class DevelopmentAgent {
         modelName: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENAI_API_KEY,
+        timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+        maxRetries: 2,
         tags: ['development-agent', 'athenai', 'openai']
       });
     }
-    this.workspaceRoot = process.env.WORKSPACE_ROOT || process.cwd();
-    this.supportedLanguages = ['javascript', 'python', 'typescript', 'java', 'go', 'rust', 'cpp'];
-    this.maxConcurrentTasks = process.env.MAX_CONCURRENT_TASKS || 3;
+    
+    // Initialize knowledge substrate helper
+    this.knowledgeHelper = new KnowledgeSubstrateHelper();
     
     // Initialize reasoning framework
     this.reasoning = new ReasoningFramework('DevelopmentAgent');
+    
+    this.workspaceRoot = process.env.WORKSPACE_ROOT || process.cwd();
+    this.supportedLanguages = ['javascript', 'python', 'typescript', 'java', 'go', 'rust', 'cpp'];
+    this.maxConcurrentTasks = process.env.MAX_CONCURRENT_TASKS || 3;
+  }
+
+  // Knowledge substrate integration using standardized helper
+  async retrieveKnowledgeContext(query, sessionId) {
+    try {
+      await progressBroadcaster.updateProgress(sessionId, 'knowledge_context', 'Retrieving development knowledge context');
+      
+      return await this.knowledgeHelper.retrieveKnowledgeContext(query, 'development', {
+        complexity: 'medium',
+        filters: {
+          session_id: sessionId
+        }
+      });
+    } catch (error) {
+      logger.error('Error retrieving knowledge context:', {
+        error: error.message,
+        sessionId,
+        query: query.substring(0, 100)
+      });
+      return { domain: 'general', similarResults: [], knowledgeEntities: [], queryHash: null };
+    }
+  }
+
+  async storeDevelopmentInsights(query, results, sessionId) {
+    try {
+      const developmentResult = {
+        success: true,
+        query,
+        output: results,
+        insights: this.extractDevelopmentInsights(results)
+      };
+      
+      const context = {
+        objective: query,
+        sessionId,
+        complexity: {
+          level: 'medium',
+          score: 6.0
+        }
+      };
+      
+      return await this.knowledgeHelper.storeKnowledgeResults(developmentResult, context, 'development');
+    } catch (error) {
+      logger.error('Error storing development insights:', {
+        error: error.message,
+        sessionId,
+        query: query.substring(0, 100)
+      });
+      return false;
+    }
+  }
+
+  extractDevelopmentInsights(results) {
+    const insights = [];
+    if (typeof results === 'string') {
+      const lines = results.split('\n');
+      lines.forEach(line => {
+        if (line.includes('function') || line.includes('class') || line.includes('implementation')) {
+          insights.push({ type: 'code_pattern', content: line.trim() });
+        }
+      });
+    }
+    return insights;
   }
 
   async executeDevelopment(inputData) {
@@ -65,11 +135,7 @@ class DevelopmentAgent {
       });
       
       // PHASE 1: Progress Broadcasting - Initialization
-      await progressBroadcaster.broadcastProgress(sessionId, {
-        phase: 'development_initialization',
-        message: 'Initializing development agent...',
-        progress: 5
-      });
+      await progressBroadcaster.updateProgress(sessionId, 'development_initialization', 'Initializing development agent...', { progress: 5 });
       
       const taskData = inputData.task || inputData;
       const requirements = taskData.requirements || taskData.message || taskData.content;
@@ -80,12 +146,11 @@ class DevelopmentAgent {
         throw new Error('Development requirements are required');
       }
 
-      // PHASE 2: Requirements Analysis
-      await progressBroadcaster.broadcastProgress(sessionId, {
-        phase: 'requirements_analysis',
-        message: 'Analyzing development requirements...',
-        progress: 15
-      });
+      // Retrieve knowledge context first
+      const knowledgeContext = await this.retrieveKnowledgeContext(requirements, sessionId);
+
+      // PHASE 2: Requirements Analysis with knowledge context
+      await progressBroadcaster.updateProgress(sessionId, 'requirements_analysis', 'Analyzing development requirements...', { progress: 15 });
 
       logger.info('DevelopmentAgent: Processing requirements', {
         requirements: requirements.substring(0, 200) + '...',
@@ -102,7 +167,7 @@ class DevelopmentAgent {
           sessionId
         });
         
-        await progressBroadcaster.broadcastProgress(sessionId, {
+        await progressBroadcaster.updateProgress(sessionId, {
           phase: 'validation_failed',
           message: repoValidation.message,
           progress: 100
@@ -119,7 +184,7 @@ class DevelopmentAgent {
       }
       
       // PHASE 3: Strategic Planning and Reasoning
-      await progressBroadcaster.broadcastProgress(sessionId, {
+      await progressBroadcaster.updateProgress(sessionId, {
         phase: 'strategic_planning',
         message: 'Planning development strategy...',
         progress: 25
@@ -145,7 +210,7 @@ class DevelopmentAgent {
       if (isTestEnvironment) {
         logger.info('DevelopmentAgent: Running in test environment', { sessionId });
         
-        await progressBroadcaster.broadcastProgress(sessionId, {
+        await progressBroadcaster.updateProgress(sessionId, {
           phase: 'test_execution',
           message: 'Running in test mode, generating mock response...',
           progress: 90
@@ -157,7 +222,7 @@ class DevelopmentAgent {
         };
       } else {
         // PHASE 4: Tool Initialization
-        await progressBroadcaster.broadcastProgress(sessionId, {
+        await progressBroadcaster.updateProgress(sessionId, {
           phase: 'tool_initialization',
           message: 'Initializing development tools...',
           progress: 35
@@ -214,7 +279,7 @@ Current task: {requirements}
 {agent_scratchpad}`);
 
         // PHASE 5: Agent Creation
-        await progressBroadcaster.broadcastProgress(sessionId, {
+        await progressBroadcaster.updateProgress(sessionId, {
           phase: 'agent_creation',
           message: 'Creating development agent...',
           progress: 45
@@ -252,7 +317,7 @@ Current task: {requirements}
         logger.info('DevelopmentAgent: AgentExecutor created', { sessionId });
 
         // PHASE 6: Development Task Execution
-        await progressBroadcaster.broadcastProgress(sessionId, {
+        await progressBroadcaster.updateProgress(sessionId, {
           phase: 'development_execution',
           message: 'Executing development task...',
           progress: 60
@@ -290,7 +355,7 @@ Current task: {requirements}
             timestamp: new Date().toISOString()
           });
           
-          await progressBroadcaster.broadcastProgress(sessionId, {
+          await progressBroadcaster.updateProgress(sessionId, {
             phase: 'execution_error',
             message: `Development execution failed: ${error.message}`,
             progress: 100
@@ -305,7 +370,7 @@ Current task: {requirements}
       }
 
       // PHASE 7: Self-Evaluation
-      await progressBroadcaster.broadcastProgress(sessionId, {
+      await progressBroadcaster.updateProgress(sessionId, {
         phase: 'self_evaluation',
         message: 'Evaluating development results...',
         progress: 80
@@ -338,15 +403,13 @@ Current task: {requirements}
       };
 
       // PHASE 8: Knowledge Storage and Completion
-      await progressBroadcaster.broadcastProgress(sessionId, {
-        phase: 'knowledge_storage',
-        message: 'Storing development insights...',
-        progress: 90
-      });
+      await progressBroadcaster.updateProgress(sessionId, 'knowledge_storage', 'Storing development insights...', { progress: 90 });
 
-      // Store results in knowledge graph (skip in test environment)
+      // Store development insights in knowledge substrate
       if (!isTestEnvironment) {
         try {
+          await this.storeDevelopmentInsights(requirements, result.output, sessionId);
+          
           await databaseService.createKnowledgeNode(
             sessionId,
             orchestrationId,
@@ -376,7 +439,7 @@ Current task: {requirements}
         }
       }
 
-      await progressBroadcaster.broadcastProgress(sessionId, {
+      await progressBroadcaster.updateProgress(sessionId, {
         phase: 'completion',
         message: 'Development task completed successfully',
         progress: 100
@@ -402,7 +465,7 @@ Current task: {requirements}
         inputData: JSON.stringify(inputData, null, 2)
       });
       
-      await progressBroadcaster.broadcastProgress(sessionId, {
+      await progressBroadcaster.updateProgress(sessionId, {
         phase: 'error',
         message: `Development task failed: ${error.message}`,
         progress: 100

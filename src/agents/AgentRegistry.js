@@ -659,6 +659,75 @@ class AgentRegistry {
 
     return stats;
   }
+
+  // Get comprehensive agent registry information for planning
+  getAgentRegistryInfo() {
+    const agentInfo = {
+      available_agents: [],
+      agent_capabilities: {},
+      performance_metrics: {},
+      total_agents: this.agents.size
+    };
+
+    // Collect information about all agents
+    for (const [agentId, agent] of this.agents) {
+      agentInfo.available_agents.push({
+        id: agentId,
+        name: agent.name,
+        type: agent.type,
+        capabilities: agent.capabilities,
+        domains: agent.domains,
+        complexity_handling: agent.complexity_handling,
+        confidence_threshold: agent.confidence_threshold
+      });
+
+      agentInfo.agent_capabilities[agentId] = agent.capabilities;
+
+      // Add performance metrics if available
+      const history = this.performanceHistory.get(agentId) || [];
+      if (history.length > 0) {
+        const avgScore = history.reduce((sum, record) => sum + record.score, 0) / history.length;
+        agentInfo.performance_metrics[agentId] = {
+          average_score: avgScore,
+          total_executions: history.length,
+          recent_score: history[history.length - 1].score
+        };
+      }
+    }
+
+    return agentInfo;
+  }
+
+  // Select the best agent for a task (alias for findBestAgentForTask)
+  async selectAgent(task, conversationContext = []) {
+    try {
+      const context = {
+        conversation_context: conversationContext,
+        context_length: conversationContext.length
+      };
+      
+      const selectedAgent = this.findBestAgentForTask(task, context);
+      
+      if (!selectedAgent) {
+        logger.warn('AgentRegistry: No agent selected, returning null');
+        return null;
+      }
+
+      logger.info('AgentRegistry: Agent selected successfully', {
+        agentId: selectedAgent.id,
+        agentName: selectedAgent.name,
+        taskLength: task.length
+      });
+
+      return selectedAgent;
+    } catch (error) {
+      logger.error('AgentRegistry: Agent selection failed', {
+        error: error.message,
+        task: task.substring(0, 100)
+      });
+      return null;
+    }
+  }
 }
 
 // Export singleton instance and classes

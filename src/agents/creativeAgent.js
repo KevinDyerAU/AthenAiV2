@@ -5,23 +5,109 @@ const { DynamicTool } = require('@langchain/core/tools');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
 const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
+const { KnowledgeSubstrateHelper } = require('../utils/knowledgeSubstrateHelper');
+const { progressBroadcaster } = require('../services/progressBroadcaster');
+const { logger } = require('../utils/logger');
 
 class CreativeAgent {
-  constructor(apiKey, langSmithConfig = {}) {
-    this.apiKey = apiKey;
-    this.langSmithConfig = langSmithConfig;
-    this.setupLangSmith();
-    
+  constructor() {
     // Initialize reasoning framework
     this.reasoning = new ReasoningFramework('CreativeAgent');
+    
+    // Initialize knowledge substrate helper
+    this.knowledgeHelper = new KnowledgeSubstrateHelper();
+    
+    // Primary OpenAI configuration with OpenRouter fallback
+    const useOpenRouter = process.env.USE_OPENROUTER === 'true';
+    
+    if (useOpenRouter) {
+      this.llm = new ChatOpenAI({
+        modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
+        temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.7,
+        openAIApiKey: process.env.OPENROUTER_API_KEY,
+        configuration: {
+          baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+          defaultHeaders: {
+            'HTTP-Referer': 'https://athenai.local',
+            'X-Title': 'AthenAI System'
+          }
+        },
+        timeout: 10000,
+        maxRetries: 2
+      });
+    } else {
+      this.llm = new ChatOpenAI({
+        modelName: process.env.OPENAI_MODEL || 'gpt-4',
+        temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.7,
+        openAIApiKey: process.env.OPENAI_API_KEY,
+        timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+        maxRetries: 2,
+        tags: ['creative-agent', 'athenai', 'openai']
+      });
+    }
   }
 
-  setupLangSmith() {
-    if (this.langSmithConfig.enabled) {
-      process.env.LANGCHAIN_TRACING_V2 = 'true';
-      process.env.LANGCHAIN_PROJECT = this.langSmithConfig.project || 'athenai-creative-agent';
-      process.env.LANGCHAIN_ENDPOINT = this.langSmithConfig.endpoint || 'https://api.smith.langchain.com';
+  // Knowledge substrate integration using standardized helper
+  async retrieveKnowledgeContext(query, sessionId) {
+    try {
+      await progressBroadcaster.updateProgress(sessionId, 'knowledge_context', 'Retrieving creative knowledge context');
+      
+      return await this.knowledgeHelper.retrieveKnowledgeContext(query, 'creative', {
+        complexity: 'medium',
+        filters: {
+          session_id: sessionId
+        }
+      });
+    } catch (error) {
+      logger.error('Error retrieving knowledge context:', {
+        error: error.message,
+        sessionId,
+        query: query.substring(0, 100)
+      });
+      return { domain: 'general', similarResults: [], knowledgeEntities: [], queryHash: null };
     }
+  }
+
+  async storeCreativeInsights(query, results, sessionId) {
+    try {
+      const creativeResult = {
+        success: true,
+        query,
+        output: results,
+        insights: this.extractCreativeInsights(results)
+      };
+      
+      const context = {
+        objective: query,
+        sessionId,
+        complexity: {
+          level: 'medium',
+          score: 6.0
+        }
+      };
+      
+      return await this.knowledgeHelper.storeKnowledgeResults(creativeResult, context, 'creative');
+    } catch (error) {
+      logger.error('Error storing creative insights:', {
+        error: error.message,
+        sessionId,
+        query: query.substring(0, 100)
+      });
+      return false;
+    }
+  }
+
+  extractCreativeInsights(results) {
+    const insights = [];
+    if (typeof results === 'string') {
+      const lines = results.split('\n');
+      lines.forEach(line => {
+        if (line.includes('creative') || line.includes('innovative') || line.includes('synthesis')) {
+          insights.push({ type: 'creative_pattern', content: line.trim() });
+        }
+      });
+    }
+    return insights;
   }
 
   async executeCreative(inputData) {
@@ -36,45 +122,27 @@ class CreativeAgent {
         throw new Error('Content is required for creative synthesis');
       }
 
-      // PHASE 1: Strategic Planning and Reasoning
+      await progressBroadcaster.updateProgress(sessionId, 'creative_start', 'Starting creative synthesis');
+
+      // Retrieve knowledge context first
+      const knowledgeContext = await this.retrieveKnowledgeContext(
+        typeof content === 'object' ? JSON.stringify(content) : content, 
+        sessionId
+      );
+
+      // PHASE 1: Strategic Planning and Reasoning with knowledge context
       const strategyPlan = await this.reasoning.planStrategy(content, {
         time_constraint: 'normal',
         quality_priority: 'high',
-        creativity_needed: true
+        creativity_needed: true,
+        knowledge_context: knowledgeContext
       });
-
-      // Primary OpenAI configuration with OpenRouter fallback
-      const useOpenRouter = process.env.USE_OPENROUTER === 'true';
-      
-      if (useOpenRouter) {
-        this.llm = new ChatOpenAI({
-          modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
-          temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
-          openAIApiKey: process.env.OPENROUTER_API_KEY,
-          configuration: {
-            baseURL: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
-            defaultHeaders: {
-              'HTTP-Referer': 'https://athenai.local',
-              'X-Title': 'AthenAI System'
-            }
-          },
-          timeout: 10000,
-          maxRetries: 2
-        });
-      } else {
-        this.llm = new ChatOpenAI({
-          modelName: process.env.OPENAI_MODEL || 'gpt-4',
-          temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.7,
-          openAIApiKey: this.apiKey || process.env.OPENAI_API_KEY,
-          tags: ['creative-agent', 'athenai', 'openai']
-        });
-      }
 
       const tools = this.initializeCreativeTools();
       const creativePrompt = this.createCreativePrompt();
 
       const agent = await createOpenAIToolsAgent({
-        llm,
+        llm: this.llm,
         tools,
         prompt: creativePrompt
       });
@@ -82,18 +150,21 @@ class CreativeAgent {
       const agentExecutor = new AgentExecutor({
         agent,
         tools,
-        verbose: true,
+        verbose: process.env.NODE_ENV === 'development',
         maxIterations: 6,
         returnIntermediateSteps: true
       });
 
-      // PHASE 2: Execute the task with strategy
+      await progressBroadcaster.updateProgress(sessionId, 'creative_execution', 'Executing creative synthesis');
+
+      // PHASE 2: Execute the task with strategy and knowledge context
       const result = await agentExecutor.invoke({
         content: typeof content === 'object' ? JSON.stringify(content) : content,
         creativeType,
         strategy: strategyPlan.selected_strategy.name,
         sessionId,
         orchestrationId,
+        knowledgeContext: JSON.stringify(knowledgeContext),
         tools: tools.map(t => t.name).join(', ')
       });
 
@@ -102,6 +173,15 @@ class CreativeAgent {
 
       const structuredOutput = await this.processCreativeOutput(result, content, creativeType);
       const qualityMetrics = this.calculateQualityMetrics(structuredOutput, result);
+
+      // Store creative insights in knowledge substrate
+      await this.storeCreativeInsights(
+        typeof content === 'object' ? JSON.stringify(content) : content,
+        structuredOutput,
+        sessionId
+      );
+
+      await progressBroadcaster.updateProgress(sessionId, 'creative_complete', 'Creative synthesis completed successfully');
 
       const creativeReport = {
         orchestration_id: orchestrationId,

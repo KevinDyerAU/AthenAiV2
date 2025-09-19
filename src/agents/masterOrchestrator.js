@@ -5,6 +5,7 @@ const { logger } = require('../utils/logger');
 const { progressBroadcaster } = require('../services/progressBroadcaster');
 const { agentRegistry } = require('./AgentRegistry');
 const { chatroomService } = require('../services/chatroom');
+const { KnowledgeSubstrateHelper } = require('../utils/knowledgeSubstrateHelper');
 
 class MasterOrchestrator {
   constructor() {
@@ -54,10 +55,76 @@ class MasterOrchestrator {
       });
     }
     
+    // Initialize knowledge substrate helper
+    this.knowledgeHelper = new KnowledgeSubstrateHelper();
+    
     this.name = 'MasterOrchestrator';
     this.capabilities = ['task-analysis', 'agent-routing', 'orchestration'];
     this.agents = new Map();
     this.executionPlans = new Map();
+  }
+
+  // Knowledge substrate integration using standardized helper
+  async retrieveKnowledgeContext(query, sessionId) {
+    try {
+      await progressBroadcaster.updateProgress(sessionId, 'knowledge_context', 'Retrieving orchestration knowledge context');
+      
+      return await this.knowledgeHelper.retrieveKnowledgeContext(query, 'orchestration', {
+        complexity: 'high',
+        filters: {
+          session_id: sessionId
+        }
+      });
+    } catch (error) {
+      logger.error('Error retrieving knowledge context:', {
+        error: error.message,
+        sessionId,
+        query: query.substring(0, 100)
+      });
+      return { domain: 'general', similarResults: [], knowledgeEntities: [], queryHash: null };
+    }
+  }
+
+  async storeOrchestrationInsights(query, results, sessionId) {
+    try {
+      const orchestrationResult = {
+        success: true,
+        query,
+        output: results,
+        insights: this.extractOrchestrationInsights(results)
+      };
+      
+      const context = {
+        objective: query,
+        sessionId,
+        complexity: {
+          level: 'high',
+          score: 8.0
+        }
+      };
+      
+      return await this.knowledgeHelper.storeKnowledgeResults(orchestrationResult, context, 'orchestration');
+    } catch (error) {
+      logger.error('Error storing orchestration insights:', {
+        error: error.message,
+        sessionId,
+        query: query.substring(0, 100)
+      });
+      return false;
+    }
+  }
+
+  extractOrchestrationInsights(results) {
+    const insights = [];
+    if (typeof results === 'string') {
+      const lines = results.split('\n');
+      lines.forEach(line => {
+        if (line.includes('orchestration') || line.includes('routing') || line.includes('coordination')) {
+          insights.push({ type: 'orchestration_pattern', content: line.trim() });
+        }
+      });
+    }
+    return insights;
   }
 
   async analyzeTaskComplexity(task, conversationContext = []) {
@@ -96,6 +163,9 @@ User Request: {message}
 
 ANALYSIS CRITERIA:
 1. How many steps or sub-tasks are involved?
+
+Respond with a JSON object in this format:
+{
   "level": "low|medium|high",
   "factors": ["factor1", "factor2", ...],
   "estimated_time": seconds,
@@ -201,7 +271,7 @@ Respond with ONLY the JSON object.`);
         timestamp: new Date().toISOString()
       });
 
-      await progressBroadcaster.broadcastProgress(sessionId, {
+      await progressBroadcaster.updateProgress(sessionId, {
         phase: 'registry_routing_start',
         message: 'Consulting AgentRegistry for optimal agent selection...',
         progress: 30
@@ -230,7 +300,7 @@ Respond with ONLY the JSON object.`);
         routingTime: Date.now() - startTime
       });
 
-      await progressBroadcaster.broadcastProgress(sessionId, {
+      await progressBroadcaster.updateProgress(sessionId, {
         phase: 'registry_routing_complete',
         message: `AgentRegistry selected: ${selectedAgent.name}`,
         progress: 50
@@ -263,16 +333,16 @@ Respond with ONLY the JSON object.`);
       });
 
       // Fallback to AI-powered routing if registry fails
-      return this.fallbackAIRouting(task, sessionId, conversationContext);
+      return this.fallbackAIRouting(task, sessionId, conversationContext || []);
     }
   }
 
-  async determineAgentRouting(task, sessionId = 'default') {
+  async determineAgentRouting(task, sessionId = 'default', conversationContext = []) {
     try {
       // Ensure task is a string
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
       
-      await progressBroadcaster.broadcastProgress(sessionId, {
+      await progressBroadcaster.updateProgress(sessionId, {
         phase: 'routing_start',
         message: 'Starting intelligent agent routing...',
         progress: 35
@@ -298,7 +368,7 @@ Respond with ONLY the JSON object.`);
         confidence: selectedAgent.confidence_threshold
       });
 
-      await progressBroadcaster.broadcastProgress(sessionId, {
+      await progressBroadcaster.updateProgress(sessionId, {
         phase: 'registry_routing_complete',
         message: `AgentRegistry selected: ${selectedAgent.name}`,
         progress: 50
@@ -327,6 +397,7 @@ Respond with ONLY the JSON object.`);
 
   async fallbackAIRouting(task, sessionId, conversationContext = []) {
     const startTime = Date.now();
+    const orchestrationId = this.generateSessionId(); // Generate orchestration ID
     try {
       // Ensure task is a string
       const taskString = typeof task === 'string' ? task : JSON.stringify(task);
@@ -490,7 +561,7 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
           sessionId
         });
         
-        await progressBroadcaster.broadcastProgress(sessionId, {
+        await progressBroadcaster.updateProgress(sessionId, {
           phase: 'validation_error',
           message: `Invalid agent response (${typeof primaryAgent}): ${primaryAgent}. Using general agent.`,
           progress: 55,
@@ -514,7 +585,7 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         sessionId
       });
       
-      await progressBroadcaster.broadcastProgress(sessionId, {
+      await progressBroadcaster.updateProgress(sessionId, {
         phase: 'agent_validation',
         message: `Agent validation: ${primaryAgent} → ${cleanAgent} → ${selectedAgent}`,
         progress: 60

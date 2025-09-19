@@ -262,7 +262,7 @@ class AgentHandlers {
           strategy_plan: strategyPlan,
           evaluation: evaluationResult,
           confidence_score: evaluationResult.confidence,
-          reasoning_log: this.reasoningFramework.getReasoningLog()
+          reasoning_log: this.reasoningFramework.getReasoningLogs ? this.reasoningFramework.getReasoningLogs() : []
         }
       };
 
@@ -295,7 +295,7 @@ class AgentHandlers {
         execution_time: executionTime,
         reasoning: {
           error_analysis: await this.analyzeExecutionFailure(error, agentId, inputData),
-          reasoning_log: this.reasoningFramework.getReasoningLog()
+          reasoning_log: this.reasoningFramework.getReasoningLogs ? this.reasoningFramework.getReasoningLogs() : []
         }
       };
     }
@@ -352,9 +352,21 @@ class AgentHandlers {
 
   // Agent Health Monitoring
   startHealthMonitoring() {
-    setInterval(() => {
+    // Don't start health monitoring in test environment to prevent memory leaks
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+    
+    this.healthMonitorInterval = setInterval(() => {
       this.performHealthChecks();
     }, this.healthCheckInterval);
+  }
+
+  stopHealthMonitoring() {
+    if (this.healthMonitorInterval) {
+      clearInterval(this.healthMonitorInterval);
+      this.healthMonitorInterval = null;
+    }
   }
 
   async performHealthChecks() {
@@ -494,7 +506,7 @@ class AgentHandlers {
 
     logger.info('Coordination strategy planned', {
       coordinationId,
-      selectedStrategy: coordinationStrategy.selectedStrategy.name,
+      selectedStrategy: coordinationStrategy.selectedStrategy?.name || 'unknown',
       confidence: coordinationStrategy.confidence
     });
 
@@ -573,7 +585,7 @@ class AgentHandlers {
         strategy_plan: coordinationStrategy,
         evaluation: coordinationEvaluation,
         confidence_score: coordinationEvaluation.confidence,
-        reasoning_log: this.reasoningFramework.getReasoningLog()
+        reasoning_log: this.reasoningFramework.getReasoningLogs ? this.reasoningFramework.getReasoningLogs() : []
       }
     };
   }

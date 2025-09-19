@@ -375,17 +375,33 @@ class MonitoringCollector {
 
   // Periodic collection
   startPeriodicCollection() {
+    // Don't start periodic collection in test environment to prevent memory leaks
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+    
     // Collect system metrics every 30 seconds
-    setInterval(() => {
+    this.metricsInterval = setInterval(() => {
       this.recordSystemMetrics();
       this.calculateErrorRate();
       this.performHealthCheck();
     }, 30000);
     
     // Clean up old histogram data every 5 minutes
-    setInterval(() => {
+    this.cleanupInterval = setInterval(() => {
       this.cleanupHistograms();
     }, 300000);
+  }
+
+  stopPeriodicCollection() {
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+      this.metricsInterval = null;
+    }
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
   }
 
   cleanupHistograms() {

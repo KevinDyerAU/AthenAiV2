@@ -7,10 +7,11 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
 const fs = require('fs').promises;
-// const path = require('path'); // Unused import
 const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
+const { progressBroadcaster } = require('../services/progressBroadcaster');
+const { KnowledgeSubstrateHelper } = require('../utils/knowledgeSubstrateHelper');
 
 class ExecutionAgent {
   constructor() {
@@ -18,7 +19,7 @@ class ExecutionAgent {
     const useOpenRouter = process.env.USE_OPENROUTER === 'true';
     
     if (useOpenRouter) {
-            this.llm = new ChatOpenAI({
+      this.llm = new ChatOpenAI({
         modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
         temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENROUTER_API_KEY,
@@ -37,15 +38,84 @@ class ExecutionAgent {
         modelName: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.2,
         openAIApiKey: process.env.OPENAI_API_KEY,
+        timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+        maxRetries: 2,
         tags: ['execution-agent', 'athenai', 'openai']
       });
     }
-    this.executionQueue = [];
-    this.runningTasks = new Map();
-    this.maxConcurrentTasks = process.env.MAX_CONCURRENT_TASKS || 5;
+    
+    // Initialize knowledge substrate helper
+    this.knowledgeHelper = new KnowledgeSubstrateHelper();
     
     // Initialize reasoning framework
     this.reasoning = new ReasoningFramework('ExecutionAgent');
+    
+    this.executionQueue = [];
+    this.runningTasks = new Map();
+    this.maxConcurrentTasks = process.env.MAX_CONCURRENT_TASKS || 5;
+  }
+
+  // Knowledge substrate integration using standardized helper
+  async retrieveKnowledgeContext(query, sessionId) {
+    try {
+      await progressBroadcaster.updateProgress(sessionId, 'knowledge_context', 'Retrieving execution knowledge context');
+      
+      return await this.knowledgeHelper.retrieveKnowledgeContext(query, 'execution', {
+        complexity: 'medium',
+        filters: {
+          session_id: sessionId
+        }
+      });
+    } catch (error) {
+      logger.error('Error retrieving knowledge context:', {
+        error: error.message,
+        sessionId,
+        query: query.substring(0, 100)
+      });
+      return { domain: 'general', similarResults: [], knowledgeEntities: [], queryHash: null };
+    }
+  }
+
+  async storeExecutionInsights(query, results, sessionId) {
+    try {
+      const executionResult = {
+        success: true,
+        query,
+        output: results,
+        insights: this.extractExecutionInsights(results)
+      };
+      
+      const context = {
+        objective: query,
+        sessionId,
+        complexity: {
+          level: 'medium',
+          score: 6.0
+        }
+      };
+      
+      return await this.knowledgeHelper.storeKnowledgeResults(executionResult, context, 'execution');
+    } catch (error) {
+      logger.error('Error storing execution insights:', {
+        error: error.message,
+        sessionId,
+        query: query.substring(0, 100)
+      });
+      return false;
+    }
+  }
+
+  extractExecutionInsights(results) {
+    const insights = [];
+    if (typeof results === 'string') {
+      const lines = results.split('\n');
+      lines.forEach(line => {
+        if (line.includes('execute') || line.includes('task') || line.includes('workflow')) {
+          insights.push({ type: 'execution_pattern', content: line.trim() });
+        }
+      });
+    }
+    return insights;
   }
 
   async executeTask(inputData) {

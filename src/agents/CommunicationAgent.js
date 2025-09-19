@@ -10,6 +10,8 @@ const { logger } = require('../utils/logger');
 const { databaseService } = require('../services/database');
 const { ReasoningFramework } = require('../utils/reasoningFramework');
 const { WebBrowsingUtils } = require('../utils/webBrowsingUtils');
+const { progressBroadcaster } = require('../services/progressBroadcaster');
+const { KnowledgeSubstrateHelper } = require('../utils/knowledgeSubstrateHelper');
 
 class CommunicationAgent {
   constructor() {
@@ -17,7 +19,7 @@ class CommunicationAgent {
     const useOpenRouter = process.env.USE_OPENROUTER === 'true';
     
     if (useOpenRouter) {
-            this.llm = new ChatOpenAI({
+      this.llm = new ChatOpenAI({
         modelName: process.env.OPENROUTER_MODEL || 'openai/gpt-4',
         temperature: parseFloat(process.env.OPENROUTER_TEMPERATURE) || 0.1,
         openAIApiKey: process.env.OPENROUTER_API_KEY,
@@ -36,9 +38,17 @@ class CommunicationAgent {
         modelName: process.env.OPENAI_MODEL || 'gpt-4',
         temperature: parseFloat(process.env.OPENAI_TEMPERATURE) || 0.3,
         openAIApiKey: process.env.OPENAI_API_KEY,
+        timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
+        maxRetries: 2,
         tags: ['communication-agent', 'athenai', 'openai']
       });
     }
+    
+    // Initialize knowledge substrate helper
+    this.knowledgeHelper = new KnowledgeSubstrateHelper();
+    
+    // Initialize reasoning framework
+    this.reasoning = new ReasoningFramework('CommunicationAgent');
     
     // Initialize communication channels
     this.channels = {
@@ -52,9 +62,69 @@ class CommunicationAgent {
     this.communicationHistory = new Map();
     this.activeChannels = new Set();
     this.messageQueue = [];
+  }
 
-    // Initialize reasoning framework
-    this.reasoning = new ReasoningFramework('CommunicationAgent');
+  // Knowledge substrate integration using standardized helper
+  async retrieveKnowledgeContext(query, sessionId) {
+    try {
+      await progressBroadcaster.updateProgress(sessionId, 'knowledge_context', 'Retrieving communication knowledge context');
+      
+      return await this.knowledgeHelper.retrieveKnowledgeContext(query, 'communication', {
+        complexity: 'medium',
+        filters: {
+          session_id: sessionId
+        }
+      });
+    } catch (error) {
+      logger.error('Error retrieving knowledge context:', {
+        error: error.message,
+        sessionId,
+        query: query.substring(0, 100)
+      });
+      return { domain: 'general', similarResults: [], knowledgeEntities: [], queryHash: null };
+    }
+  }
+
+  async storeCommunicationInsights(query, results, sessionId) {
+    try {
+      const communicationResult = {
+        success: true,
+        query,
+        output: results,
+        insights: this.extractCommunicationInsights(results)
+      };
+      
+      const context = {
+        objective: query,
+        sessionId,
+        complexity: {
+          level: 'medium',
+          score: 6.0
+        }
+      };
+      
+      return await this.knowledgeHelper.storeKnowledgeResults(communicationResult, context, 'communication');
+    } catch (error) {
+      logger.error('Error storing communication insights:', {
+        error: error.message,
+        sessionId,
+        query: query.substring(0, 100)
+      });
+      return false;
+    }
+  }
+
+  extractCommunicationInsights(results) {
+    const insights = [];
+    if (typeof results === 'string') {
+      const lines = results.split('\n');
+      lines.forEach(line => {
+        if (line.includes('message') || line.includes('communication') || line.includes('format')) {
+          insights.push({ type: 'communication_pattern', content: line.trim() });
+        }
+      });
+    }
+    return insights;
   }
 
   async executeCommunication(inputData) {
