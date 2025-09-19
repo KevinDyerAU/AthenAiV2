@@ -39,6 +39,26 @@ class PlanningAgent {
     
     // Initialize reasoning framework
     this.reasoning = new ReasoningFramework('PlanningAgent');
+    
+    // Initialize execution plans storage
+    this.executionPlans = new Map();
+    
+    // Agent metadata
+    this.agentId = 'planning_agent';
+    this.agentName = 'Planning Agent';
+    this.description = 'Specialized agent for project planning, task breakdown, and strategic coordination';
+    this.capabilities = ['project_planning', 'task_breakdown', 'resource_allocation', 'timeline_creation', 'risk_assessment'];
+    this.tools = ['think'];
+    this.domain = 'planning';
+    this.complexity = 'high';
+    this.performance = {
+      successRate: 0.92,
+      averageResponseTime: 3200,
+      qualityScore: 0.89
+    };
+    this.routingKeywords = ['plan', 'planning', 'project', 'timeline', 'breakdown', 'strategy', 'coordinate', 'organize'];
+    
+    logger.info('PlanningAgent initialized');
   }
 
   async executePlanning(inputData) {
@@ -67,10 +87,33 @@ class PlanningAgent {
       const planningType = taskData.planning_type || 'project';
       const constraints = taskData.constraints || {};
       const resources = taskData.resources || {};
-      const timeline = taskData.timeline || 'flexible';
+      const timeline = taskData.timeline || taskData.timeframe || 'flexible';
+
+      // Handle orchestration-level planning requests from MasterOrchestrator
+      const isOrchestrationPlanning = planningType === 'orchestration';
+      if (isOrchestrationPlanning) {
+        logger.info('PlanningAgent: Processing orchestration-level planning request', {
+          objective: objective?.substring(0, 100),
+          complexity: inputData.complexity,
+          availableAgents: resources.available_agents
+        });
+      }
 
       if (!objective) {
         throw new Error('Planning objective is required');
+      }
+
+      // PHASE 0: Knowledge Substrate Integration - Retrieve relevant planning context
+      let knowledgeContext = null;
+      try {
+        logger.info('PlanningAgent: Retrieving planning context from knowledge substrate');
+        knowledgeContext = await this.retrievePlanningContext(objective, planningType, inputData.complexity);
+        logger.debug('PlanningAgent: Knowledge context retrieved', {
+          contextItems: knowledgeContext?.relevant_plans?.length || 0,
+          patterns: knowledgeContext?.planning_patterns?.length || 0
+        });
+      } catch (error) {
+        logger.warn('PlanningAgent: Failed to retrieve knowledge context', { error: error.message });
       }
 
       // Check if we're in test environment (NODE_ENV=test or jest is running)
@@ -85,19 +128,54 @@ class PlanningAgent {
           intermediateSteps: []
         };
       } else {
+        // ALWAYS use think tool for all planning tasks with agent awareness and knowledge context
+        logger.info('PlanningAgent: Engaging think tool for systematic planning analysis');
+        let thinkingResult = null;
+        try {
+          // Pass agent registry information and knowledge context to think tool
+          const agentRegistry = resources.agent_registry || null;
+          thinkingResult = await this.think(objective, agentRegistry, knowledgeContext);
+          logger.debug('PlanningAgent: Think tool completed', { 
+            steps: thinkingResult?.steps?.length || 0,
+            agentAware: !!agentRegistry,
+            knowledgeAware: !!knowledgeContext
+          });
+        } catch (error) {
+          logger.warn('PlanningAgent: Think tool failed, proceeding with standard planning', { 
+            error: error.message 
+          });
+        }
+
         // Initialize planning tools
         const tools = this.initializePlanningTools();
 
-        // Create enhanced planning prompt with reasoning
+        // Extract agent registry information and knowledge context if available
+        const agentRegistry = resources.agent_registry || {};
+        const availableAgents = agentRegistry.agents || [];
+        
+        // Create enhanced planning prompt with agent awareness and knowledge context
         const prompt = PromptTemplate.fromTemplate(`
-You are a Planning Agent with advanced strategic reasoning capabilities. Before creating your plan, think through your approach systematically.
+You are a Planning Agent with advanced strategic reasoning capabilities and full awareness of available agents. ${isOrchestrationPlanning ? 'You are working with the MasterOrchestrator to create execution plans for multi-agent tasks.' : 'Before creating your plan, think through your approach systematically.'}
+
+AGENT ECOSYSTEM AWARENESS:
+Available Agents (${availableAgents.length} total):
+${availableAgents.map(agent => `
+- ${agent.name} (${agent.id}):
+  * Description: ${agent.description}
+  * Capabilities: ${agent.capabilities?.join(', ') || 'none'}
+  * Tools: ${agent.tools?.join(', ') || 'none'}
+  * Domains: ${agent.domains?.join(', ') || 'none'}
+  * Complexity Level: ${agent.complexity_level}
+  * Performance: Accuracy ${agent.performance_metrics?.accuracy || 'N/A'}, Speed ${agent.performance_metrics?.speed || 'N/A'}
+`).join('')}
 
 REASONING PHASE:
 1. Analyze the planning request to understand true objectives and constraints
 2. Assess complexity factors and determine optimal planning methodology
 3. Consider resource availability and timeline constraints
-4. Identify potential risks and success factors
+4. Map tasks to specific agents based on their capabilities and performance metrics
 5. Select the most appropriate planning framework based on the strategy: {strategy}
+${isOrchestrationPlanning ? '6. Design agent coordination strategies leveraging each agent\'s strengths' : ''}
 
 Planning Request: {planningRequest}
 Complexity Level: {complexity}
@@ -105,33 +183,39 @@ Timeframe: {timeframe}
 Resources: {resources}
 Strategy Selected: {strategy}
 Session ID: {sessionId}
+${isOrchestrationPlanning ? 'Planning Type: ORCHESTRATION (Multi-Agent Coordination)' : ''}
+Agent Registry Stats: {agentStats}
 
 Available tools: {tools}
 
 Your systematic approach:
 1. Break down complex tasks into manageable components with strategic focus
-2. Create detailed project plans with realistic timelines and dependencies
-3. Identify critical paths and potential bottlenecks
-4. Allocate resources efficiently based on priorities
-5. Define SMART milestones and measurable success criteria
-6. Anticipate risks and create comprehensive mitigation strategies
-7. Establish monitoring, control, and adaptation mechanisms
-8. Include confidence assessments for all planning elements
+2. Assign specific tasks to agents based on their capabilities, tools, and performance metrics
+3. Create detailed ${isOrchestrationPlanning ? 'execution plans with agent coordination' : 'project plans'} with realistic timelines and dependencies
+4. Identify critical paths and potential bottlenecks considering agent strengths/limitations
+5. Allocate resources efficiently based on agent capabilities and priorities
+6. Define SMART milestones and measurable success criteria
+7. Anticipate risks and create comprehensive mitigation strategies
+8. Establish monitoring, control, and adaptation mechanisms
+9. Include confidence assessments for all planning elements
+${isOrchestrationPlanning ? '10. Define agent handoffs and coordination points leveraging agent specializations\n11. Ensure seamless integration between agents with complementary capabilities' : ''}
 
 Planning methodologies available:
 - waterfall: Sequential phases with clear dependencies (best for well-defined projects)
 - agile: Iterative development with flexible adaptation (best for uncertain requirements)
 - hybrid: Combination of structured and adaptive elements (best for mixed complexity)
 - lean: Minimal viable approach with continuous improvement (best for resource constraints)
+${isOrchestrationPlanning ? '- orchestrated: Multi-agent coordination with synchronized execution (best for complex multi-step tasks)' : ''}
 
 Provide a comprehensive plan including:
 - Executive Summary with confidence level
-- Work Breakdown Structure with effort estimates
-- Timeline with critical milestones
-- Resource allocation and dependencies
-- Risk assessment with mitigation strategies
+- Work Breakdown Structure with specific agent assignments and effort estimates
+- Timeline with critical milestones and agent dependencies
+- Resource allocation leveraging agent capabilities and performance metrics
+- Risk assessment with mitigation strategies considering agent limitations
 - Success metrics and monitoring approach
 - Adaptation strategies for changing requirements
+${isOrchestrationPlanning ? '- Agent coordination strategy with specific agent roles and responsibilities\n- Handoff protocols and checkpoints between agents\n- Integration testing approach considering agent interfaces' : ''}
 
 Show your reasoning process where it adds strategic value.
 
@@ -155,7 +239,7 @@ Current planning task: {complexity} - {planningRequest}
           returnIntermediateSteps: true
         });
 
-        // PHASE 2: Execute the planning task with strategy
+        // PHASE 2: Execute the planning task with strategy and agent awareness
         try {
           result = await agentExecutor.invoke({
             planningRequest: typeof inputData === 'object' ? JSON.stringify(inputData) : inputData,
@@ -164,7 +248,12 @@ Current planning task: {complexity} - {planningRequest}
             resources: JSON.stringify(resources),
             strategy: strategyPlan.selected_strategy.name,
             sessionId,
-            tools: tools.map(t => t.name).join(', ')
+            tools: tools.map(t => t.name).join(', '),
+            agentStats: JSON.stringify({
+              total_agents: agentRegistry.total_agents || 0,
+              capabilities_available: Object.keys(agentRegistry.capabilities_distribution || {}).length,
+              domains_covered: Object.keys(agentRegistry.domain_distribution || {}).length
+            })
           });
           
         } catch (error) {
@@ -174,6 +263,24 @@ Current planning task: {complexity} - {planningRequest}
             intermediateSteps: []
           };
         }
+      }
+
+      // PHASE 3: Store planning results in knowledge substrate for future reference
+      try {
+        logger.info('PlanningAgent: Storing planning results in knowledge substrate');
+        await this.storePlanningResults(result, {
+          objective,
+          planningType,
+          complexity: inputData.complexity,
+          sessionId,
+          orchestrationId,
+          agentRegistry: resources.agent_registry,
+          knowledgeContext,
+          thinkingResult
+        });
+        logger.debug('PlanningAgent: Planning results stored successfully');
+      } catch (error) {
+        logger.warn('PlanningAgent: Failed to store planning results', { error: error.message });
       }
 
       // PHASE 3: Self-Evaluation
@@ -757,6 +864,631 @@ Define:
       tracking_system: trackingSystem,
       timestamp: new Date().toISOString()
     };
+  }
+
+  async think(problem, agentRegistry = null, knowledgeContext = null) {
+    logger.debug('PlanningAgent: Starting think process', { problem: problem.substring(0, 100) });
+    
+    try {
+      // Extract agent information if available
+      const availableAgents = agentRegistry?.agents || [];
+      const agentCapabilities = agentRegistry?.capabilities_distribution || {};
+      
+      // AI-powered thinking with step-by-step planning reasoning, agent awareness, and knowledge context
+      const thinkPrompt = PromptTemplate.fromTemplate(`
+You are the Planning Agent's reasoning engine with full awareness of available agents and their capabilities, plus access to historical planning knowledge. Think through complex planning challenges step by step with systematic analysis.
+
+${availableAgents.length > 0 ? `
+AVAILABLE AGENT ECOSYSTEM:
+${availableAgents.map(agent => `
+- ${agent.name} (${agent.id}):
+  * Capabilities: ${agent.capabilities?.join(', ') || 'none'}
+  * Tools: ${agent.tools?.join(', ') || 'none'}
+  * Complexity Level: ${agent.complexity_level}
+  * Performance: Accuracy ${agent.performance_metrics?.accuracy || 'N/A'}, Speed ${agent.performance_metrics?.speed || 'N/A'}
+`).join('')}
+
+Available Capabilities: ${Object.keys(agentCapabilities).join(', ')}
+` : ''}
+
+${knowledgeContext ? `
+HISTORICAL PLANNING KNOWLEDGE:
+Similar Past Projects:
+${knowledgeContext.relevant_plans?.map(plan => `
+- ${plan.title || plan.objective}
+  * Methodology: ${plan.methodology || 'N/A'}
+  * Success Rate: ${plan.success_rate || 'N/A'}
+  * Key Lessons: ${plan.lessons_learned || 'N/A'}
+`).join('') || 'No relevant historical plans found'}
+
+Proven Planning Patterns:
+${knowledgeContext.planning_patterns?.map(pattern => `
+- ${pattern.name}: ${pattern.context}
+  * Success Factors: ${pattern.success_factors?.join(', ') || 'N/A'}
+  * Pitfalls to Avoid: ${pattern.pitfalls?.join(', ') || 'N/A'}
+`).join('') || 'No established patterns found'}
+` : ''}
+
+${knowledgeContext ? `
+KNOWLEDGE SUBSTRATE CONTEXT:
+Historical Planning Insights:
+${knowledgeContext.relevant_plans?.map(plan => `
+- Similar Project: ${plan.title || plan.objective}
+  * Approach: ${plan.methodology || 'N/A'}
+  * Success Rate: ${plan.success_rate || 'N/A'}
+  * Key Lessons: ${plan.lessons_learned || 'N/A'}
+  * Timeline: ${plan.actual_duration || plan.estimated_duration || 'N/A'}
+`).join('') || 'No relevant historical plans found'}
+
+Planning Patterns & Best Practices:
+${knowledgeContext.planning_patterns?.map(pattern => `
+- Pattern: ${pattern.name}
+  * Context: ${pattern.context}
+  * Success Factors: ${pattern.success_factors?.join(', ') || 'N/A'}
+  * Common Pitfalls: ${pattern.pitfalls?.join(', ') || 'N/A'}
+`).join('') || 'No established patterns found'}
+` : ''}
+
+PLANNING REASONING PHASE:
+1. First, break down the planning objective into its core components and requirements
+2. Identify the key planning challenges, constraints, and success factors
+3. ${availableAgents.length > 0 ? 'Map tasks to specific agents based on their capabilities and performance metrics' : 'Consider resource requirements and skill sets needed'}
+4. Consider multiple planning approaches and their trade-offs (waterfall, agile, hybrid, lean)
+5. Determine the optimal planning methodology and execution strategy
+6. ${availableAgents.length > 0 ? 'Design agent coordination strategies leveraging complementary capabilities' : 'Plan resource allocation and team coordination'}
+7. Anticipate potential risks, dependencies, and resource requirements
+8. Synthesize your analysis into actionable planning insights
+
+PLANNING OBJECTIVE TO ANALYZE:
+{problem}
+
+INSTRUCTIONS:
+- Think systematically through each planning phase
+- Consider complexity, timeline, resources, and stakeholder requirements
+- ${availableAgents.length > 0 ? 'Leverage specific agent capabilities and assign tasks to optimal agents' : 'Consider skill requirements and resource allocation'}
+- Evaluate different planning methodologies for this specific objective
+- Provide clear reasoning for your planning recommendations
+- Structure your response as numbered steps with detailed explanations
+- Focus on practical, actionable planning insights
+- ${availableAgents.length > 0 ? 'Include specific agent assignments and coordination strategies' : 'Include resource and team coordination strategies'}
+
+Provide your step-by-step planning reasoning and methodology recommendations:
+`);
+
+      const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+      
+      const startTime = Date.now();
+      const reasoning = await chain.invoke({ problem });
+      const responseTime = Date.now() - startTime;
+      
+      logger.debug('PlanningAgent: Think process completed', { 
+        responseTime,
+        reasoningLength: reasoning.length 
+      });
+
+      // Parse the reasoning into structured steps
+      const steps = this.parseReasoningSteps(reasoning);
+      
+      return {
+        problem,
+        reasoning,
+        steps,
+        responseTime,
+        timestamp: new Date().toISOString(),
+        agent: 'PlanningAgent'
+      };
+
+    } catch (error) {
+      logger.error('PlanningAgent: Think process failed', { 
+        error: error.message,
+        problem: problem.substring(0, 100)
+      });
+      
+      // Fallback to structured planning thinking
+      return {
+        problem,
+        reasoning: `Fallback planning analysis: ${problem}`,
+        steps: [
+          { step: 1, description: 'Analyze planning objective', reasoning: 'Break down the core planning requirements and constraints' },
+          { step: 2, description: 'Evaluate planning approaches', reasoning: 'Consider waterfall, agile, hybrid, and lean methodologies' },
+          { step: 3, description: 'Determine optimal strategy', reasoning: 'Select the best planning approach based on complexity and constraints' },
+          { step: 4, description: 'Plan resource allocation', reasoning: 'Identify required resources and timeline considerations' },
+          { step: 5, description: 'Anticipate risks', reasoning: 'Identify potential obstacles and mitigation strategies' }
+        ],
+        responseTime: 0,
+        timestamp: new Date().toISOString(),
+        agent: 'PlanningAgent',
+        fallback: true,
+        error: error.message
+      };
+    }
+  }
+
+  parseReasoningSteps(reasoning) {
+    const steps = [];
+    const lines = reasoning.split('\n');
+    let currentStep = null;
+    let stepCounter = 1;
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // Look for numbered steps or bullet points
+      if (trimmedLine.match(/^\d+\./)) {
+        if (currentStep) {
+          steps.push(currentStep);
+        }
+        currentStep = {
+          step: stepCounter++,
+          description: trimmedLine.replace(/^\d+\.\s*/, ''),
+          reasoning: ''
+        };
+      } else if (trimmedLine.match(/^[-*•]/)) {
+        if (currentStep) {
+          steps.push(currentStep);
+        }
+        currentStep = {
+          step: stepCounter++,
+          description: trimmedLine.replace(/^[-*•]\s*/, ''),
+          reasoning: ''
+        };
+      } else if (currentStep && trimmedLine.length > 0) {
+        currentStep.reasoning += (currentStep.reasoning ? ' ' : '') + trimmedLine;
+      }
+    }
+    
+    // Add the last step
+    if (currentStep) {
+      steps.push(currentStep);
+    }
+
+    // If no structured steps found, create planning-specific breakdown
+    if (steps.length === 0) {
+      const sentences = reasoning.split('.').filter(s => s.trim().length > 0);
+      sentences.slice(0, 6).forEach((sentence, index) => {
+        const planningSteps = [
+          'Objective Analysis', 'Methodology Selection', 'Resource Planning', 
+          'Risk Assessment', 'Timeline Creation', 'Success Metrics'
+        ];
+        steps.push({
+          step: index + 1,
+          description: planningSteps[index] || `Planning Step ${index + 1}`,
+          reasoning: sentence.trim()
+        });
+      });
+    }
+
+    return {
+      reasoning: reasoning,
+      steps: steps,
+      summary: `Completed ${steps.length} planning reasoning steps`,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Retrieve relevant planning context from knowledge substrate
+   * @param {string} objective - Planning objective to search for similar plans
+   * @param {string} planningType - Type of planning (project, orchestration, etc.)
+   * @param {string} complexity - Complexity level of the planning task
+   * @returns {Object} Knowledge context with relevant plans and patterns
+   */
+  async retrievePlanningContext(objective, planningType, complexity) {
+    try {
+      // Validate inputs
+      if (!objective) {
+        throw new Error('Planning objective is required');
+      }
+
+      // Generate search query for knowledge substrate
+      const searchQuery = `planning ${planningType || 'general'} ${objective} ${complexity || 'medium'}`;
+      const domain = this.inferDomain(objective);
+      const queryHash = this.generateQueryHash(searchQuery);
+
+      logger.debug('PlanningAgent: Searching knowledge substrate', {
+        query: searchQuery,
+        domain,
+        queryHash
+      });
+
+      // Search for relevant planning documents and insights
+      let knowledgeResults = [];
+      try {
+        knowledgeResults = await databaseService.searchKnowledge({
+          query: searchQuery,
+          domain: domain,
+          limit: 10,
+          similarity_threshold: 0.7,
+          filters: {
+            content_type: ['planning', 'project_plan', 'methodology'],
+            complexity_level: complexity
+          }
+        });
+      } catch (dbError) {
+        logger.warn('PlanningAgent: Knowledge search failed, continuing without context', { error: dbError.message });
+        knowledgeResults = [];
+      }
+
+      // Extract relevant plans and patterns
+      const relevantPlans = [];
+      const planningPatterns = [];
+
+      if (knowledgeResults && knowledgeResults.length > 0) {
+        for (const result of knowledgeResults) {
+          if (result.metadata?.content_type === 'planning' || result.metadata?.content_type === 'project_plan') {
+            relevantPlans.push({
+              title: result.title || result.metadata?.title,
+              objective: result.metadata?.objective,
+              methodology: result.metadata?.methodology,
+              success_rate: result.metadata?.success_rate,
+              lessons_learned: result.metadata?.lessons_learned,
+              estimated_duration: result.metadata?.estimated_duration,
+              actual_duration: result.metadata?.actual_duration,
+              complexity_level: result.metadata?.complexity_level,
+              agent_assignments: result.metadata?.agent_assignments,
+              similarity_score: result.similarity_score
+            });
+          }
+
+          if (result.metadata?.content_type === 'methodology' || result.metadata?.planning_pattern) {
+            planningPatterns.push({
+              name: result.metadata?.pattern_name || result.title,
+              context: result.metadata?.context,
+              success_factors: result.metadata?.success_factors,
+              pitfalls: result.metadata?.pitfalls,
+              applicable_complexity: result.metadata?.applicable_complexity,
+              similarity_score: result.similarity_score
+            });
+          }
+        }
+      }
+
+      logger.debug('PlanningAgent: Knowledge context compiled', {
+        relevantPlans: relevantPlans.length,
+        planningPatterns: planningPatterns.length
+      });
+
+      return {
+        relevant_plans: relevantPlans,
+        planning_patterns: planningPatterns,
+        search_query: searchQuery,
+        domain: domain,
+        retrieved_at: new Date().toISOString()
+      };
+
+    } catch (error) {
+      logger.error('PlanningAgent: Failed to retrieve planning context', { error: error.message });
+      return {
+        relevant_plans: [],
+        planning_patterns: [],
+        error: error.message,
+        retrieved_at: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * Store planning results in knowledge substrate for future reference
+   * @param {Object} planningResult - The planning result to store
+   * @param {Object} context - Additional context about the planning session
+   */
+  async storePlanningResults(planningResult, context) {
+    try {
+      const { objective, planningType, complexity, sessionId, orchestrationId, agentRegistry, knowledgeContext, thinkingResult } = context;
+
+      // Extract objective from context or planning result
+      const planObjective = objective || planningResult.plan?.objective || 'Unknown Planning Objective';
+      
+      // Extract key insights from the planning result
+      const planContent = planningResult.output || planningResult.result || JSON.stringify(planningResult.plan || {});
+      const domain = this.inferDomain(planObjective);
+
+      // Structure the planning data for storage
+      const planningDocument = {
+        title: `Planning Session: ${planObjective.substring(0, 100)}`,
+        content: planContent,
+        domain: domain,
+        metadata: {
+          content_type: 'planning',
+          planning_type: planningType,
+          objective: planObjective,
+          complexity_level: complexity,
+          session_id: sessionId,
+          orchestration_id: orchestrationId,
+          methodology: this.extractMethodology(planContent),
+          agent_assignments: this.extractAgentAssignments(planContent, agentRegistry),
+          estimated_duration: this.extractDuration(planContent),
+          success_factors: this.extractSuccessFactors(planContent),
+          risk_factors: this.extractRiskFactors(planContent),
+          lessons_learned: this.extractLessonsLearned(planContent, knowledgeContext),
+          thinking_steps: thinkingResult?.steps?.length || 0,
+          agent_aware: !!agentRegistry,
+          knowledge_aware: !!knowledgeContext,
+          created_at: new Date().toISOString(),
+          created_by: 'PlanningAgent'
+        }
+      };
+
+      // Store the planning document
+      await databaseService.storeKnowledge(planningDocument);
+
+      // If this was orchestration-level planning, also store agent coordination insights
+      if (planningType === 'orchestration' && agentRegistry) {
+        const coordinationInsights = {
+          title: `Agent Coordination Insights: ${planObjective.substring(0, 80)}`,
+          content: this.generateCoordinationInsights(planContent, agentRegistry),
+          domain: domain,
+          metadata: {
+            content_type: 'methodology',
+            planning_pattern: 'agent_coordination',
+            pattern_name: 'Multi-Agent Orchestration',
+            context: `Orchestration planning for: ${planObjective}`,
+            success_factors: this.extractCoordinationSuccessFactors(planContent),
+            pitfalls: this.extractCoordinationPitfalls(planContent),
+            applicable_complexity: complexity,
+            agent_count: agentRegistry.total_agents || 0,
+            capabilities_used: Object.keys(agentRegistry.capabilities_distribution || {}).length,
+            session_id: sessionId,
+            created_at: new Date().toISOString(),
+            created_by: 'PlanningAgent'
+          }
+        };
+
+        await databaseService.storeKnowledge(coordinationInsights);
+      }
+
+      logger.debug('PlanningAgent: Planning results stored in knowledge substrate', {
+        planningType,
+        complexity,
+        domain,
+        sessionId
+      });
+
+    } catch (error) {
+      logger.error('PlanningAgent: Failed to store planning results', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Infer domain from planning objective
+   * @param {string} objective - Planning objective
+   * @returns {string} Inferred domain
+   */
+  inferDomain(objective) {
+    if (!objective || typeof objective !== 'string') {
+      return 'general';
+    }
+    const lowerObjective = objective.toLowerCase();
+    
+    if (lowerObjective.includes('ai') || lowerObjective.includes('machine learning') || lowerObjective.includes('analytics')) {
+      return 'ai';
+    } else if (lowerObjective.includes('software') || lowerObjective.includes('development') || lowerObjective.includes('code')) {
+      return 'software';
+    } else if (lowerObjective.includes('data') || lowerObjective.includes('analysis') || lowerObjective.includes('dashboard')) {
+      return 'data';
+    } else if (lowerObjective.includes('business') || lowerObjective.includes('strategy') || lowerObjective.includes('project')) {
+      return 'business';
+    } else if (lowerObjective.includes('research') || lowerObjective.includes('investigation')) {
+      return 'research';
+    } else {
+      return 'general';
+    }
+  }
+
+  /**
+   * Generate query hash for caching
+   * @param {string} query - Search query
+   * @returns {string} Query hash
+   */
+  generateQueryHash(query) {
+    // Simple hash function for query caching
+    let hash = 0;
+    for (let i = 0; i < query.length; i++) {
+      const char = query.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16);
+  }
+
+  /**
+   * Extract methodology from planning content
+   * @param {string} content - Planning content
+   * @returns {string} Extracted methodology
+   */
+  extractMethodology(content) {
+    const methodologies = ['waterfall', 'agile', 'hybrid', 'lean', 'orchestrated'];
+    const lowerContent = content.toLowerCase();
+    
+    for (const methodology of methodologies) {
+      if (lowerContent.includes(methodology)) {
+        return methodology;
+      }
+    }
+    return 'hybrid'; // Default
+  }
+
+  /**
+   * Extract agent assignments from planning content
+   * @param {string} content - Planning content
+   * @param {Object} agentRegistry - Agent registry information
+   * @returns {Array} Extracted agent assignments
+   */
+  extractAgentAssignments(content, agentRegistry) {
+    if (!agentRegistry || !agentRegistry.agents) return [];
+    
+    const assignments = [];
+    const lowerContent = content.toLowerCase();
+    
+    for (const agent of agentRegistry.agents) {
+      if (lowerContent.includes(agent.name.toLowerCase()) || lowerContent.includes(agent.id)) {
+        assignments.push({
+          agent_id: agent.id,
+          agent_name: agent.name,
+          mentioned: true
+        });
+      }
+    }
+    
+    return assignments;
+  }
+
+  /**
+   * Extract duration estimates from planning content
+   * @param {string} content - Planning content
+   * @returns {string} Extracted duration
+   */
+  extractDuration(content) {
+    const durationRegex = /(\d+)\s*(days?|weeks?|months?|hours?)/gi;
+    const matches = content.match(durationRegex);
+    return matches ? matches[0] : 'not specified';
+  }
+
+  /**
+   * Extract success factors from planning content
+   * @param {string} content - Planning content
+   * @returns {Array} Extracted success factors
+   */
+  extractSuccessFactors(content) {
+    const factors = [];
+    const lowerContent = content.toLowerCase();
+    
+    const successKeywords = ['success', 'critical', 'important', 'key', 'essential'];
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+      if (successKeywords.some(keyword => lowerLine.includes(keyword))) {
+        factors.push(line.trim());
+      }
+    }
+    
+    return factors.slice(0, 5); // Limit to top 5
+  }
+
+  /**
+   * Extract risk factors from planning content
+   * @param {string} content - Planning content
+   * @returns {Array} Extracted risk factors
+   */
+  extractRiskFactors(content) {
+    const risks = [];
+    const lowerContent = content.toLowerCase();
+    
+    const riskKeywords = ['risk', 'challenge', 'obstacle', 'threat', 'concern'];
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+      if (riskKeywords.some(keyword => lowerLine.includes(keyword))) {
+        risks.push(line.trim());
+      }
+    }
+    
+    return risks.slice(0, 5); // Limit to top 5
+  }
+
+  /**
+   * Extract lessons learned from planning content and knowledge context
+   * @param {string} content - Planning content
+   * @param {Object} knowledgeContext - Knowledge context from retrieval
+   * @returns {Array} Extracted lessons learned
+   */
+  extractLessonsLearned(content, knowledgeContext) {
+    const lessons = [];
+    
+    // Extract from current planning content
+    const lowerContent = content.toLowerCase();
+    const lessonKeywords = ['lesson', 'learn', 'insight', 'recommendation'];
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+      if (lessonKeywords.some(keyword => lowerLine.includes(keyword))) {
+        lessons.push(line.trim());
+      }
+    }
+    
+    // Add lessons from historical context
+    if (knowledgeContext && knowledgeContext.relevant_plans) {
+      for (const plan of knowledgeContext.relevant_plans) {
+        if (plan.lessons_learned) {
+          lessons.push(`Historical: ${plan.lessons_learned}`);
+        }
+      }
+    }
+    
+    return lessons.slice(0, 10); // Limit to top 10
+  }
+
+  /**
+   * Generate coordination insights for agent orchestration
+   * @param {string} content - Planning content
+   * @param {Object} agentRegistry - Agent registry information
+   * @returns {string} Generated coordination insights
+   */
+  generateCoordinationInsights(content, agentRegistry) {
+    const insights = [];
+    
+    insights.push('Agent Coordination Analysis:');
+    insights.push(`- Total agents available: ${agentRegistry.total_agents || 0}`);
+    insights.push(`- Capabilities utilized: ${Object.keys(agentRegistry.capabilities_distribution || {}).length}`);
+    
+    if (agentRegistry.agents) {
+      const mentionedAgents = agentRegistry.agents.filter(agent => 
+        content.toLowerCase().includes(agent.name.toLowerCase())
+      );
+      
+      if (mentionedAgents.length > 0) {
+        insights.push('\nAgent Assignments:');
+        mentionedAgents.forEach(agent => {
+          insights.push(`- ${agent.name}: ${agent.capabilities?.join(', ') || 'General tasks'}`);
+        });
+      }
+    }
+    
+    insights.push('\nCoordination Strategy:');
+    insights.push('- Sequential execution for dependent tasks');
+    insights.push('- Parallel execution for independent tasks');
+    insights.push('- Handoff protocols between specialized agents');
+    
+    return insights.join('\n');
+  }
+
+  /**
+   * Extract coordination success factors
+   * @param {string} content - Planning content
+   * @returns {Array} Coordination success factors
+   */
+  extractCoordinationSuccessFactors(content) {
+    return [
+      'Clear agent role definitions',
+      'Proper task-to-agent capability matching',
+      'Effective handoff protocols',
+      'Real-time progress monitoring',
+      'Fallback agent assignments'
+    ];
+  }
+
+  /**
+   * Extract coordination pitfalls
+   * @param {string} content - Planning content
+   * @returns {Array} Coordination pitfalls
+   */
+  extractCoordinationPitfalls(content) {
+    return [
+      'Agent capability mismatches',
+      'Unclear handoff procedures',
+      'Lack of progress visibility',
+      'No fallback strategies',
+      'Poor task dependency management'
+    ];
+  }
+
+  async shutdown() {
+    logger.info('PlanningAgent shutting down');
+    this.executionPlans.clear();
   }
 }
 

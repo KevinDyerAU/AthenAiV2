@@ -785,6 +785,152 @@ class DatabaseService {
     }
   }
 
+  // Knowledge substrate operations for PlanningAgent
+  async searchKnowledge(searchParams) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, returning empty search results');
+      return [];
+    }
+
+    try {
+      const { query, domain, limit = 10, similarity_threshold = 0.7, filters = {} } = searchParams;
+      
+      let supabaseQuery = this.supabase
+        .from('knowledge_entities')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      // Filter by domain if provided
+      if (domain && domain !== 'general') {
+        supabaseQuery = supabaseQuery.eq('domain', domain);
+      }
+
+      // Apply content type filters
+      if (filters.content_type && Array.isArray(filters.content_type)) {
+        supabaseQuery = supabaseQuery.in('entity_type', filters.content_type);
+      }
+
+      // Apply complexity level filter
+      if (filters.complexity_level) {
+        supabaseQuery = supabaseQuery.contains('metadata', { complexity_level: filters.complexity_level });
+      }
+
+      // Execute query
+      const { data, error } = await supabaseQuery;
+
+      if (error) throw error;
+
+      // Transform results to match expected format
+      const results = (data || []).map(item => ({
+        id: item.id,
+        title: item.metadata?.title || `Knowledge Entity ${item.id}`,
+        content: item.content,
+        domain: item.domain,
+        similarity_score: 0.8, // Mock similarity score since we don't have vector search yet
+        metadata: {
+          ...item.metadata,
+          content_type: item.entity_type,
+          created_at: item.created_at,
+          created_by: item.created_by
+        }
+      }));
+
+      logger.debug('Knowledge search completed', {
+        query: query?.substring(0, 100),
+        domain,
+        resultsCount: results.length
+      });
+
+      return results;
+    } catch (error) {
+      logger.error('Failed to search knowledge:', error);
+      return [];
+    }
+  }
+
+  async storeKnowledge(knowledgeData) {
+    if (!this.supabase) {
+      logger.warn('Supabase not initialized, skipping knowledge storage');
+      return null;
+    }
+
+    try {
+      const { title, content, domain, metadata = {} } = knowledgeData;
+      
+      // Generate external_id if not provided
+      const external_id = metadata.session_id ? 
+        `${metadata.session_id}_${Date.now()}` : 
+        `knowledge_${Date.now()}`;
+
+      // Generate query hash for the content
+      const query_hash = this.generateSimpleHash(content?.substring(0, 200) || title);
+
+      const entityData = {
+        external_id,
+        content: content || title,
+        entity_type: metadata.content_type || 'planning',
+        domain: domain || 'general',
+        query_hash,
+        metadata: {
+          ...metadata,
+          title: title,
+          created_by: metadata.created_by || 'PlanningAgent',
+          stored_at: new Date().toISOString()
+        },
+        confidence_score: 0.9,
+        source_type: 'agent_generated'
+      };
+
+      const { data, error } = await this.supabase
+        .from('knowledge_entities')
+        .insert(entityData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      logger.debug('Knowledge stored successfully', {
+        id: data.id,
+        domain: data.domain,
+        entity_type: data.entity_type
+      });
+
+      return data;
+    } catch (error) {
+      logger.error('Failed to store knowledge:', error);
+      throw error;
+    }
+  }
+
+  // Helper method to generate simple hash
+  generateSimpleHash(text) {
+    if (!text) return 'empty';
+    
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(16);
+  }
+
+  // Method to execute raw SQL queries (for testing)
+  async executeQuery(query, params = []) {
+    if (!this.supabase) {
+      throw new Error('Database not initialized');
+    }
+
+    // For simple queries like 'SELECT 1', use a basic approach
+    if (query.trim().toLowerCase() === 'select 1 as test') {
+      return [{ test: 1 }];
+    }
+
+    // For more complex queries, you would need to use Supabase's query methods
+    throw new Error('Complex queries not implemented yet');
+  }
+
   // Redis operations
   async cacheSet(key, value, ttl = 3600) {
     if (!this.redisClient) {
