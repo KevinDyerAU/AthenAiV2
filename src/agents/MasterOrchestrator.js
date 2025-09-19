@@ -699,6 +699,83 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       conversation_continuity: 'new_conversation'
     };
 
+    // If primary agent is planning, delegate to PlanningAgent for comprehensive planning
+    if (routing.primary === 'planning') {
+      logger.info('MasterOrchestrator: Delegating execution plan creation to PlanningAgent');
+      
+      try {
+        const { PlanningAgent } = require('./PlanningAgent');
+        const planningAgent = new PlanningAgent();
+        
+        // Get comprehensive agent registry information
+        const agentRegistryInfo = this.getAgentRegistryInfo();
+        
+        const planningRequest = {
+          task: task,
+          objective: task,
+          complexity: complexity,
+          routing: routing,
+          conversationContext: conversationContext,
+          constraints: {},
+          resources: {
+            available_agents: routing.secondary || [],
+            execution_order: routing.execution_order || [routing.primary],
+            parallel_execution: routing.parallel_execution || false,
+            agent_registry: agentRegistryInfo // Pass comprehensive agent information
+          },
+          sessionId: `plan_${Date.now()}`,
+          orchestrationId: `orch_${Date.now()}`,
+          planning_type: 'orchestration'
+        };
+
+        // Get comprehensive plan from PlanningAgent
+        const planningResult = await planningAgent.executePlanning(planningRequest);
+        
+        // Transform PlanningAgent result into MasterOrchestrator execution plan format
+        return {
+          task_id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          primary_agent: routing.primary,
+          secondary_agents: routing.secondary || [],
+          execution_order: routing.execution_order || [routing.primary],
+          parallel_execution: routing.parallel_execution || false,
+          estimated_time: complexity.estimated_time || 300,
+          priority: this.determinePriority(complexity.level),
+          dependencies: [],
+          checkpoints: this.createCheckpoints(routing.execution_order || [routing.primary]),
+          context_awareness: contextAwareness,
+          fallback_strategy: {
+            primary_fallback: 'research',
+            timeout_threshold: 30000,
+            retry_attempts: 2
+          },
+          // Enhanced with PlanningAgent comprehensive planning
+          comprehensive_plan: {
+            planning_result: planningResult,
+            work_breakdown: planningResult.work_breakdown || 'Detailed planning completed',
+            timeline: planningResult.timeline || 'Timeline established',
+            resource_allocation: planningResult.resource_allocation || 'Resources allocated',
+            risk_assessment: planningResult.risk_assessment || 'Risks assessed',
+            success_metrics: planningResult.success_metrics || 'Success criteria defined'
+          },
+          metadata: {
+            complexity_factors: complexity.factors || [],
+            reasoning: complexity.reasoning || 'Standard execution plan',
+            created_at: new Date().toISOString(),
+            conversation_context: conversationContext.slice(-3),
+            planning_agent_used: true,
+            planning_confidence: planningResult.confidence || 'high'
+          }
+        };
+        
+      } catch (error) {
+        logger.warn('MasterOrchestrator: PlanningAgent integration failed, using fallback plan', { 
+          error: error.message 
+        });
+        // Fallback to standard execution plan
+      }
+    }
+
+    // Standard execution plan for non-planning tasks
     return {
       task_id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       primary_agent: routing.primary,
@@ -719,7 +796,8 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         complexity_factors: complexity.factors || [],
         reasoning: complexity.reasoning || 'Standard execution plan',
         created_at: new Date().toISOString(),
-        conversation_context: conversationContext.slice(-3) // Store last 3 messages for reference
+        conversation_context: conversationContext.slice(-3),
+        planning_agent_used: false
       }
     };
   }
@@ -771,6 +849,22 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       logger.info('MasterOrchestrator: Analyzing task complexity');
       const complexity = await this.analyzeTaskComplexity(taskMessage);
       
+      // Use think tool only for highly complex tasks
+      let thinkingResult = null;
+      if (complexity.level === 'high' || complexity.level === 'very_complex') {
+        logger.info('MasterOrchestrator: High complexity detected, engaging think tool');
+        progressBroadcaster.updateThinking(sessionId, 'deep_thinking', 'Engaging advanced reasoning for complex task...');
+        try {
+          thinkingResult = await this.think(taskMessage);
+          logger.debug('MasterOrchestrator: Think tool completed', { 
+            steps: thinkingResult.steps?.length || 0,
+            responseTime: thinkingResult.responseTime 
+          });
+        } catch (error) {
+          logger.warn('MasterOrchestrator: Think tool failed for complex task', { error: error.message });
+        }
+      }
+      
       const routing = await this.routeToAgent(taskMessage, sessionId, conversationContext);
       
       const orchestrationId = this.generateSessionId();
@@ -793,7 +887,36 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         plan 
       });
 
-      // Step 4: Store orchestration result
+      // Step 4: Execute comprehensive plan if created by PlanningAgent
+      let executionResult = null;
+      if (plan.comprehensive_plan && plan.metadata.planning_agent_used) {
+        logger.info('MasterOrchestrator: Executing comprehensive plan from PlanningAgent');
+        progressBroadcaster.updateProgress(sessionId, {
+          phase: 'plan_execution',
+          message: 'Executing comprehensive plan...',
+          progress: 80
+        });
+        
+        try {
+          executionResult = await this.executeComprehensivePlan(plan, sessionId, orchestrationId);
+          logger.info('MasterOrchestrator: Comprehensive plan execution completed', { 
+            orchestrationId,
+            executionStatus: executionResult.status 
+          });
+        } catch (error) {
+          logger.error('MasterOrchestrator: Comprehensive plan execution failed', { 
+            error: error.message,
+            orchestrationId 
+          });
+          executionResult = {
+            status: 'failed',
+            error: error.message,
+            fallback_executed: true
+          };
+        }
+      }
+
+      // Step 5: Store orchestration result
       const metadata = {
         orchestration_id: orchestrationId,
         task_type: routing.primary,
@@ -804,12 +927,16 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         complexity,
         routing,
         plan,
+        thinkingResult, // Include thinking result for complex tasks
+        executionResult, // Include execution result if comprehensive plan was executed
         conversationContext: conversationContext.slice(-5), // Store last 5 messages for reference
         metadata: {
           ...metadata,
           created_at: new Date().toISOString(),
           session_id: sessionId,
-          user_id: inputData.userId || 'anonymous'
+          user_id: inputData.userId || 'anonymous',
+          used_think_tool: !!thinkingResult,
+          executed_comprehensive_plan: !!executionResult
         }
       });
 
@@ -819,7 +946,8 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         orchestration_result: {
           complexity,
           routing,
-          execution_plan: plan
+          execution_plan: plan,
+          execution_result: executionResult
         },
         status: 'completed',
         timestamp: new Date().toISOString()
@@ -976,6 +1104,788 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
       estimated_duration: 30,
       dependencies: index > 0 ? [`checkpoint_${index}`] : []
     }));
+  }
+
+  /**
+   * Execute a comprehensive plan created by the PlanningAgent
+   * @param {Object} plan - The execution plan containing comprehensive_plan
+   * @param {string} sessionId - Session identifier for progress tracking
+   * @param {string} orchestrationId - Orchestration identifier
+   * @returns {Object} Execution result with status and outcomes
+   */
+  async executeComprehensivePlan(plan, sessionId, orchestrationId) {
+    const startTime = Date.now();
+    const comprehensivePlan = plan.comprehensive_plan;
+    
+    logger.info('MasterOrchestrator: Starting comprehensive plan execution', {
+      orchestrationId,
+      workBreakdown: comprehensivePlan.work_breakdown?.length || 0,
+      agentCoordination: comprehensivePlan.agent_coordination?.length || 0
+    });
+
+    try {
+      const executionResults = {
+        status: 'in_progress',
+        orchestration_id: orchestrationId,
+        session_id: sessionId,
+        started_at: new Date().toISOString(),
+        work_breakdown_results: [],
+        agent_coordination_results: [],
+        success_metrics_achieved: [],
+        risks_encountered: [],
+        overall_progress: 0
+      };
+
+      // Phase 1: Execute work breakdown structure
+      if (comprehensivePlan.work_breakdown && comprehensivePlan.work_breakdown.length > 0) {
+        logger.info('MasterOrchestrator: Executing work breakdown structure');
+        progressBroadcaster.updateProgress(sessionId, {
+          phase: 'work_breakdown_execution',
+          message: 'Executing work breakdown tasks...',
+          progress: 85
+        });
+
+        for (let i = 0; i < comprehensivePlan.work_breakdown.length; i++) {
+          const task = comprehensivePlan.work_breakdown[i];
+          const taskProgress = ((i + 1) / comprehensivePlan.work_breakdown.length) * 100;
+          
+          progressBroadcaster.updateProgress(sessionId, {
+            phase: 'work_breakdown_execution',
+            message: `Executing task: ${task.task_name || task.name || `Task ${i + 1}`}`,
+            progress: 85 + (taskProgress * 0.1) // 85-95% range
+          });
+
+          try {
+            const taskResult = await this.executeWorkBreakdownTask(task, sessionId, orchestrationId);
+            executionResults.work_breakdown_results.push({
+              task_id: task.id || `task_${i + 1}`,
+              task_name: task.task_name || task.name,
+              status: taskResult.status,
+              result: taskResult.result,
+              agent_used: taskResult.agent_used,
+              execution_time: taskResult.execution_time,
+              completed_at: new Date().toISOString()
+            });
+            
+            logger.debug('MasterOrchestrator: Work breakdown task completed', {
+              taskName: task.task_name || task.name,
+              status: taskResult.status
+            });
+          } catch (error) {
+            logger.error('MasterOrchestrator: Work breakdown task failed', {
+              taskName: task.task_name || task.name,
+              error: error.message
+            });
+            
+            executionResults.work_breakdown_results.push({
+              task_id: task.id || `task_${i + 1}`,
+              task_name: task.task_name || task.name,
+              status: 'failed',
+              error: error.message,
+              completed_at: new Date().toISOString()
+            });
+          }
+        }
+      }
+
+      // Phase 2: Execute agent coordination if specified
+      if (comprehensivePlan.agent_coordination && comprehensivePlan.agent_coordination.length > 0) {
+        logger.info('MasterOrchestrator: Executing agent coordination');
+        progressBroadcaster.updateProgress(sessionId, {
+          phase: 'agent_coordination',
+          message: 'Coordinating multi-agent execution...',
+          progress: 95
+        });
+
+        for (const coordination of comprehensivePlan.agent_coordination) {
+          try {
+            const coordResult = await this.executeAgentCoordination(coordination, sessionId, orchestrationId);
+            executionResults.agent_coordination_results.push({
+              coordination_type: coordination.type || coordination.coordination_type,
+              agents_involved: coordination.agents || coordination.agents_involved,
+              status: coordResult.status,
+              result: coordResult.result,
+              completed_at: new Date().toISOString()
+            });
+          } catch (error) {
+            logger.error('MasterOrchestrator: Agent coordination failed', {
+              coordinationType: coordination.type,
+              error: error.message
+            });
+            
+            executionResults.agent_coordination_results.push({
+              coordination_type: coordination.type || coordination.coordination_type,
+              status: 'failed',
+              error: error.message,
+              completed_at: new Date().toISOString()
+            });
+          }
+        }
+      }
+
+      // Phase 3: Evaluate success metrics
+      if (comprehensivePlan.success_metrics) {
+        logger.info('MasterOrchestrator: Evaluating success metrics');
+        try {
+          const metricsEvaluation = await this.evaluateSuccessMetrics(
+            comprehensivePlan.success_metrics,
+            executionResults,
+            sessionId
+          );
+          executionResults.success_metrics_achieved = metricsEvaluation.achieved;
+          executionResults.overall_progress = metricsEvaluation.overall_progress;
+        } catch (error) {
+          logger.warn('MasterOrchestrator: Success metrics evaluation failed', { error: error.message });
+          executionResults.overall_progress = this.calculateFallbackProgress(executionResults);
+        }
+      } else {
+        executionResults.overall_progress = this.calculateFallbackProgress(executionResults);
+      }
+
+      // Determine final status
+      const failedTasks = executionResults.work_breakdown_results.filter(r => r.status === 'failed').length;
+      const totalTasks = executionResults.work_breakdown_results.length;
+      
+      if (failedTasks === 0) {
+        executionResults.status = 'completed';
+      } else if (failedTasks < totalTasks) {
+        executionResults.status = 'partially_completed';
+      } else {
+        executionResults.status = 'failed';
+      }
+
+      executionResults.completed_at = new Date().toISOString();
+      executionResults.execution_time = Date.now() - startTime;
+
+      logger.info('MasterOrchestrator: Comprehensive plan execution completed', {
+        orchestrationId,
+        status: executionResults.status,
+        tasksCompleted: totalTasks - failedTasks,
+        totalTasks,
+        executionTime: executionResults.execution_time
+      });
+
+      return executionResults;
+
+    } catch (error) {
+      logger.error('MasterOrchestrator: Comprehensive plan execution failed', {
+        orchestrationId,
+        error: error.message,
+        executionTime: Date.now() - startTime
+      });
+
+      return {
+        status: 'failed',
+        error: error.message,
+        orchestration_id: orchestrationId,
+        session_id: sessionId,
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        execution_time: Date.now() - startTime
+      };
+    }
+  }
+
+  /**
+   * Execute a single work breakdown task by routing to appropriate agent
+   * @param {Object} task - Work breakdown task to execute
+   * @param {string} sessionId - Session identifier
+   * @param {string} orchestrationId - Orchestration identifier
+   * @returns {Object} Task execution result
+   */
+  async executeWorkBreakdownTask(task, sessionId, orchestrationId) {
+    const startTime = Date.now();
+    
+    try {
+      // Determine which agent should handle this task
+      const taskDescription = task.description || task.task_description || task.name || task.task_name;
+      const agentType = task.assigned_agent || task.agent || await this.determineTaskAgent(taskDescription);
+      
+      logger.debug('MasterOrchestrator: Executing work breakdown task', {
+        taskName: task.name || task.task_name,
+        agentType,
+        orchestrationId
+      });
+
+      // Get the appropriate agent instance
+      const agent = this.agentRegistry.getAgent(agentType);
+      if (!agent) {
+        throw new Error(`Agent '${agentType}' not found in registry`);
+      }
+
+      // Execute the task with the agent
+      const agentInput = {
+        message: taskDescription,
+        task: taskDescription,
+        sessionId: sessionId,
+        orchestrationId: orchestrationId,
+        taskContext: {
+          task_id: task.id,
+          task_name: task.name || task.task_name,
+          priority: task.priority,
+          dependencies: task.dependencies,
+          estimated_time: task.estimated_time
+        }
+      };
+
+      let result;
+      if (agentType === 'research') {
+        result = await agent.executeResearch(agentInput);
+      } else if (agentType === 'analysis') {
+        result = await agent.executeAnalysis(agentInput);
+      } else if (agentType === 'creative') {
+        result = await agent.executeCreative(agentInput);
+      } else if (agentType === 'development') {
+        result = await agent.executeDevelopment(agentInput);
+      } else if (agentType === 'communication') {
+        result = await agent.executeCommunication(agentInput);
+      } else if (agentType === 'execution') {
+        result = await agent.executeExecution(agentInput);
+      } else if (agentType === 'qa') {
+        result = await agent.executeQualityAssurance(agentInput);
+      } else {
+        // Generic execution method
+        result = await agent.execute(agentInput);
+      }
+
+      return {
+        status: 'completed',
+        result: result,
+        agent_used: agentType,
+        execution_time: Date.now() - startTime
+      };
+
+    } catch (error) {
+      logger.error('MasterOrchestrator: Work breakdown task execution failed', {
+        taskName: task.name || task.task_name,
+        error: error.message
+      });
+
+      return {
+        status: 'failed',
+        error: error.message,
+        execution_time: Date.now() - startTime
+      };
+    }
+  }
+
+  /**
+   * Execute agent coordination strategy
+   * @param {Object} coordination - Agent coordination specification
+   * @param {string} sessionId - Session identifier
+   * @param {string} orchestrationId - Orchestration identifier
+   * @returns {Object} Coordination execution result
+   */
+  async executeAgentCoordination(coordination, sessionId, orchestrationId) {
+    const startTime = Date.now();
+    
+    try {
+      const coordinationType = coordination.type || coordination.coordination_type;
+      const agentsInvolved = coordination.agents || coordination.agents_involved || [];
+      
+      logger.debug('MasterOrchestrator: Executing agent coordination', {
+        type: coordinationType,
+        agents: agentsInvolved,
+        orchestrationId
+      });
+
+      let result;
+      
+      if (coordinationType === 'sequential') {
+        result = await this.executeSequentialCoordination(agentsInvolved, coordination, sessionId);
+      } else if (coordinationType === 'parallel') {
+        result = await this.executeParallelCoordination(agentsInvolved, coordination, sessionId);
+      } else if (coordinationType === 'collaborative') {
+        result = await this.executeCollaborativeCoordination(agentsInvolved, coordination, sessionId);
+      } else {
+        // Default to sequential execution
+        result = await this.executeSequentialCoordination(agentsInvolved, coordination, sessionId);
+      }
+
+      return {
+        status: 'completed',
+        result: result,
+        execution_time: Date.now() - startTime
+      };
+
+    } catch (error) {
+      logger.error('MasterOrchestrator: Agent coordination execution failed', {
+        coordinationType: coordination.type,
+        error: error.message
+      });
+
+      return {
+        status: 'failed',
+        error: error.message,
+        execution_time: Date.now() - startTime
+      };
+    }
+  }
+
+  /**
+   * Evaluate success metrics against execution results
+   * @param {Array} successMetrics - Success metrics to evaluate
+   * @param {Object} executionResults - Current execution results
+   * @param {string} sessionId - Session identifier
+   * @returns {Object} Metrics evaluation result
+   */
+  async evaluateSuccessMetrics(successMetrics, executionResults, sessionId) {
+    const achieved = [];
+    let totalScore = 0;
+    let maxScore = 0;
+
+    for (const metric of successMetrics) {
+      maxScore += metric.weight || 1;
+      
+      try {
+        const isAchieved = await this.evaluateMetric(metric, executionResults);
+        if (isAchieved) {
+          achieved.push({
+            metric: metric.name || metric.description,
+            achieved: true,
+            score: metric.weight || 1
+          });
+          totalScore += metric.weight || 1;
+        } else {
+          achieved.push({
+            metric: metric.name || metric.description,
+            achieved: false,
+            score: 0
+          });
+        }
+      } catch (error) {
+        logger.warn('MasterOrchestrator: Metric evaluation failed', {
+          metric: metric.name,
+          error: error.message
+        });
+        achieved.push({
+          metric: metric.name || metric.description,
+          achieved: false,
+          error: error.message,
+          score: 0
+        });
+      }
+    }
+
+    const overallProgress = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+
+    return {
+      achieved,
+      overall_progress: overallProgress,
+      total_score: totalScore,
+      max_score: maxScore
+    };
+  }
+
+  /**
+   * Calculate fallback progress when success metrics evaluation fails
+   * @param {Object} executionResults - Execution results to analyze
+   * @returns {number} Progress percentage
+   */
+  calculateFallbackProgress(executionResults) {
+    const totalTasks = executionResults.work_breakdown_results.length;
+    if (totalTasks === 0) return 100;
+    
+    const completedTasks = executionResults.work_breakdown_results.filter(r => r.status === 'completed').length;
+    return (completedTasks / totalTasks) * 100;
+  }
+
+  /**
+   * Determine which agent should handle a specific task
+   * @param {string} taskDescription - Description of the task
+   * @returns {string} Agent type identifier
+   */
+  async determineTaskAgent(taskDescription) {
+    // Simple keyword-based routing for now - could be enhanced with AI
+    const description = taskDescription.toLowerCase();
+    
+    if (description.includes('research') || description.includes('investigate') || description.includes('analyze data')) {
+      return 'research';
+    } else if (description.includes('analyze') || description.includes('evaluation') || description.includes('metrics')) {
+      return 'analysis';
+    } else if (description.includes('create') || description.includes('design') || description.includes('content')) {
+      return 'creative';
+    } else if (description.includes('develop') || description.includes('code') || description.includes('implement')) {
+      return 'development';
+    } else if (description.includes('communicate') || description.includes('email') || description.includes('message')) {
+      return 'communication';
+    } else if (description.includes('test') || description.includes('quality') || description.includes('validate')) {
+      return 'qa';
+    } else {
+      return 'execution'; // Default fallback
+    }
+  }
+
+  /**
+   * Execute sequential agent coordination
+   * @param {Array} agents - List of agents to coordinate
+   * @param {Object} coordination - Coordination specification
+   * @param {string} sessionId - Session identifier
+   * @returns {Object} Coordination result
+   */
+  async executeSequentialCoordination(agents, coordination, sessionId) {
+    const results = [];
+    let previousResult = null;
+
+    for (const agentType of agents) {
+      const agent = this.agentRegistry.getAgent(agentType);
+      if (!agent) {
+        logger.warn(`Agent '${agentType}' not found for sequential coordination`);
+        continue;
+      }
+
+      const input = {
+        message: coordination.task || coordination.description,
+        sessionId: sessionId,
+        previousResult: previousResult,
+        coordinationContext: coordination
+      };
+
+      try {
+        const result = await agent.execute(input);
+        results.push({
+          agent: agentType,
+          status: 'completed',
+          result: result
+        });
+        previousResult = result;
+      } catch (error) {
+        results.push({
+          agent: agentType,
+          status: 'failed',
+          error: error.message
+        });
+        break; // Stop sequential execution on failure
+      }
+    }
+
+    return { type: 'sequential', results };
+  }
+
+  /**
+   * Execute parallel agent coordination
+   * @param {Array} agents - List of agents to coordinate
+   * @param {Object} coordination - Coordination specification
+   * @param {string} sessionId - Session identifier
+   * @returns {Object} Coordination result
+   */
+  async executeParallelCoordination(agents, coordination, sessionId) {
+    const promises = agents.map(async (agentType) => {
+      const agent = this.agentRegistry.getAgent(agentType);
+      if (!agent) {
+        return {
+          agent: agentType,
+          status: 'failed',
+          error: 'Agent not found'
+        };
+      }
+
+      const input = {
+        message: coordination.task || coordination.description,
+        sessionId: sessionId,
+        coordinationContext: coordination
+      };
+
+      try {
+        const result = await agent.execute(input);
+        return {
+          agent: agentType,
+          status: 'completed',
+          result: result
+        };
+      } catch (error) {
+        return {
+          agent: agentType,
+          status: 'failed',
+          error: error.message
+        };
+      }
+    });
+
+    const results = await Promise.all(promises);
+    return { type: 'parallel', results };
+  }
+
+  /**
+   * Execute collaborative agent coordination
+   * @param {Array} agents - List of agents to coordinate
+   * @param {Object} coordination - Coordination specification
+   * @param {string} sessionId - Session identifier
+   * @returns {Object} Coordination result
+   */
+  async executeCollaborativeCoordination(agents, coordination, sessionId) {
+    // For collaborative coordination, we'll use a round-robin approach
+    // where each agent builds on the work of others
+    const results = [];
+    let sharedContext = {
+      task: coordination.task || coordination.description,
+      collaborativeResults: []
+    };
+
+    for (let round = 0; round < (coordination.rounds || 2); round++) {
+      const roundResults = [];
+      
+      for (const agentType of agents) {
+        const agent = this.agentRegistry.getAgent(agentType);
+        if (!agent) {
+          logger.warn(`Agent '${agentType}' not found for collaborative coordination`);
+          continue;
+        }
+
+        const input = {
+          message: coordination.task || coordination.description,
+          sessionId: sessionId,
+          sharedContext: sharedContext,
+          round: round,
+          coordinationContext: coordination
+        };
+
+        try {
+          const result = await agent.execute(input);
+          roundResults.push({
+            agent: agentType,
+            round: round,
+            status: 'completed',
+            result: result
+          });
+          
+          // Add to shared context for next agents
+          sharedContext.collaborativeResults.push({
+            agent: agentType,
+            round: round,
+            contribution: result
+          });
+        } catch (error) {
+          roundResults.push({
+            agent: agentType,
+            round: round,
+            status: 'failed',
+            error: error.message
+          });
+        }
+      }
+      
+      results.push(...roundResults);
+    }
+
+    return { type: 'collaborative', results, sharedContext };
+  }
+
+  /**
+   * Evaluate a single success metric
+   * @param {Object} metric - Success metric to evaluate
+   * @param {Object} executionResults - Current execution results
+   * @returns {boolean} Whether the metric is achieved
+   */
+  async evaluateMetric(metric, executionResults) {
+    const metricType = metric.type || metric.metric_type;
+    const target = metric.target || metric.target_value;
+
+    switch (metricType) {
+      case 'completion_rate':
+        const completionRate = this.calculateFallbackProgress(executionResults);
+        return completionRate >= target;
+        
+      case 'task_success':
+        const successfulTasks = executionResults.work_breakdown_results.filter(r => r.status === 'completed').length;
+        return successfulTasks >= target;
+        
+      case 'time_limit':
+        const totalTime = executionResults.execution_time || 0;
+        return totalTime <= target;
+        
+      case 'quality_score':
+        // This would require more sophisticated quality evaluation
+        // For now, assume quality is met if tasks completed successfully
+        const qualityScore = this.calculateFallbackProgress(executionResults);
+        return qualityScore >= target;
+        
+      default:
+        logger.warn('MasterOrchestrator: Unknown metric type', { metricType });
+        return false;
+    }
+  }
+
+  /**
+   * Get comprehensive agent registry information for planning
+   * @returns {Object} Complete agent registry data with capabilities, tools, and performance metrics
+   */
+  getAgentRegistryInfo() {
+    try {
+      const registryStats = this.agentRegistry.getRegistryStats();
+      const allAgents = this.agentRegistry.getAllAgents();
+      
+      const agentInfo = {
+        total_agents: registryStats.totalAgents,
+        agents: allAgents.map(agent => ({
+          id: agent.id,
+          name: agent.name,
+          description: agent.description,
+          capabilities: agent.capabilities,
+          tools: agent.tools,
+          domains: agent.domains,
+          complexity_level: agent.complexity_level,
+          max_iterations: agent.max_iterations,
+          routing_keywords: agent.routing_keywords,
+          confidence_threshold: agent.confidence_threshold,
+          performance_metrics: agent.performance_metrics,
+          search_priority: agent.search_priority
+        })),
+        capabilities_distribution: registryStats.capabilityDistribution,
+        domain_distribution: registryStats.agentsByDomain,
+        complexity_distribution: registryStats.agentsByComplexity,
+        performance_stats: registryStats.performanceStats
+      };
+      
+      logger.debug('MasterOrchestrator: Agent registry info compiled', {
+        totalAgents: agentInfo.total_agents,
+        capabilities: Object.keys(agentInfo.capabilities_distribution).length,
+        domains: Object.keys(agentInfo.domain_distribution).length
+      });
+      
+      return agentInfo;
+      
+    } catch (error) {
+      logger.error('MasterOrchestrator: Failed to get agent registry info', { error: error.message });
+      
+      // Fallback minimal agent info
+      return {
+        total_agents: 0,
+        agents: [],
+        capabilities_distribution: {},
+        domain_distribution: {},
+        complexity_distribution: {},
+        performance_stats: {},
+        error: 'Failed to load agent registry information'
+      };
+    }
+  }
+
+  async think(problem) {
+    logger.debug('MasterOrchestrator: Starting think process', { problem: problem.substring(0, 100) });
+    
+    try {
+      // AI-powered thinking with step-by-step reasoning
+      const thinkPrompt = PromptTemplate.fromTemplate(`
+You are the Master Orchestrator's reasoning engine. Think through complex problems step by step with systematic analysis.
+
+REASONING PHASE:
+1. First, break down the problem into its core components
+2. Identify the key challenges and requirements
+3. Consider multiple approaches and their trade-offs
+4. Determine the optimal strategy and execution plan
+5. Anticipate potential obstacles and mitigation strategies
+6. Synthesize your analysis into actionable insights
+
+PROBLEM TO ANALYZE:
+{problem}
+
+INSTRUCTIONS:
+- Think systematically through each phase
+- Consider complexity, dependencies, and resource requirements
+- Provide clear reasoning for your recommendations
+- Structure your response as numbered steps with explanations
+- Focus on practical, actionable insights
+
+Provide your step-by-step reasoning and recommendations:
+`);
+
+      const chain = thinkPrompt.pipe(this.llm).pipe(new StringOutputParser());
+      
+      const startTime = Date.now();
+      const reasoning = await chain.invoke({ problem });
+      const responseTime = Date.now() - startTime;
+      
+      logger.debug('MasterOrchestrator: Think process completed', { 
+        responseTime,
+        reasoningLength: reasoning.length 
+      });
+
+      // Parse the reasoning into structured steps
+      const steps = this.parseReasoningSteps(reasoning);
+      
+      return {
+        problem,
+        reasoning,
+        steps,
+        responseTime,
+        timestamp: new Date().toISOString()
+      };
+
+    } catch (error) {
+      logger.error('MasterOrchestrator: Think process failed', { 
+        error: error.message,
+        problem: problem.substring(0, 100)
+      });
+      
+      // Fallback to simple structured thinking
+      return {
+        problem,
+        reasoning: `Fallback analysis: ${problem}`,
+        steps: [
+          { step: 1, description: 'Analyze the problem', reasoning: 'Break down the core requirements' },
+          { step: 2, description: 'Consider approaches', reasoning: 'Evaluate different solution strategies' },
+          { step: 3, description: 'Plan execution', reasoning: 'Determine implementation steps' }
+        ],
+        responseTime: 0,
+        timestamp: new Date().toISOString(),
+        fallback: true,
+        error: error.message
+      };
+    }
+  }
+
+  parseReasoningSteps(reasoning) {
+    const steps = [];
+    const lines = reasoning.split('\n');
+    let currentStep = null;
+    let stepCounter = 1;
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // Look for numbered steps or bullet points
+      if (trimmedLine.match(/^\d+\./)) {
+        if (currentStep) {
+          steps.push(currentStep);
+        }
+        currentStep = {
+          step: stepCounter++,
+          description: trimmedLine.replace(/^\d+\.\s*/, ''),
+          reasoning: ''
+        };
+      } else if (trimmedLine.match(/^[-*•]/)) {
+        if (currentStep) {
+          steps.push(currentStep);
+        }
+        currentStep = {
+          step: stepCounter++,
+          description: trimmedLine.replace(/^[-*•]\s*/, ''),
+          reasoning: ''
+        };
+      } else if (currentStep && trimmedLine.length > 0) {
+        currentStep.reasoning += (currentStep.reasoning ? ' ' : '') + trimmedLine;
+      }
+    }
+    
+    // Add the last step
+    if (currentStep) {
+      steps.push(currentStep);
+    }
+
+    // If no structured steps found, create a simple breakdown
+    if (steps.length === 0) {
+      const sentences = reasoning.split('.').filter(s => s.trim().length > 0);
+      sentences.slice(0, 5).forEach((sentence, index) => {
+        steps.push({
+          step: index + 1,
+          description: sentence.trim(),
+          reasoning: 'AI-generated reasoning step'
+        });
+      });
+    }
+
+    return steps;
   }
 
   async shutdown() {
