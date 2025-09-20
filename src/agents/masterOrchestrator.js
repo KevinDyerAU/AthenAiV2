@@ -2,10 +2,26 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { StringOutputParser } = require('@langchain/core/output_parsers');
 const { logger } = require('../utils/logger');
-const { progressBroadcaster } = require('../services/progressBroadcaster');
+const progressBroadcaster = require('../services/progressBroadcaster');
 const { agentRegistry } = require('./AgentRegistry');
-const { chatroomService } = require('../services/chatroom');
-const { KnowledgeSubstrateHelper } = require('../utils/knowledgeSubstrateHelper');
+const { knowledgeHelper } = require('../utils/knowledgeHelper');
+const { PlanningAgent } = require('./PlanningAgent');
+
+// Error classification constants
+const ERROR_TYPES = {
+  TRANSIENT: 'transient',        // Temporary issues - retry
+  RECOVERABLE: 'recoverable',    // Can be fixed with replanning
+  CRITICAL: 'critical'           // Fatal errors - stop execution
+};
+
+const RETRY_STRATEGIES = {
+  EXPONENTIAL_BACKOFF: 'exponential_backoff',
+  LINEAR_BACKOFF: 'linear_backoff',
+  IMMEDIATE: 'immediate'
+};
+
+const MAX_RETRIES = 3;
+const MAX_REPLANS = 2;
 
 class MasterOrchestrator {
   constructor() {
@@ -1621,12 +1637,58 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
         });
         previousResult = result;
       } catch (error) {
-        results.push({
-          agent: agentType,
-          status: 'failed',
-          error: error.message
-        });
-        break; // Stop sequential execution on failure
+        // Use comprehensive error handling for agent failures
+        const recoveryResult = await this.executeWithRecovery(
+          async (context) => {
+            return await this.executeAgent(agentType, context.task, context.sessionId, previousResult);
+          },
+          {
+            task: taskMessage,
+            agent: agentType,
+            sessionId,
+            execution_history: results,
+            coordination: { type: 'sequential' }
+          },
+          {
+            sessionId,
+            orchestrationId: this.generateSessionId(),
+            maxRetries: 2,
+            maxReplans: 1
+          }
+        );
+
+        if (recoveryResult.success) {
+          results.push({
+            agent: agentType,
+            status: 'completed',
+            result: recoveryResult.result,
+            recovery_stats: recoveryResult.recovery_stats
+          });
+          previousResult = recoveryResult.result;
+        } else {
+          results.push({
+            agent: agentType,
+            status: 'failed',
+            error: recoveryResult.error,
+            error_type: recoveryResult.error_type,
+            recovery_stats: recoveryResult.recovery_stats
+          });
+          
+          // Only break on critical errors, continue for others
+          if (recoveryResult.error_type === 'critical') {
+            logger.error('MasterOrchestrator: Critical error in sequential execution, stopping', {
+              agent: agentType,
+              error: recoveryResult.error
+            });
+            break;
+          }
+          
+          logger.warn('MasterOrchestrator: Agent failed but continuing sequential execution', {
+            agent: agentType,
+            error: recoveryResult.error,
+            nextAgent: agents[agents.indexOf(agentType) + 1]
+          });
+        }
       }
     }
 
@@ -1665,11 +1727,41 @@ Think through your reasoning, then respond with ONLY the agent name (research, c
           result: result
         };
       } catch (error) {
-        return {
-          agent: agentType,
-          status: 'failed',
-          error: error.message
-        };
+        // Use comprehensive error handling for parallel agent failures
+        const recoveryResult = await this.executeWithRecovery(
+          async (context) => {
+            return await this.executeAgent(agentType, context.task, context.sessionId);
+          },
+          {
+            task: coordination.task || coordination.description,
+            agent: agentType,
+            sessionId,
+            coordination: { type: 'parallel' }
+          },
+          {
+            sessionId,
+            orchestrationId: this.generateSessionId(),
+            maxRetries: 1, // Lower retries for parallel to avoid delays
+            maxReplans: 1
+          }
+        );
+
+        if (recoveryResult.success) {
+          return {
+            agent: agentType,
+            status: 'completed',
+            result: recoveryResult.result,
+            recovery_stats: recoveryResult.recovery_stats
+          };
+        } else {
+          return {
+            agent: agentType,
+            status: 'failed',
+            error: recoveryResult.error,
+            error_type: recoveryResult.error_type,
+            recovery_stats: recoveryResult.recovery_stats
+          };
+        }
       }
     });
 
@@ -1957,6 +2049,480 @@ Provide your step-by-step reasoning and recommendations:
     }
 
     return steps;
+  }
+
+  /**
+   * Classify error type and determine recovery strategy
+   * @param {Error} error - The error to classify
+   * @param {Object} context - Execution context
+   * @returns {Object} Error classification and recovery strategy
+   */
+  classifyError(error, context = {}) {
+    const errorMessage = error.message.toLowerCase();
+    const errorName = error.name;
+    const errorCode = error.code;
+
+    // Critical errors - stop execution immediately
+    if (errorMessage.includes('api key') || 
+        errorMessage.includes('authentication') ||
+        errorMessage.includes('authorization') ||
+        errorMessage.includes('permission denied') ||
+        errorCode === 'EACCES') {
+      return {
+        type: ERROR_TYPES.CRITICAL,
+        reason: 'Authentication or permission error',
+        action: 'stop',
+        retryable: false,
+        replannable: false
+      };
+    }
+
+    // Transient errors - retry with backoff
+    if (errorMessage.includes('timeout') ||
+        errorMessage.includes('connection') ||
+        errorMessage.includes('network') ||
+        errorMessage.includes('rate limit') ||
+        errorMessage.includes('503') ||
+        errorMessage.includes('502') ||
+        errorMessage.includes('500') ||
+        errorCode === 'ECONNRESET' ||
+        errorCode === 'ETIMEDOUT') {
+      return {
+        type: ERROR_TYPES.TRANSIENT,
+        reason: 'Network or service availability issue',
+        action: 'retry',
+        retryable: true,
+        replannable: false,
+        strategy: RETRY_STRATEGIES.EXPONENTIAL_BACKOFF
+      };
+    }
+
+    // Recoverable errors - can be fixed with replanning
+    if (errorMessage.includes('objective is required') ||
+        errorMessage.includes('invalid input') ||
+        errorMessage.includes('missing parameter') ||
+        errorMessage.includes('validation failed') ||
+        errorMessage.includes('agent not found') ||
+        errorMessage.includes('tool not available') ||
+        errorMessage.includes('insufficient context')) {
+      return {
+        type: ERROR_TYPES.RECOVERABLE,
+        reason: 'Input validation or context issue',
+        action: 'replan',
+        retryable: false,
+        replannable: true,
+        replanning_context: {
+          error_type: 'validation_error',
+          error_message: error.message,
+          failed_agent: context.agent,
+          failed_task: context.task,
+          execution_context: context
+        }
+      };
+    }
+
+    // Default to recoverable for unknown errors
+    return {
+      type: ERROR_TYPES.RECOVERABLE,
+      reason: 'Unknown error - attempting recovery',
+      action: 'replan',
+      retryable: true,
+      replannable: true,
+      strategy: RETRY_STRATEGIES.LINEAR_BACKOFF,
+      replanning_context: {
+        error_type: 'unknown_error',
+        error_message: error.message,
+        failed_agent: context.agent,
+        failed_task: context.task,
+        execution_context: context
+      }
+    };
+  }
+
+  /**
+   * Execute with comprehensive error handling and recovery
+   * @param {Function} operation - The operation to execute
+   * @param {Object} context - Execution context
+   * @param {Object} options - Recovery options
+   * @returns {Object} Execution result
+   */
+  async executeWithRecovery(operation, context, options = {}) {
+    const {
+      maxRetries = MAX_RETRIES,
+      maxReplans = MAX_REPLANS,
+      sessionId = 'unknown',
+      orchestrationId = 'unknown'
+    } = options;
+
+    let retryCount = 0;
+    let replanCount = 0;
+    let lastError = null;
+    let currentContext = { ...context };
+
+    while (retryCount <= maxRetries && replanCount <= maxReplans) {
+      try {
+        logger.debug('MasterOrchestrator: Executing operation with recovery', {
+          attempt: retryCount + 1,
+          replans: replanCount,
+          sessionId,
+          orchestrationId
+        });
+
+        const result = await operation(currentContext);
+        
+        // Success - reset counters for future operations
+        if (retryCount > 0 || replanCount > 0) {
+          logger.info('MasterOrchestrator: Operation succeeded after recovery', {
+            retries: retryCount,
+            replans: replanCount,
+            sessionId,
+            orchestrationId
+          });
+        }
+
+        return {
+          success: true,
+          result,
+          recovery_stats: {
+            retries: retryCount,
+            replans: replanCount,
+            total_attempts: retryCount + replanCount + 1
+          }
+        };
+
+      } catch (error) {
+        lastError = error;
+        const errorClassification = this.classifyError(error, currentContext);
+
+        logger.warn('MasterOrchestrator: Operation failed, analyzing recovery options', {
+          error: error.message,
+          classification: errorClassification,
+          retryCount,
+          replanCount,
+          sessionId,
+          orchestrationId
+        });
+
+        // Critical errors - stop immediately
+        if (errorClassification.type === ERROR_TYPES.CRITICAL) {
+          logger.error('MasterOrchestrator: Critical error encountered, stopping execution', {
+            error: error.message,
+            sessionId,
+            orchestrationId
+          });
+
+          await progressBroadcaster.updateProgress(sessionId, {
+            phase: 'critical_error',
+            message: `Critical error: ${error.message}`,
+            progress: 100,
+            error: true
+          });
+
+          return {
+            success: false,
+            error: error.message,
+            error_type: 'critical',
+            recovery_stats: {
+              retries: retryCount,
+              replans: replanCount,
+              total_attempts: retryCount + replanCount + 1
+            }
+          };
+        }
+
+        // Transient errors - retry with backoff
+        if (errorClassification.type === ERROR_TYPES.TRANSIENT && retryCount < maxRetries) {
+          retryCount++;
+          const backoffDelay = this.calculateBackoffDelay(retryCount, errorClassification.strategy);
+          
+          logger.info('MasterOrchestrator: Retrying operation after transient error', {
+            retryCount,
+            backoffDelay,
+            error: error.message,
+            sessionId,
+            orchestrationId
+          });
+
+          await progressBroadcaster.updateProgress(sessionId, {
+            phase: 'retry_attempt',
+            message: `Retrying after error (attempt ${retryCount}/${maxRetries}): ${error.message}`,
+            progress: 30 + (retryCount * 10)
+          });
+
+          await this.delay(backoffDelay);
+          continue;
+        }
+
+        // Recoverable errors - attempt replanning
+        if (errorClassification.type === ERROR_TYPES.RECOVERABLE && replanCount < maxReplans) {
+          replanCount++;
+          
+          logger.info('MasterOrchestrator: Attempting replanning for recoverable error', {
+            replanCount,
+            error: error.message,
+            sessionId,
+            orchestrationId
+          });
+
+          await progressBroadcaster.updateProgress(sessionId, {
+            phase: 'replanning',
+            message: `Replanning execution strategy (attempt ${replanCount}/${maxReplans})`,
+            progress: 40 + (replanCount * 15)
+          });
+
+          try {
+            currentContext = await this.replanExecution(currentContext, errorClassification, {
+              sessionId,
+              orchestrationId
+            });
+            
+            // Reset retry count after successful replanning
+            retryCount = 0;
+            continue;
+            
+          } catch (replanError) {
+            logger.error('MasterOrchestrator: Replanning failed', {
+              replanError: replanError.message,
+              originalError: error.message,
+              sessionId,
+              orchestrationId
+            });
+            
+            // If replanning fails, treat as critical
+            lastError = replanError;
+            break;
+          }
+        }
+
+        // Exhausted all recovery options
+        break;
+      }
+    }
+
+    // All recovery attempts failed
+    logger.error('MasterOrchestrator: All recovery attempts exhausted', {
+      finalError: lastError.message,
+      retries: retryCount,
+      replans: replanCount,
+      sessionId,
+      orchestrationId
+    });
+
+    await progressBroadcaster.updateProgress(sessionId, {
+      phase: 'recovery_failed',
+      message: `All recovery attempts failed: ${lastError.message}`,
+      progress: 100,
+      error: true
+    });
+
+    return {
+      success: false,
+      error: lastError.message,
+      error_type: 'recovery_exhausted',
+      recovery_stats: {
+        retries: retryCount,
+        replans: replanCount,
+        total_attempts: retryCount + replanCount + 1
+      }
+    };
+  }
+
+  /**
+   * Replan execution strategy based on error context
+   * @param {Object} context - Current execution context
+   * @param {Object} errorClassification - Error classification details
+   * @param {Object} options - Replanning options
+   * @returns {Object} Updated execution context
+   */
+  async replanExecution(context, errorClassification, options = {}) {
+    const { sessionId, orchestrationId } = options;
+    
+    logger.info('MasterOrchestrator: Starting replanning process', {
+      errorType: errorClassification.type,
+      reason: errorClassification.reason,
+      sessionId,
+      orchestrationId
+    });
+
+    // Prepare comprehensive context for PlanningAgent
+    const replanningInput = {
+      objective: `Replan execution strategy to recover from error: ${errorClassification.reason}`,
+      planning_type: 'error_recovery',
+      session_id: sessionId,
+      orchestration_id: orchestrationId,
+      error_context: {
+        original_error: errorClassification.replanning_context?.error_message,
+        failed_agent: errorClassification.replanning_context?.failed_agent,
+        failed_task: errorClassification.replanning_context?.failed_task,
+        error_type: errorClassification.replanning_context?.error_type,
+        execution_history: context.execution_history || [],
+        attempted_strategies: context.attempted_strategies || []
+      },
+      original_context: {
+        task: context.task,
+        agents: context.agents,
+        coordination: context.coordination,
+        resources: context.resources,
+        constraints: context.constraints
+      },
+      replanning_constraints: {
+        avoid_failed_agent: errorClassification.replanning_context?.failed_agent,
+        require_alternative_approach: true,
+        include_error_handling: true,
+        max_complexity_increase: 'moderate'
+      },
+      conversation_context: context.conversation_context || []
+    };
+
+    try {
+      // Use PlanningAgent to create recovery plan
+      const planningAgent = new PlanningAgent();
+      const recoveryPlan = await planningAgent.executePlanning(replanningInput);
+
+      if (!recoveryPlan.success) {
+        throw new Error(`Replanning failed: ${recoveryPlan.error || 'Unknown planning error'}`);
+      }
+
+      logger.info('MasterOrchestrator: Replanning completed successfully', {
+        planningType: recoveryPlan.planning_type,
+        hasNewStrategy: !!recoveryPlan.strategy_plan,
+        sessionId,
+        orchestrationId
+      });
+
+      // Extract updated execution strategy from recovery plan
+      const updatedContext = {
+        ...context,
+        // Update task if planning suggests modifications
+        task: recoveryPlan.objective || context.task,
+        
+        // Update agent selection if planning suggests alternatives
+        agents: this.extractAgentsFromPlan(recoveryPlan) || context.agents,
+        
+        // Update coordination strategy
+        coordination: this.extractCoordinationFromPlan(recoveryPlan) || context.coordination,
+        
+        // Add recovery-specific resources
+        resources: {
+          ...context.resources,
+          recovery_plan: recoveryPlan,
+          error_context: errorClassification.replanning_context
+        },
+        
+        // Track replanning history
+        replanning_history: [
+          ...(context.replanning_history || []),
+          {
+            timestamp: new Date().toISOString(),
+            error: errorClassification.replanning_context?.error_message,
+            recovery_strategy: recoveryPlan.strategy_plan?.selected_strategy?.name,
+            plan_summary: recoveryPlan.output?.substring(0, 200)
+          }
+        ],
+        
+        // Update attempted strategies
+        attempted_strategies: [
+          ...(context.attempted_strategies || []),
+          errorClassification.replanning_context?.failed_agent
+        ].filter(Boolean)
+      };
+
+      return updatedContext;
+
+    } catch (error) {
+      logger.error('MasterOrchestrator: Replanning process failed', {
+        error: error.message,
+        sessionId,
+        orchestrationId
+      });
+      throw new Error(`Replanning failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Extract agent recommendations from recovery plan
+   * @param {Object} recoveryPlan - The recovery plan from PlanningAgent
+   * @returns {Array} Updated agent list
+   */
+  extractAgentsFromPlan(recoveryPlan) {
+    try {
+      const planContent = recoveryPlan.output || recoveryPlan.result || '';
+      const agents = [];
+      
+      // Look for agent mentions in the plan
+      const agentKeywords = ['research', 'analysis', 'creative', 'development', 'planning', 'communication', 'execution', 'qa'];
+      
+      for (const keyword of agentKeywords) {
+        if (planContent.toLowerCase().includes(keyword)) {
+          agents.push(keyword);
+        }
+      }
+      
+      return agents.length > 0 ? agents : null;
+    } catch (error) {
+      logger.warn('MasterOrchestrator: Failed to extract agents from recovery plan', { error: error.message });
+      return null;
+    }
+  }
+
+  /**
+   * Extract coordination strategy from recovery plan
+   * @param {Object} recoveryPlan - The recovery plan from PlanningAgent
+   * @returns {Object} Updated coordination strategy
+   */
+  extractCoordinationFromPlan(recoveryPlan) {
+    try {
+      const planContent = recoveryPlan.output || recoveryPlan.result || '';
+      
+      // Default to sequential for error recovery (more reliable)
+      let coordinationType = 'sequential';
+      
+      // Look for coordination hints in the plan
+      if (planContent.toLowerCase().includes('parallel') || planContent.toLowerCase().includes('concurrent')) {
+        coordinationType = 'parallel';
+      } else if (planContent.toLowerCase().includes('collaborative') || planContent.toLowerCase().includes('iterative')) {
+        coordinationType = 'collaborative';
+      }
+      
+      return {
+        type: coordinationType,
+        error_recovery_mode: true,
+        include_checkpoints: true,
+        failure_tolerance: 'low'
+      };
+    } catch (error) {
+      logger.warn('MasterOrchestrator: Failed to extract coordination from recovery plan', { error: error.message });
+      return null;
+    }
+  }
+
+  /**
+   * Calculate backoff delay for retry attempts
+   * @param {number} attempt - Current attempt number
+   * @param {string} strategy - Backoff strategy
+   * @returns {number} Delay in milliseconds
+   */
+  calculateBackoffDelay(attempt, strategy = RETRY_STRATEGIES.EXPONENTIAL_BACKOFF) {
+    const baseDelay = 1000; // 1 second
+    
+    switch (strategy) {
+      case RETRY_STRATEGIES.EXPONENTIAL_BACKOFF:
+        return baseDelay * Math.pow(2, attempt - 1);
+      case RETRY_STRATEGIES.LINEAR_BACKOFF:
+        return baseDelay * attempt;
+      case RETRY_STRATEGIES.IMMEDIATE:
+        return 0;
+      default:
+        return baseDelay * Math.pow(2, attempt - 1);
+    }
+  }
+
+  /**
+   * Delay execution for specified milliseconds
+   * @param {number} ms - Milliseconds to delay
+   */
+  async delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   async shutdown() {
