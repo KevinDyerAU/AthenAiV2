@@ -2,9 +2,9 @@ const { ChatOpenAI } = require('@langchain/openai');
 const { PromptTemplate } = require('@langchain/core/prompts');
 const { StringOutputParser } = require('@langchain/core/output_parsers');
 const { logger } = require('../utils/logger');
-const progressBroadcaster = require('../services/progressBroadcaster');
+const { progressBroadcaster } = require('../services/progressBroadcaster');
 const { agentRegistry } = require('./AgentRegistry');
-const { knowledgeHelper } = require('../utils/knowledgeHelper');
+const { KnowledgeSubstrateHelper } = require('../utils/knowledgeSubstrateHelper');
 const { PlanningAgent } = require('./PlanningAgent');
 
 // Error classification constants
@@ -72,7 +72,7 @@ class MasterOrchestrator {
     }
     
     // Initialize knowledge substrate helper
-    this.knowledgeHelper = new KnowledgeSubstrateHelper();
+    this.knowledgeHelper = new KnowledgeSubstrateHelper('MasterOrchestrator', 'orchestration');
     
     this.name = 'MasterOrchestrator';
     this.capabilities = ['task-analysis', 'agent-routing', 'orchestration'];
